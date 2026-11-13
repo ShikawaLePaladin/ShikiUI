@@ -704,3 +704,102 @@ D("bars.bar3", "bars.bar2", "TOP", 0, 6)
 D("bars.stance", "bars.bar3", "TOP", -250, 6)
 D("bars.pet", "bars.bar3", "TOP", 250, 6)
 D("bars.bar5", "bars.bar4", "LEFT", -4, 0)
+
+-- ================================================================ PRESETS COMPLETS (tout est place)
+-- Ces dispositions positionnent TOUT l'ecran : barres d'action, cadres perso, groupe/raid, compteur, menace,
+-- alarmes de boss, marques, castbar, minimap, totems/tanktools. Choisissez-en une dans le menu Mise en page
+-- et l'ecran entier passe a la disposition (vos positions personnalisees sont remplacees).
+-- Positions = { fraction largeur, fraction hauteur, dx, dy } en unites d'UIParent (origine en bas-gauche).
+
+-- ESPORT DPS : concu pour les raids - barres compactees en bas, cadres perso au centre-bas,
+-- raid a gauche, compteur/menace a droite, alarmes en haut-droite. Le centre de l'ecran reste libre.
+SUI.RegisterLayout("esportdps", { label = "mod.layout.name.esportdps", reset = true,
+	v = { ["units.width"] = 180, ["units.height"] = 26 },
+	pos = {
+		["bars.main"] = { 0.5, 0.02, -226, 4 }, ["bars.bar2"] = { 0.5, 0.02, -226, 60 }, ["bars.bar3"] = { 0.5, 0.02, -226, 116 },
+		["bars.stance"] = { 0.5, 0.02, -410, 60 }, ["bars.pet"] = { 0.5, 0.02, 260, 60 },
+		["bars.micro"] = { 0.99, 0.02, -240, 4 },
+		["unit.player"] = { 0.5, 0.16, -240, 0 }, ["unit.target"] = { 0.5, 0.16, 60, 0 }, ["unit.targettarget"] = { 0.5, 0.16, 60, -46 },
+		["castbar.player"] = { 0.5, 0.26, -110, 0 },
+		["group"] = { 0.0, 0.95, 12, 0 }, ["raid"] = { 0.0, 0.99, 12, 0 },
+		["meter.win1"] = { 0.99, 0.6, -260, 0 }, ["threat.win"] = { 0.99, 0.35, -260, 0 },
+		["bossmods.win"] = { 0.99, 0.99, -260, -24 }, ["marks.bar"] = { 0.5, 0.99, -110, -24 },
+		["minimap"] = { 0.99, 0.99, -180, -20 }, ["esport.win"] = { 0.99, 0.18, -260, 0 },
+	} })
+
+-- ESPORT HEAL : concu pour soigner en raid - raid en colonnes au centre-gauche (oeil dessus),
+-- cadres perso en bas-centre, totems/tanktools a portee, compteur relegue en bas-gauche.
+SUI.RegisterLayout("esportheal", { label = "mod.layout.name.esportheal", reset = true,
+	v = { ["units.width"] = 180, ["units.height"] = 26 },
+	pos = {
+		["bars.main"] = { 0.5, 0.02, -226, 4 }, ["bars.bar2"] = { 0.5, 0.02, -226, 60 },
+		["bars.stance"] = { 0.5, 0.02, -410, 60 }, ["bars.pet"] = { 0.5, 0.02, 260, 60 },
+		["unit.player"] = { 0.5, 0.16, -240, 0 }, ["unit.target"] = { 0.5, 0.16, 60, 0 }, ["unit.targettarget"] = { 0.5, 0.16, 60, -46 },
+		["castbar.player"] = { 0.5, 0.26, -110, 0 },
+		["raid"] = { 0.22, 0.99, 0, 0 }, ["group"] = { 0.22, 0.95, 0, 0 },
+		["meter.win1"] = { 0.0, 0.35, 12, 0 },
+		["totems.bar"] = { 0.99, 0.02, -170, 8 }, ["tanktools.bar"] = { 0.99, 0.02, -400, 8 },
+		["bossmods.win"] = { 0.99, 0.99, -260, -24 }, ["marks.bar"] = { 0.5, 0.99, -110, -24 },
+		["minimap"] = { 0.99, 0.99, -180, -20 },
+	} })
+
+-- TANK RAID : tout ce qui compte en haut de l'ecran - cadres perso au centre-haut, raid a gauche,
+-- menace en bas-droite pres de la barre, alarmes de boss juste sous les cadres.
+SUI.RegisterLayout("tankraid", { label = "mod.layout.name.tankraid", reset = true,
+	v = { ["units.width"] = 200, ["units.height"] = 30 },
+	pos = {
+		["bars.main"] = { 0.5, 0.02, -226, 4 }, ["bars.bar2"] = { 0.5, 0.02, -226, 60 }, ["bars.bar3"] = { 0.5, 0.02, -226, 116 },
+		["bars.stance"] = { 0.5, 0.02, -410, 116 },
+		["unit.player"] = { 0.5, 0.8, -300, 0 }, ["unit.target"] = { 0.5, 0.8, 80, 0 }, ["unit.targettarget"] = { 0.5, 0.8, 80, -50 },
+		["castbar.player"] = { 0.5, 0.66, -110, 0 },
+		["raid"] = { 0.0, 0.99, 12, 0 }, ["group"] = { 0.0, 0.95, 12, 0 },
+		["threat.win"] = { 0.99, 0.15, -250, 0 }, ["meter.win1"] = { 0.99, 0.45, -250, 0 },
+		["bossmods.win"] = { 0.5, 0.56, 80, 0 }, ["marks.bar"] = { 0.0, 0.45, 12, 0 },
+		["minimap"] = { 0.99, 0.99, -180, -20 }, ["tanktools.bar"] = { 0.5, 0.02, -420, 4 },
+	} })
+
+-- PVP ARENE / BG : ennemis epingles au centre, suivi esport a droite (DR visibles en permanence),
+-- barres en bas-gauche pour liberer le centre, groupe compact a gauche.
+SUI.RegisterLayout("pvparena", { label = "mod.layout.name.pvparena", reset = true,
+	v = { ["units.width"] = 190, ["units.height"] = 28 },
+	pos = {
+		["bars.main"] = { 0.14, 0.02, -230, 4 }, ["bars.bar2"] = { 0.14, 0.02, -230, 60 },
+		["bars.stance"] = { 0.14, 0.02, -410, 60 },
+		["unit.player"] = { 0.5, 0.18, -290, 0 }, ["unit.target"] = { 0.5, 0.18, 100, 0 }, ["unit.targettarget"] = { 0.5, 0.18, 100, -48 },
+		["castbar.player"] = { 0.5, 0.3, -110, 0 },
+		["group.enemies"] = { 0.5, 0.68, 0, 0 }, ["group"] = { 0.0, 0.6, 12, 0 },
+		["esport.win"] = { 0.99, 0.72, -230, 0 },
+		["meter.win1"] = { 0.99, 0.1, -260, 0 }, ["threat.win"] = { 0.99, 0.4, -260, 0 },
+		["marks.bar"] = { 0.0, 0.35, 12, 0 }, ["minimap"] = { 0.99, 0.99, -180, -20 },
+	} })
+
+-- MINIMALISTE : l'essentiel colle aux bords, le centre entier est libre pour le jeu.
+-- Barres en bas, cadres perso en bas-gauche, raid en colonne fine a gauche, compteur/menace masques en coin.
+SUI.RegisterLayout("minimal", { label = "mod.layout.name.minimal", reset = true,
+	v = { ["units.width"] = 150, ["units.height"] = 20, ["units.powerheight"] = 3 },
+	pos = {
+		["bars.main"] = { 0.5, 0.02, -226, 4 },
+		["bars.stance"] = { 0.0, 0.02, 12, 8 }, ["bars.pet"] = { 0.5, 0.02, 260, 60 },
+		["bars.micro"] = { 0.99, 0.02, -240, 4 },
+		["unit.player"] = { 0.0, 0.16, 12, 0 }, ["unit.target"] = { 0.0, 0.16, 170, 0 }, ["unit.targettarget"] = { 0.0, 0.16, 170, -38 },
+		["castbar.player"] = { 0.0, 0.26, 12, 0 },
+		["raid"] = { 0.0, 0.99, 12, 0 }, ["group"] = { 0.0, 0.95, 12, 0 },
+		["meter.win1"] = { 0.99, 0.99, -190, -24 }, ["threat.win"] = { 0.99, 0.8, -190, 0 },
+		["bossmods.win"] = { 0.99, 0.6, -190, 0 }, ["marks.bar"] = { 0.0, 0.02, 12, 60 },
+		["minimap"] = { 0.99, 0.99, -180, -20 },
+	} })
+
+-- ECRAN LARGE 16/9 : tout reparti sur les bords d'un ecran large - bars en bas a droite,
+-- cadres perso a gauche, raid en colonnes centre-gauche, compteur centre-droit. Le centre reste le jeu.
+SUI.RegisterLayout("wideui", { label = "mod.layout.name.wideui", reset = true,
+	v = { ["units.width"] = 190 },
+	pos = {
+		["bars.main"] = { 0.5, 0.02, -226, 4 }, ["bars.bar2"] = { 0.5, 0.02, -226, 60 }, ["bars.bar3"] = { 0.5, 0.02, -226, 116 },
+		["bars.stance"] = { 0.24, 0.02, -180, 4 }, ["bars.pet"] = { 0.76, 0.02, -60, 4 },
+		["unit.player"] = { 0.0, 0.3, 12, 0 }, ["unit.target"] = { 0.0, 0.3, 200, 0 }, ["unit.targettarget"] = { 0.0, 0.3, 200, -48 },
+		["castbar.player"] = { 0.0, 0.42, 12, 0 },
+		["raid"] = { 0.3, 0.99, 0, 0 }, ["group"] = { 0.3, 0.95, 0, 0 },
+		["meter.win1"] = { 0.99, 0.75, -260, 0 }, ["threat.win"] = { 0.99, 0.5, -260, 0 },
+		["bossmods.win"] = { 0.99, 0.3, -260, 0 }, ["marks.bar"] = { 0.99, 0.15, -230, 0 },
+		["minimap"] = { 0.99, 0.99, -180, -20 }, ["totems.bar"] = { 0.76, 0.02, -260, 4 },
+	} })
