@@ -49,213 +49,56 @@ M.MAXBARS = 8
 --   warn  : annonce RAID au moment de la mise en place
 -- Valeurs = guides vanilla publies, NON VERIFIEES EN JEU (voir entete).
 M.BOSSES = {
-	["lucifron"] = {
-		label = "Lucifron",
+	["antnormi"] = {
+		label = "Antnormi",
 		ev = {
-			{ t = 20, every = 20, name = "Impending Doom", dur = 3, warn = true },
-			{ t = 15, every = 15, name = "Curse of Lucifron", dur = 3 },
+			{ t = 20, every = 20, name = "Fear CD", dur = 3, warn = true },
+			{ t = 5, every = 5, name = "Feared!", dur = 3, warn = true },
+			{ t = 10, every = 10, name = "Shadow Shock CD", dur = 3, warn = true },
 		},
 	},
-	["magmadar"] = {
-		label = "Magmadar",
+	["anubisath defender"] = {
+		label = "Anubisath Defender",
 		ev = {
-			{ t = 12, every = 12, name = "Panic", dur = 3, warn = true },
-			{ t = 20, every = 20, name = "Lava Bomb", dur = 3 },
+			{ t = 600, every = 600, name = "Fire & Arcane Reflect", dur = 3, icon = "Interface\\Icons\\spell_arcane_portaldarnassus", warn = true },
+			{ t = 600, every = 600, name = "Shadow & Frost Reflect", dur = 3, icon = "Interface\\Icons\\spell_arcane_portalundercity", warn = true },
+			{ t = 40, every = 40, name = "Plagued", dur = 3, icon = "Interface\\Icons\\Spell_Shadow_CurseOfTounges", warn = true },
+			{ t = 600, every = 600, name = "Thunder Clap", dur = 3, icon = "Interface\\Icons\\Ability_ThunderClap", warn = true },
+			{ t = 600, every = 600, name = "Shadow Storm", dur = 3, icon = "Interface\\Icons\\spell_shadow_shadowbolt", warn = true },
+			{ t = 600, every = 600, name = "Meteor", dur = 3, icon = "Interface\\Icons\\Spell_Fire_Fireball02", warn = true },
+			{ t = 6, every = 6, name = "Exploding!", dur = 3, icon = "Interface\\Icons\\spell_fire_selfdestruct", warn = true },
 		},
 	},
-	["gehennas"] = {
-		label = "Gehennas",
+	["anubisath guardian"] = {
+		label = "Anubisath Guardian",
 		ev = {
-			{ t = 12, every = 30, name = "Gehennas' Curse", dur = 3 },
-			{ t = 10, every = 10, name = "Shadow Bolt", dur = 3 },
+			{ t = 600, every = 600, name = "Fire & Arcane Reflect", dur = 3, icon = "Interface\\Icons\\spell_arcane_portaldarnassus", warn = true },
+			{ t = 600, every = 600, name = "Shadow & Frost Reflect", dur = 3, icon = "Interface\\Icons\\spell_arcane_portalundercity", warn = true },
+			{ t = 40, every = 40, name = "Plagued", dur = 3, icon = "Interface\\Icons\\Spell_Shadow_CurseOfTounges", warn = true },
+			{ t = 600, every = 600, name = "Thunder Clap CD", dur = 3, icon = "Interface\\Icons\\Ability_ThunderClap", warn = true },
+			{ t = 600, every = 600, name = "Shadow Storm CD", dur = 3, icon = "Interface\\Icons\\spell_shadow_shadowbolt", warn = true },
+			{ t = 600, every = 600, name = "Meteor CD", dur = 3, icon = "Interface\\Icons\\Spell_Fire_Fireball02", warn = true },
+			{ t = 6, every = 6, name = "Exploding!", dur = 3, icon = "Interface\\Icons\\spell_fire_selfdestruct", warn = true },
 		},
 	},
-	["garr"] = {
-		label = "Garr",
+	["anubisath sentinel"] = {
+		label = "Anubisath Sentinel",
 		ev = {
-			{ t = 25, every = 25, name = "Mass Dispel", dur = 3 },
-			{ t = 30, every = 30, name = "Antimagic Pulse", dur = 3 },
+			{ t = 600, every = 600, name = "has Knockback", dur = 3, icon = "Interface\\Icons\\Inv_Gauntlets_05", warn = true },
+			{ t = 600, every = 600, name = "has Mana Burn", dur = 3, icon = "Interface\\Icons\\Spell_Shadow_Manaburn", warn = true },
+			{ t = 600, every = 600, name = "has Mending", dur = 3, icon = "Interface\\Icons\\spell_nature_resistnature", warn = true },
+			{ t = 600, every = 600, name = "has Mortal Strike", dur = 3, icon = "Interface\\Icons\\ability_warrior_savageblow", warn = true },
+			{ t = 600, every = 600, name = "has Shadow Storm", dur = 3, icon = "Interface\\Icons\\spell_shadow_shadowbolt", warn = true },
+			{ t = 600, every = 600, name = "has Thorns", dur = 3, icon = "Interface\\Icons\\Spell_Nature_Thorns", warn = true },
+			{ t = 600, every = 600, name = "has Thunderclap", dur = 3, icon = "Interface\\Icons\\Ability_ThunderClap", warn = true },
+			{ t = 600, every = 600, name = "reflect Fire & Arcane", dur = 3, icon = "Interface\\Icons\\spell_arcane_portaldarnassus", warn = true },
+			{ t = 600, every = 600, name = "reflect Shadow & Frost", dur = 3, icon = "Interface\\Icons\\spell_arcane_portalundercity", warn = true },
 		},
 	},
-	["baron geddon"] = {
-		label = "Baron Geddon",
+	["atiesh"] = {
+		label = "Atiesh",
 		ev = {
-			{ t = 10, every = 10, name = "Inferno", dur = 3, warn = true },
-			{ t = 45, every = 45, name = "Ignite Mana", dur = 3 },
-		},
-	},
-	["shazzrah"] = {
-		label = "Shazzrah",
-		ev = {
-			{ t = 20, every = 20, name = "Shazzrah's Doom", dur = 3 },
-			{ t = 45, every = 45, name = "Gate of Shazzrah", dur = 3 },
-		},
-	},
-	["sulfuron harbinger"] = {
-		label = "Sulfuron Harbinger",
-		ev = {
-			{ t = 15, every = 15, name = "Hand of Ragnaros", dur = 3 },
-		},
-	},
-	["ragnaros"] = {
-		label = "Ragnaros",
-		ev = {
-			{ t = 25, every = 25, name = "Wrath of Ragnaros", dur = 3 },
-			{ t = 90, every = 90, name = "Submerge", dur = 45, warn = true },
-		},
-	},
-	["onyxia"] = {
-		label = "Onyxia",
-		ev = {
-			{ t = 30, every = 30, name = "Deep Breath", dur = 3, warn = true },
-		},
-	},
-	["vaelastrasz"] = {
-		label = "Vaelastrasz",
-		ev = {
-			{ t = 15, every = 15, name = "Fire Burning", dur = 3, warn = true },
-		},
-	},
-	["broodlord lushwing"] = {
-		label = "Broodlord",
-		ev = {
-			{ t = 30, every = 30, name = "Blast Wave", dur = 3 },
-		},
-	},
-	["firemaw"] = {
-		label = "Firemaw",
-		ev = {
-			{ t = 14, every = 14, name = "Flame Buffet", dur = 3 },
-		},
-	},
-	["ebonroc"] = {
-		label = "Ebonroc",
-		ev = {
-			{ t = 14, every = 14, name = "Shadow Flame", dur = 3 },
-		},
-	},
-	["flamegor"] = {
-		label = "Flamegor",
-		ev = {
-			{ t = 14, every = 14, name = "Flame Buffet", dur = 3 },
-		},
-	},
-	["chromaggus"] = {
-		label = "Chromaggus",
-		ev = {
-			{ t = 12, every = 12, name = "Breath", dur = 3, warn = true },
-		},
-	},
-	["nefarian"] = {
-		label = "Nefarian",
-		ev = {
-			{ t = 30, every = 30, name = "Class Call", dur = 5, warn = true },
-			{ t = 60, every = 60, name = "Shadow Breath", dur = 3 },
-		},
-	},
-	["hakkar"] = {
-		label = "Hakkar",
-		ev = {
-			{ t = 90, every = 90, name = "Blood Siphon", dur = 15, warn = true },
-		},
-	},
-	["ossirian the unscarred"] = {
-		label = "Ossirian",
-		ev = {
-			{ t = 20, every = 20, name = "Tornado", dur = 3 },
-		},
-	},
-	["kurinnaxx"] = {
-		label = "Kurinnaxx",
-		ev = {
-			{ t = 20, every = 20, name = "Sand Trap", dur = 3 },
-		},
-	},
-	["maexxna"] = {
-		label = "Maexxna",
-		ev = {
-			{ t = 40, every = 40, name = "Web Spray", dur = 7, warn = true },
-		},
-	},
-	["loatheb"] = {
-		label = "Loatheb",
-		ev = {
-			{ t = 30, every = 30, name = "Doom", dur = 3, warn = true },
-		},
-	},
-	["thaddius"] = {
-		label = "Thaddius",
-		ev = {
-			{ t = 30, every = 30, name = "Polarity Shift", dur = 3, warn = true },
-		},
-	},
-	["sapphiron"] = {
-		label = "Sapphiron",
-		ev = {
-			{ t = 45, every = 45, name = "Ice Bolt", dur = 5, warn = true },
-		},
-	},
-	["kel'thuzad"] = {
-		label = "Kel'Thuzad",
-		ev = {
-			{ t = 20, every = 20, name = "Shadow Fissure", dur = 3 },
-			{ t = 30, every = 30, name = "Frost Blast", dur = 3, warn = true },
-		},
-	},
-	["kazzak"] = {
-		label = "Kazzak",
-		ev = {
-			{ t = 30, every = 30, name = "Shadow Bolt Volley", dur = 3 },
-		},
-	},
-	["azuregos"] = {
-		label = "Azuregos",
-		ev = {
-			{ t = 35, every = 35, name = "Teleport", dur = 3, warn = true },
-		},
-	},
-	-- ===== ZG =====
-	["venoxis"] = {
-		label = "Venoxis",
-		ev = {
-			{ t = 45, every = 45, name = "Renataki's Blessing", dur = 3, warn = true },
-		},
-	},
-	["mar'li"] = {
-		label = "Mar'li",
-		ev = {
-			{ t = 20, every = 20, name = "Enrage", dur = 3 },
-		},
-	},
-	["mandokir"] = {
-		label = "Mandokir",
-		ev = {
-			{ t = 60, every = 60, name = "Frightening Shout", dur = 3, warn = true },
-		},
-	},
-	["jindo the hexxer"] = {
-		label = "Jindo",
-		ev = {
-			{ t = 25, every = 25, name = "Hex", dur = 3, warn = true },
-		},
-	},
-	-- ===== AQ20 =====
-	["general rajaxx"] = {
-		label = "General Rajaxx",
-		ev = {
-			{ t = 30, every = 30, name = "Wave", dur = 5, warn = true },
-		},
-	},
-	["moam"] = {
-		label = "Moam",
-		ev = {
-			{ t = 90, every = 90, name = "Mana Burn", dur = 3, warn = true },
-		},
-	},
-	["buru the gorger"] = {
-		label = "Buru",
-		ev = {
-			{ t = 30, every = 30, name = "Dismember", dur = 3 },
+			{ t = 2, every = 2, name = "Unholy Aura", dur = 3, icon = "Interface\\Icons\\spell_shadow_unholystrength", warn = true },
 		},
 	},
 	["ayamiss the hunter"] = {
@@ -271,41 +114,58 @@ M.BOSSES = {
 			{ t = 25, every = 25, name = "Earth Shock", dur = 3 },
 		},
 	},
+	["azuregos"] = {
+		label = "Azuregos",
+		ev = {
+			{ t = 24, every = 24, name = "Chill CD", dur = 3, warn = true },
+			{ t = 30, every = 30, name = "Arcane Vacuum CD", dur = 3, warn = true },
+			{ t = 20, every = 20, name = "Arcane Vacuum Ready...", dur = 3, warn = true },
+		},
+	},
+	["baron geddon"] = {
+		label = "Baron Geddon",
+		ev = {
+			{ t = 8, every = 8, name = "Bomb!", dur = 3, icon = "Interface\\Icons\\inv_enchant_essenceastralsmall", warn = true },
+		},
+	},
 	["battleguard sartura"] = {
 		label = "Sartura",
 		ev = {
 			{ t = 45, every = 45, name = "Whirlwind", dur = 5, warn = true },
 		},
 	},
-	["fankriss the unyielding"] = {
-		label = "Fankriss",
+	["bloodlord mandokir"] = {
+		label = "Bloodlord Mandokir",
 		ev = {
-			{ t = 30, every = 30, name = "Mortal Wound", dur = 3 },
+			{ t = 12, every = 12, name = "Threatening Gaze CD", dur = 3, warn = true },
+			{ t = 8, every = 8, name = "Gaze!", dur = 3, warn = true },
+			{ t = 18, every = 18, name = "Whirlwind CD", dur = 3, warn = true },
 		},
 	},
-	["princess huhuran"] = {
-		label = "Huhuran",
+	["brood queen araxxna"] = {
+		label = "Brood Queen Araxxna",
 		ev = {
-			{ t = 30, every = 30, name = "Wyvern Sting", dur = 3, warn = true },
-			{ t = 30, every = 30, name = "Frenzy", dur = 3 },
+			{ t = 8, every = 8, name = "Brood Venom Volley", dur = 3, icon = "Interface\\Icons\\Spell_Nature_InsectSwarm", warn = true },
+			{ t = 10, every = 10, name = "Leeching Bite", dur = 3, icon = "Interface\\Icons\\ability_poisonsting", warn = true },
+			{ t = 20, every = 20, name = "Skitterweb Egg Hatch", dur = 3, icon = "Interface\\Icons\\inv_egg_02", warn = true },
 		},
 	},
-	["viscidus"] = {
-		label = "Viscidus",
+	["broodlord lashlayer"] = {
+		label = "Broodlord Lashlayer",
 		ev = {
-			{ t = 15, every = 15, name = "Poison Bolt Volley", dur = 3 },
+			{ t = 20, every = 20, name = "Mortal Strike CD", dur = 3, warn = true },
 		},
 	},
-	["emperor vek'lor"] = {
-		label = "Vek'lor",
+	["broodlord lushwing"] = {
+		label = "Broodlord",
 		ev = {
-			{ t = 30, every = 30, name = "Explode Bug", dur = 3 },
+			{ t = 30, every = 30, name = "Blast Wave", dur = 3 },
 		},
 	},
-	["ouro"] = {
-		label = "Ouro",
+	["buru the gorger"] = {
+		label = "Buru the Gorger",
 		ev = {
-			{ t = 20, every = 20, name = "Sand Blast", dur = 3, warn = true },
+			{ t = 10, every = 10, name = "Dismember", dur = 3, icon = "Interface\\Icons\\ability_backstab", warn = true },
 		},
 	},
 	["c'thun"] = {
@@ -322,10 +182,480 @@ M.BOSSES = {
 			{ t = 20, every = 20, name = "Locust Swarm", dur = 12, warn = true },
 		},
 	},
-	["grand widow faerlina"] = {
-		label = "Faerlina",
+	["chieftain partath"] = {
+		label = "Chieftain Partath",
 		ev = {
-			{ t = 60, every = 60, name = "Rain of Fire", dur = 3 },
+			{ t = 15, every = 15, name = "Immune", dur = 3, icon = "Interface\\Icons\\Spell_Shadow_SummonVoidWalker", warn = true },
+		},
+	},
+	["chromaggus"] = {
+		label = "Chromaggus",
+		ev = {
+			{ t = 12, every = 12, name = "Breath", dur = 3, warn = true },
+		},
+	},
+	["chronar"] = {
+		label = "Chronar",
+		ev = {
+			{ t = 10, every = 10, name = "Spell Reflect", dur = 3, icon = "Interface\\Icons\\Spell_Arcane_Blink", warn = true },
+			{ t = 5, every = 5, name = "Mortal Strike", dur = 3, icon = "Interface\\Icons\\ability_warrior_savageblow", warn = true },
+		},
+	},
+	["core hound"] = {
+		label = "Core Hound",
+		ev = {
+			{ t = 10, every = 10, name = "Respawn", dur = 3, icon = "Interface\\Icons\\spell_holy_resurrection", warn = true },
+			{ t = 11, every = 11, name = "Despawn", dur = 3, icon = "Interface\\Icons\\inv_misc_pocketwatch_01", warn = true },
+		},
+	},
+	["cthun"] = {
+		label = "C'Thun",
+		ev = {
+			{ t = 8, every = 8, name = "Start of Random Beams!", dur = 3, warn = true },
+			{ t = 39, every = 39, name = "Dark Glare!", dur = 3, warn = true },
+			{ t = 8, every = 8, name = "Small Claw Spawn", dur = 3, icon = "Interface\\Icons\\spell_nature_thorns", warn = true },
+		},
+	},
+	["dark reaver of karazhan"] = {
+		label = "Dark Reaver of Karazhan",
+		ev = {
+			{ t = 22, every = 22, name = "4 Forlorn Spirit", dur = 3, icon = "Interface\\Icons\\spell_shadow_burningspirit", warn = true },
+			{ t = 10, every = 10, name = "Lurking Shadow", dur = 3, icon = "Interface\\Icons\\ability_creature_poison_05", warn = true },
+			{ t = 6, every = 6, name = "Unbalancing", dur = 3, icon = "Interface\\Icons\\ability_warrior_decisivestrike", warn = true },
+			{ t = 20, every = 20, name = "Pierce Armor", dur = 3, icon = "Interface\\Icons\\spell_shadow_vampiricaura", warn = true },
+		},
+	},
+	["dark rider champion"] = {
+		label = "Dark Rider Champion",
+		ev = {
+			{ t = 5.5, every = 5.5, name = "Reaver Storm CD", dur = 3, warn = true },
+			{ t = 1.5, every = 1.5, name = "Reaver Storm Cast", dur = 3, warn = true },
+		},
+	},
+	["deathknight cavalier"] = {
+		label = "Deathknight Cavalier",
+		ev = {
+			{ t = 3, every = 3, name = "Death Coil", dur = 3, icon = "Interface\\Icons\\spell_shadow_deathcoil", warn = true },
+		},
+	},
+	["doctor weavil"] = {
+		label = "Doctor Weavil",
+		ev = {
+			{ t = 10, every = 10, name = "Mind Shatter CD", dur = 3, warn = true },
+			{ t = 6, every = 6, name = "Mind Shatter Soon...", dur = 3, warn = true },
+		},
+	},
+	["drifting avatar of sand"] = {
+		label = "Drifting Avatar of Sand",
+		ev = {
+			{ t = 5, every = 5, name = "Blinded", dur = 3, icon = "Interface\\Icons\\spell_shadow_mindsteal", warn = true },
+		},
+	},
+	["ebonroc"] = {
+		label = "Ebonroc",
+		ev = {
+			{ t = 29, every = 29, name = "Wing Buffet CD", dur = 3, warn = true },
+			{ t = 14, every = 14, name = "Shadow Flame CD", dur = 3, warn = true },
+			{ t = 8, every = 8, name = "Shadow of Ebonroc CD", dur = 3, warn = true },
+			{ t = 8, every = 8, name = "Shadow of Ebonroc", dur = 3, warn = true },
+		},
+	},
+	["echo of medivh"] = {
+		label = "Echo of Medivh",
+		ev = {
+			{ t = 12, every = 12, name = "Corruption of Medivh", dur = 3, icon = "Interface\\Icons\\INV_Misc_ShadowEgg", warn = true },
+		},
+	},
+	["emperor vek'lor"] = {
+		label = "Vek'lor",
+		ev = {
+			{ t = 30, every = 30, name = "Explode Bug", dur = 3 },
+		},
+	},
+	["epidamu"] = {
+		label = "Epidamu",
+		ev = {
+			{ t = 5, every = 5, name = "Drain Mana", dur = 3, icon = "Interface\\Icons\\spell_shadow_siphonmana", warn = true },
+			{ t = 15, every = 15, name = "Temporal Conflux", dur = 3, icon = "Interface\\Icons\\spell_holy_borrowedtime", warn = true },
+		},
+	},
+	["erennius"] = {
+		label = "Erennius",
+		ev = {
+			{ t = 6, every = 6, name = "Wail Casting", dur = 3, icon = "Interface\\Icons\\Spell_Shadow_ShadeTruesight", warn = true },
+			{ t = 3, every = 3, name = "Wail Afflicted", dur = 3, icon = "Interface\\Icons\\Spell_Shadow_ShadeTruesight", warn = true },
+			{ t = 26, every = 26, name = "Wail of Erennius CD", dur = 3, icon = "Interface\\Icons\\Spell_Shadow_ShadeTruesight", warn = true },
+		},
+	},
+	["fankriss the unyielding"] = {
+		label = "Fankriss the Unyielding",
+		ev = {
+			{ t = 8, every = 8, name = "Entangled", dur = 3, icon = "Interface\\Icons\\Spell_Nature_Web", warn = true },
+			{ t = 15, every = 15, name = "Wounds", dur = 3, icon = "Interface\\Icons\\ability_criticalstrike", warn = true },
+		},
+	},
+	["firemaw"] = {
+		label = "Firemaw",
+		ev = {
+			{ t = 29, every = 29, name = "Wing Buffet CD", dur = 3, warn = true },
+			{ t = 14, every = 14, name = "Shadow Flame CD", dur = 3, warn = true },
+		},
+	},
+	["flame imp"] = {
+		label = "Flame Imp",
+		ev = {
+			{ t = 420, every = 420, name = "Respawn", dur = 3, icon = "Interface\\Icons\\inv_misc_pocketwatch_01", warn = true },
+		},
+	},
+	["flamegor"] = {
+		label = "Flamegor",
+		ev = {
+			{ t = 29, every = 29, name = "Wing Buffet CD", dur = 3, warn = true },
+			{ t = 14, every = 14, name = "Shadow Flame CD", dur = 3, warn = true },
+			{ t = 10, every = 10, name = "Frenzy CD", dur = 3, warn = true },
+			{ t = 10, every = 10, name = "Frenzy!", dur = 3, warn = true },
+		},
+	},
+	["gahzranka"] = {
+		label = "Gahz'ranka",
+		ev = {
+			{ t = 2, every = 2, name = "FrostBreath Dmg+ManaBurn", dur = 3, warn = true },
+			{ t = 7, every = 7, name = "Frost Breath CD", dur = 3, warn = true },
+			{ t = 1.5, every = 1.5, name = "knockUP - Aggro Drop", dur = 3, warn = true },
+			{ t = 19, every = 19, name = "knockUP AggroDrop CD", dur = 3, warn = true },
+			{ t = 15, every = 15, name = "knockBACK - CD", dur = 3, icon = "Interface\\Icons\\ability_devour", warn = true },
+		},
+	},
+	["garr"] = {
+		label = "Garr",
+		ev = {
+			{ t = 20, every = 20, name = "Antimagic Pulse", dur = 3, icon = "Interface\\Icons\\spell_holy_dispelmagic", warn = true },
+		},
+	},
+	["gehennas"] = {
+		label = "Gehennas",
+		ev = {
+			{ t = 12, every = 30, name = "Gehennas' Curse", dur = 3 },
+			{ t = 10, every = 10, name = "Shadow Bolt", dur = 3 },
+		},
+	},
+	["general drakkisath"] = {
+		label = "General Drakkisath",
+		ev = {
+			{ t = 10, every = 10, name = "Conflag", dur = 3, icon = "Interface\\Icons\\spell_fire_incinerate", warn = true },
+		},
+	},
+	["general rajaxx"] = {
+		label = "General Rajaxx",
+		ev = {
+			{ t = 34.72, every = 34.72, name = "Encounter begins", dur = 3, icon = "Interface\\Icons\\Inv_Misc_PocketWatch_01", warn = true },
+			{ t = 10, every = 10, name = "Marked", dur = 3, icon = "Interface\\Icons\\Ability_Hunter_SniperShot", warn = true },
+		},
+	},
+	["gluth"] = {
+		label = "Gluth",
+		ev = {
+			{ t = 105, every = 105, name = "Decimate", dur = 3, icon = "Interface\\Icons\\INV_Shield_01", warn = true },
+			{ t = 330, every = 330, name = "Enrage", dur = 3, icon = "Interface\\Icons\\Spell_Shadow_UnholyFrenzy", warn = true },
+			{ t = 15, every = 15, name = "Wounds", dur = 3, icon = "Interface\\Icons\\ability_criticalstrike", warn = true },
+		},
+	},
+	["golemagg the incinerator"] = {
+		label = "Golemagg the Incinerator",
+		ev = {
+			{ t = 3, every = 3, name = "Earthquake", dur = 3, icon = "Interface\\Icons\\spell_nature_earthquake", warn = true },
+		},
+	},
+	["gothik the harvester"] = {
+		label = "Gothik the Harvester",
+		ev = {
+			{ t = 20, every = 20, name = "Trainee - ", dur = 3, icon = "Interface\\Icons\\Ability_Seal", warn = true },
+			{ t = 30, every = 30, name = "Rider - ", dur = 3, icon = "Interface\\Icons\\Spell_Shadow_DeathPact", warn = true },
+		},
+	},
+	["grand widow faerlina"] = {
+		label = "Grand Widow Faerlina",
+		ev = {
+			{ t = 30, every = 30, name = "Boss Silenced", dur = 3, icon = "Interface\\Icons\\Spell_Holy_Silence", warn = true },
+			{ t = 8, every = 8, name = "Raid member Silenced", dur = 3, warn = true },
+		},
+	},
+	["grilek"] = {
+		label = "Gri'lek",
+		ev = {
+			{ t = 10, every = 10, name = "Avatar CD", dur = 3, warn = true },
+			{ t = 15, every = 15, name = "Avatar!", dur = 3, warn = true },
+			{ t = 2, every = 2, name = "Gri'lek Stunned", dur = 3, icon = "Interface\\Icons\\spell_frost_stun", warn = true },
+			{ t = 18, every = 18, name = "Ground Tremor CD", dur = 3, warn = true },
+			{ t = 2, every = 2, name = "Ground Tremor Stun", dur = 3, warn = true },
+			{ t = 10, every = 10, name = "Rooted", dur = 3, icon = "Interface\\Icons\\spell_nature_stranglevines", warn = true },
+			{ t = 20, every = 20, name = "Sweeping Strikes!", dur = 3, icon = "Interface\\Icons\\ability_rogue_slicedice", warn = true },
+		},
+	},
+	["grizikil"] = {
+		label = "Grizikil",
+		ev = {
+			{ t = 9, every = 9, name = "Flamewave", dur = 3, icon = "Interface\\Icons\\spell_fire_incinerate", warn = true },
+		},
+	},
+	["grobbulus"] = {
+		label = "Grobbulus",
+		ev = {
+			{ t = 12, every = 12, name = "Poison Cloud", dur = 3, warn = true },
+		},
+	},
+	["gurubashi berserker"] = {
+		label = "Gurubashi Berserker",
+		ev = {
+			{ t = 25, every = 25, name = "Fear CD", dur = 3, icon = "Interface\\Icons\\Ability_GolemThunderClap", warn = true },
+			{ t = 10, every = 10, name = "KnockAway CD", dur = 3, icon = "Interface\\Icons\\INV_Gauntlets_05", warn = true },
+			{ t = 15, every = 15, name = "Thunderclap CD", dur = 3, icon = "Interface\\Icons\\Ability_ThunderClap", warn = true },
+		},
+	},
+	["hakkar"] = {
+		label = "Hakkar",
+		ev = {
+			{ t = 11, every = 11, name = "MC CD", dur = 3, warn = true },
+			{ t = 8, every = 8, name = "Blood Siphon!", dur = 3, warn = true },
+			{ t = 600, every = 600, name = "Enrage", dur = 3, icon = "Interface\\Icons\\Spell_Shadow_UnholyFrenzy", warn = true },
+		},
+	},
+	["hazzarah"] = {
+		label = "Hazza'rah",
+		ev = {
+			{ t = 24, every = 24, name = "Adds Spawn", dur = 3, icon = "Interface\\Icons\\spell_magic_lesserinvisibilty", warn = true },
+			{ t = 18, every = 18, name = "Sleep CD", dur = 3, warn = true },
+			{ t = 6, every = 6, name = "Sleeping!", dur = 3, warn = true },
+			{ t = 60, every = 60, name = "AoE Mana Burn CD", dur = 3, icon = "Interface\\Icons\\spell_shadow_manaburn", warn = true },
+		},
+	},
+	["heigan the unclean"] = {
+		label = "Heigan",
+		ev = {
+			{ t = 15, every = 15, name = "Eruption", dur = 3 },
+		},
+	},
+	["high priest thekal"] = {
+		label = "High Priest Thekal",
+		ev = {
+			{ t = 6, every = 6, name = "Silenced", dur = 3, icon = "Interface\\Icons\\Spell_Holy_Silence", warn = true },
+			{ t = 6, every = 6, name = "Disarmed", dur = 3, icon = "Interface\\Icons\\Ability_Warrior_Disarm", warn = true },
+			{ t = 10, every = 10, name = "Blinded", dur = 3, icon = "Interface\\Icons\\spell_shadow_mindsteal", warn = true },
+			{ t = 4, every = 4, name = "Gouged", dur = 3, icon = "Interface\\Icons\\ability_gouge", warn = true },
+			{ t = 5, every = 5, name = "Mortal Cleave", dur = 3, icon = "Interface\\Icons\\Ability_Warrior_SavageBlow", warn = true },
+			{ t = 30, every = 30, name = "Bloodlust", dur = 3, icon = "Interface\\Icons\\Spell_Nature_BloodLust", warn = true },
+			{ t = 10, every = 10, name = "Resurrect", dur = 3, icon = "Interface\\Icons\\spell_holy_resurrection", warn = true },
+		},
+	},
+	["high priest venoxis"] = {
+		label = "High Priest Venoxis",
+		ev = {
+			{ t = 15, every = 15, name = "Renew", dur = 3, icon = "Interface\\Icons\\Spell_Holy_Renew", warn = true },
+			{ t = 8, every = 8, name = "Holy Fire", dur = 3, warn = true },
+		},
+	},
+	["high priestess arlokk"] = {
+		label = "High Priestess Arlokk",
+		ev = {
+			{ t = 120, every = 120, name = "Marked", dur = 3, icon = "Interface\\Icons\\Ability_Hunter_Snipershot", warn = true },
+			{ t = 16, every = 16, name = "Whirlwind CD", dur = 3, icon = "Interface\\Icons\\Ability_Whirlwind", warn = true },
+			{ t = 2, every = 2, name = "Ravage Stun", dur = 3, icon = "Interface\\Icons\\spell_frost_stun", warn = true },
+			{ t = 4, every = 4, name = "Gouged", dur = 3, icon = "Interface\\Icons\\ability_gouge", warn = true },
+			{ t = 18, every = 18, name = "Shadow Word: Pain", dur = 3, icon = "Interface\\Icons\\spell_shadow_shadowwordpain", warn = true },
+		},
+	},
+	["high priestess jeklik"] = {
+		label = "High Priestess Jeklik",
+		ev = {
+			{ t = 4, every = 4, name = "Heal - Interrupt!", dur = 3, warn = true },
+			{ t = 20, every = 20, name = "Heal CD", dur = 3, warn = true },
+			{ t = 25, every = 25, name = "Mind Flay - Interrupt!", dur = 3, icon = "Interface\\Icons\\Spell_Shadow_SiphonMana", warn = true },
+			{ t = 10, every = 10, name = "Silence CD", dur = 3, warn = true },
+			{ t = 10, every = 10, name = "People Silenced", dur = 3, warn = true },
+		},
+	},
+	["incindis"] = {
+		label = "Incindis",
+		ev = {
+			{ t = 5.5, every = 5.5, name = "Fire Nova!", dur = 3, icon = "Interface\\Icons\\spell_fire_selfdestruct", warn = true },
+		},
+	},
+	["instructor razuvious"] = {
+		label = "Instructor Razuvious",
+		ev = {
+			{ t = 25, every = 25, name = "Disrupting Shout", dur = 3, icon = "Interface\\Icons\\Ability_Warrior_WarCry", warn = true },
+			{ t = 30, every = 30, name = "Unbalancing Strike", dur = 3, icon = "Interface\\Icons\\Ability_Warrior_DecisiveStrike", warn = true },
+		},
+	},
+	["jindo the hexxer"] = {
+		label = "Jindo",
+		ev = {
+			{ t = 25, every = 25, name = "Hex", dur = 3, warn = true },
+		},
+	},
+	-- ===== AQ20 =====
+	["general rajaxx"] = {
+		label = "General Rajaxx",
+		ev = {
+			{ t = 30, every = 30, name = "Wave", dur = 5, warn = true },
+		},
+	},
+	["karrsh the sentinel"] = {
+		label = "Karrsh the Sentinel",
+		ev = {
+			{ t = 12, every = 12, name = "Furious Roar", dur = 3, icon = "Interface\\Icons\\Ability_Druid_DemoralizingRoar", warn = true },
+		},
+	},
+	["kazzak"] = {
+		label = "Kazzak",
+		ev = {
+			{ t = 30, every = 30, name = "Shadow Bolt Volley", dur = 3 },
+		},
+	},
+	["keeper gnarlmoon"] = {
+		label = "Keeper Gnarlmoon",
+		ev = {
+			{ t = 5, every = 5, name = "Lunar Shift Casting!", dur = 3, warn = true },
+			{ t = 60, every = 60, name = "Owls Enrage", dur = 3, icon = "Interface\\Icons\\Spell_Shadow_UnholyFrenzy", warn = true },
+		},
+	},
+	["kel'thuzad"] = {
+		label = "Kel'Thuzad",
+		ev = {
+			{ t = 20, every = 20, name = "Shadow Fissure", dur = 3 },
+			{ t = 30, every = 30, name = "Frost Blast", dur = 3, warn = true },
+		},
+	},
+	["king"] = {
+		label = "King",
+		ev = {
+			{ t = 5, every = 5, name = "King's Fury - Hide!", dur = 3, icon = "Interface\\Icons\\Spell_Holy_HolyNova", warn = true },
+			{ t = 11, every = 11, name = "Shield Bash", dur = 3, icon = "Interface\\Icons\\Ability_Warrior_ShieldBash", warn = true },
+		},
+	},
+	["kurinnaxx"] = {
+		label = "Kurinnaxx",
+		ev = {
+			{ t = 15, every = 15, name = "Wounds", dur = 3, icon = "Interface\\Icons\\ability_criticalstrike", warn = true },
+			{ t = 20, every = 20, name = "Sand Trap", dur = 3, icon = "Interface\\Icons\\inv_misc_dust_02", warn = true },
+		},
+	},
+	["lethon"] = {
+		label = "Lethon",
+		ev = {
+			{ t = 20, every = 20, name = "Shadow Bolt Whirl", dur = 3 },
+		},
+	},
+	["loatheb"] = {
+		label = "Loatheb",
+		ev = {
+			{ t = 60, every = 60, name = "Your Corrupted Mind", dur = 3, icon = "Interface\\Icons\\spell_shadow_auraofdarkness", warn = true },
+		},
+	},
+	["lord blackwald ii"] = {
+		label = "Lord Blackwald II",
+		ev = {
+			{ t = 5.5, every = 5.5, name = "Reaver Storm CD", dur = 3, warn = true },
+			{ t = 1.5, every = 1.5, name = "Reaver Storm Cast", dur = 3, warn = true },
+			{ t = 15, every = 15, name = "Boon on ", dur = 3, icon = "Interface\\Icons\\Spell_Shadow_ChillTouch", warn = true },
+			{ t = 10, every = 10, name = "Empowered", dur = 3, icon = "Interface\\Icons\\Spell_Shadow_Haunting", warn = true },
+			{ t = 45, every = 45, name = "Summons add", dur = 3, icon = "Interface\\Icons\\inv_misc_bone_orcskull_01", warn = true },
+		},
+	},
+	["lord kazzak"] = {
+		label = "Lord Kazzak",
+		ev = {
+			{ t = 180, every = 180, name = "Berserk", dur = 3, icon = "Interface\\Icons\\Spell_Shadow_UnholyFrenzy", warn = true },
+			{ t = 10, every = 10, name = "Mark of Kazzak CD", dur = 3, warn = true },
+			{ t = 60, every = 60, name = "Mark of Kazzak", dur = 3, warn = true },
+			{ t = 14, every = 14, name = "Twisted Reflection CD", dur = 3, warn = true },
+			{ t = 45, every = 45, name = "Twisted Reflect", dur = 3, warn = true },
+			{ t = 10, every = 10, name = "Void Bolt CD", dur = 3, warn = true },
+			{ t = 4, every = 4, name = "Void Bolt!", dur = 3, warn = true },
+		},
+	},
+	["lucifron"] = {
+		label = "Lucifron",
+		ev = {
+			{ t = 8, every = 8, name = "MC CD", dur = 3, warn = true },
+			{ t = 15, every = 15, name = "MC ", dur = 3, icon = "Interface\\Icons\\Spell_Shadow_ShadowWordDominate", warn = true },
+		},
+	},
+	["mad servant"] = {
+		label = "Mad Servant",
+		ev = {
+			{ t = 11, every = 11, name = "Void Spawn - Portal ", dur = 3, icon = "Interface\\Icons\\spell_shadow_sealofkings", warn = true },
+		},
+	},
+	["maexxna"] = {
+		label = "Maexxna",
+		ev = {
+			{ t = 20, every = 20, name = "Cocoon CD", dur = 3, warn = true },
+			{ t = 30, every = 30, name = "Spiderlings", dur = 3, icon = "Interface\\Icons\\INV_Misc_MonsterSpiderCarapace_01", warn = true },
+		},
+	},
+	["magmadar"] = {
+		label = "Magmadar",
+		ev = {
+			{ t = 30, every = 30, name = "Fear CD", dur = 3, warn = true },
+			{ t = 5, every = 5, name = "Fear Soon...", dur = 3, warn = true },
+		},
+	},
+	["majordomo executus"] = {
+		label = "Majordomo Executus",
+		ev = {
+			{ t = 20, every = 20, name = "Reflection CD", dur = 3, warn = true },
+		},
+	},
+	["mandokir"] = {
+		label = "Mandokir",
+		ev = {
+			{ t = 60, every = 60, name = "Frightening Shout", dur = 3, warn = true },
+		},
+	},
+	["mar'li"] = {
+		label = "Mar'li",
+		ev = {
+			{ t = 20, every = 20, name = "Enrage", dur = 3 },
+		},
+	},
+	["moam"] = {
+		label = "Moam",
+		ev = {
+			{ t = 90, every = 90, name = "Mana Burn", dur = 3, warn = true },
+		},
+	},
+	["moroes"] = {
+		label = "Moroes",
+		ev = {
+			{ t = 10, every = 10, name = "Players Smoke Bombed", dur = 3, icon = "Interface\\Icons\\Ability_Vanish", warn = true },
+			{ t = 5, every = 5, name = "Spell Reflect!", dur = 3, icon = "Interface\\Icons\\Spell_Arcane_Blink", warn = true },
+			{ t = 4, every = 4, name = "Kicked", dur = 3, icon = "Interface\\Icons\\Ability_Kick", warn = true },
+			{ t = 10, every = 10, name = "Dusted", dur = 3, icon = "Interface\\Icons\\Ability_Hibernation", warn = true },
+		},
+	},
+	["mossheart"] = {
+		label = "Mossheart",
+		ev = {
+			{ t = 180, every = 180, name = "Moss", dur = 3, icon = "Interface\\Icons\\spell_nature_magicimmunity", warn = true },
+			{ t = 25, every = 25, name = "Entangling Roots CD", dur = 3, icon = "Interface\\Icons\\spell_nature_stranglevines", warn = true },
+			{ t = 12, every = 12, name = "Rejuvenation", dur = 3, icon = "Interface\\Icons\\spell_nature_rejuvenation", warn = true },
+		},
+	},
+	["nefarian"] = {
+		label = "Nefarian",
+		ev = {
+			{ t = 12.4, every = 12.4, name = "AoE Shadow Flame", dur = 3, warn = true },
+		},
+	},
+	["nerubian overseer"] = {
+		label = "Nerubian Overseer",
+		ev = {
+			{ t = 10, every = 10, name = "Shadow Shock", dur = 3, icon = "Interface\\Icons\\spell_shadow_shadowbolt", warn = true },
+			{ t = 30, every = 30, name = "Venom Spit", dur = 3, icon = "Interface\\Icons\\spell_nature_corrosivebreath", warn = true },
+			{ t = 30, every = 30, name = "Corrosive Poison", dur = 3, icon = "Interface\\Icons\\Corrosive Acid Spit", warn = true },
+			{ t = 30, every = 30, name = "Necrotic Poison", dur = 3, icon = "Interface\\Icons\\ability_creature_poison_03", warn = true },
+			{ t = 10, every = 10, name = "Web Spray", dur = 3, icon = "Interface\\Icons\\inv_egg_04", warn = true },
 		},
 	},
 	["noth the plaguebringer"] = {
@@ -335,41 +665,195 @@ M.BOSSES = {
 			{ t = 90, every = 90, name = "Blink", dur = 3 },
 		},
 	},
-	["heigan the unclean"] = {
-		label = "Heigan",
+	["onyxia"] = {
+		label = "Onyxia",
 		ev = {
-			{ t = 15, every = 15, name = "Eruption", dur = 3 },
+			{ t = 30, every = 30, name = "Deep Breath", dur = 3, warn = true },
+		},
+	},
+	["ossirian the unscarred"] = {
+		label = "Ossirian",
+		ev = {
+			{ t = 20, every = 20, name = "Tornado", dur = 3 },
+		},
+	},
+	["ostarius"] = {
+		label = "Ostarius",
+		ev = {
+			{ t = 10, every = 10, name = "Conflag", dur = 3, icon = "Interface\\Icons\\spell_fire_incinerate", warn = true },
+			{ t = 12, every = 12, name = "Stomped", dur = 3, icon = "Interface\\Icons\\ability_warstomp", warn = true },
+		},
+	},
+	["ouro"] = {
+		label = "Ouro",
+		ev = {
+			{ t = 20, every = 20, name = "Sand Blast", dur = 3, warn = true },
 		},
 	},
 	["patchwerk"] = {
 		label = "Patchwerk",
 		ev = {
-			{ t = 30, every = 30, name = "Hateful Strike", dur = 3 },
+			{ t = 420, every = 420, name = "Enrage", dur = 3, icon = "Interface\\Icons\\Spell_Shadow_UnholyFrenzy", warn = true },
 		},
 	},
-	["grobbulus"] = {
-		label = "Grobbulus",
+	["princess huhuran"] = {
+		label = "Huhuran",
 		ev = {
-			{ t = 12, every = 12, name = "Poison Cloud", dur = 3, warn = true },
+			{ t = 30, every = 30, name = "Wyvern Sting", dur = 3, warn = true },
+			{ t = 30, every = 30, name = "Frenzy", dur = 3 },
 		},
 	},
-	["gluth"] = {
-		label = "Gluth",
+	["pyroguard emberseer"] = {
+		label = "Pyroguard Emberseer",
 		ev = {
-			{ t = 20, every = 20, name = "Terrifying Roar", dur = 3, warn = true },
-			{ t = 15, every = 15, name = "Decimate", dur = 3 },
+			{ t = 6, every = 6, name = "Fire Nova", dur = 3, icon = "Interface\\Icons\\spell_fire_sealoffire", warn = true },
 		},
 	},
-	["instructor razuvious"] = {
-		label = "Razuvious",
+	["qiraji brainwasher"] = {
+		label = "Qiraji Brainwasher",
 		ev = {
-			{ t = 25, every = 25, name = "Jagged Knife", dur = 3 },
+			{ t = 8, every = 8, name = "Mind Flay", dur = 3, icon = "Interface\\Icons\\spell_shadow_siphonmana", warn = true },
 		},
 	},
-	["gothik the harvester"] = {
-		label = "Gothik",
+	["qiraji mindslayer"] = {
+		label = "Qiraji Mindslayer",
 		ev = {
-			{ t = 30, every = 30, name = "Harvest Soul", dur = 3 },
+			{ t = 8, every = 8, name = "Mind Flay", dur = 3, icon = "Interface\\Icons\\spell_shadow_siphonmana", warn = true },
+			{ t = 8, every = 8, name = "Mana Burn & Disorient", dur = 3, icon = "Interface\\Icons\\spell_shadow_manaburn", warn = true },
+		},
+	},
+	["ragnaros"] = {
+		label = "Ragnaros",
+		ev = {
+			{ t = 90, every = 90, name = "Emerge", dur = 3, warn = true },
+			{ t = 25, every = 25, name = "Knockback CD", dur = 3, warn = true },
+			{ t = 8, every = 8, name = "Knockback Soon...", dur = 3, warn = true },
+		},
+	},
+	["razorgore the untamed"] = {
+		label = "Razorgore the Untamed",
+		ev = {
+			{ t = 10, every = 10, name = "Slowed", dur = 3, icon = "Interface\\Icons\\spell_nature_slow", warn = true },
+			{ t = 90, every = 90, name = "Orb Control", dur = 3, icon = "Interface\\Icons\\INV_Misc_Gem_Pearl_03", warn = true },
+			{ t = 60, every = 60, name = "Mind Exhaustion", dur = 3, icon = "Interface\\Icons\\spell_shadow_teleport", warn = true },
+		},
+	},
+	["renataki"] = {
+		label = "Renataki",
+		ev = {
+			{ t = 28, every = 28, name = "Vanish", dur = 3, icon = "Interface\\Icons\\ability_vanish", warn = true },
+			{ t = 20, every = 20, name = "Return", dur = 3, icon = "Interface\\Icons\\ability_rogue_ambush", warn = true },
+			{ t = 9, every = 9, name = "Gouge CD", dur = 3, icon = "Interface\\Icons\\ability_gouge", warn = true },
+		},
+	},
+	["rotmaw"] = {
+		label = "Rotmaw",
+		ev = {
+			{ t = 240, every = 240, name = "Contagion", dur = 3, icon = "Interface\\Icons\\spell_shadow_callofbone", warn = true },
+			{ t = 15, every = 15, name = "Consumed", dur = 3, icon = "Interface\\Icons\\spell_nature_drowsy", warn = true },
+		},
+	},
+	["sanctum dragonkin"] = {
+		label = "Sanctum Dragonkin",
+		ev = {
+			{ t = 5, every = 5, name = "Dragonkin Spell Reflect", dur = 3, icon = "Interface\\Icons\\Spell_Arcane_Blink", warn = true },
+		},
+	},
+	["sanctum dreamer"] = {
+		label = "Sanctum Dreamer",
+		ev = {
+			{ t = 10, every = 10, name = "People Sleeping", dur = 3, icon = "Interface\\Icons\\Spell_Nature_Sleep", warn = true },
+		},
+	},
+	["sanctum supressor"] = {
+		label = "Sanctum Supressor",
+		ev = {
+			{ t = 12, every = 12, name = "Supression", dur = 3, icon = "Interface\\Icons\\Spell_Nature_MagicImmunity", warn = true },
+		},
+	},
+	["sanctum wyrm"] = {
+		label = "Sanctum Wyrm",
+		ev = {
+			{ t = 15, every = 15, name = "Poison Bolt Volley", dur = 3, icon = "Interface\\Icons\\Spell_Nature_CorrosiveBreath", warn = true },
+		},
+	},
+	["sanctum wyrmkin"] = {
+		label = "Sanctum Wyrmkin",
+		ev = {
+			{ t = 30, every = 30, name = "Venom", dur = 3, icon = "Interface\\Icons\\Ability_Creature_Poison_03", warn = true },
+		},
+	},
+	["sanv tasdal"] = {
+		label = "Sanv Tas'dal",
+		ev = {
+			{ t = 6, every = 6, name = "Overflowing Hatred", dur = 3, warn = true },
+		},
+	},
+	["sapphiron"] = {
+		label = "Sapphiron",
+		ev = {
+			{ t = 7, every = 7, name = "Frost Breath Exploding!", dur = 3, icon = "Interface\\Icons\\spell_frost_frostward", warn = true },
+			{ t = 24, every = 24, name = "Life Drain", dur = 3, icon = "Interface\\Icons\\Spell_Shadow_LifeDrain02", warn = true },
+		},
+	},
+	["shazzrah"] = {
+		label = "Shazzrah",
+		ev = {
+			{ t = 16, every = 16, name = "Counterspell CD", dur = 3, warn = true },
+			{ t = 3, every = 3, name = "Counterspell Soon...", dur = 3, warn = true },
+			{ t = 20, every = 20, name = "Shazzrah's Curse CD", dur = 3, warn = true },
+		},
+	},
+	["solakar flamewreath"] = {
+		label = "Solakar Flamewreath",
+		ev = {
+			{ t = 40, every = 40, name = "Solakar spawns", dur = 3, warn = true },
+			{ t = 5, every = 5, name = "Stun!", dur = 3, icon = "Interface\\Icons\\ability_bullrush", warn = true },
+		},
+	},
+	["solnius"] = {
+		label = "Solnius",
+		ev = {
+			{ t = 600, every = 600, name = "Solnius is Immune", dur = 3, icon = "Interface\\Icons\\Inv_Misc_Pocketwatch_01", warn = true },
+			{ t = 45, every = 45, name = "Solnius is Sleeping", dur = 3, icon = "Interface\\Icons\\Inv_Misc_Pocketwatch_01", warn = true },
+			{ t = 6, every = 6, name = "Wail Casting", dur = 3, icon = "Interface\\Icons\\Spell_Shadow_ShadeTruesight", warn = true },
+			{ t = 3, every = 3, name = "Wail Afflicted", dur = 3, icon = "Interface\\Icons\\Spell_Shadow_ShadeTruesight", warn = true },
+			{ t = 26, every = 26, name = "Wail of Erennius CD", dur = 3, icon = "Interface\\Icons\\Spell_Shadow_ShadeTruesight", warn = true },
+		},
+	},
+	["sulfuron harbinger"] = {
+		label = "Sulfuron Harbinger",
+		ev = {
+			{ t = 10, every = 10, name = "Hand of Ragnaros CD", dur = 3, warn = true },
+			{ t = 2, every = 2, name = "Hand of Ragnaros Stun", dur = 3, warn = true },
+		},
+	},
+	["taerar"] = {
+		label = "Taerar",
+		ev = {
+			{ t = 20, every = 20, name = "Bane of Awakening", dur = 3 },
+		},
+	},
+	["thaddius"] = {
+		label = "Thaddius",
+		ev = {
+			{ t = 10, every = 10, name = "Power Surge", dur = 3, icon = "Interface\\Icons\\Spell_Shadow_UnholyFrenzy", warn = true },
+			{ t = 20.5, every = 20.5, name = "Magnetic Pull", dur = 3, icon = "Interface\\Icons\\spell_nature_groundingtotem", warn = true },
+			{ t = 300, every = 300, name = "Enrage", dur = 3, icon = "Interface\\Icons\\Spell_Shadow_UnholyFrenzy", warn = true },
+		},
+	},
+	["the beast"] = {
+		label = "The Beast",
+		ev = {
+			{ t = 10, every = 10, name = "Fear CD", dur = 3, warn = true },
+			{ t = 5, every = 5, name = "Fear Duration", dur = 3, warn = true },
+		},
+	},
+	["the bug family"] = {
+		label = "The Bug Family",
+		ev = {
+			{ t = 20, every = 20, name = "Panic CD", dur = 3, icon = "Interface\\Icons\\Spell_Shadow_DeathScream", warn = true },
+			{ t = 2, every = 2, name = "Great Heal", dur = 3, icon = "Interface\\Icons\\Spell_Holy_Heal", warn = true },
 		},
 	},
 	["the four horsemen"] = {
@@ -385,16 +869,62 @@ M.BOSSES = {
 			{ t = 15, every = 15, name = "Volatile Infection", dur = 3 },
 		},
 	},
-	["lethon"] = {
-		label = "Lethon",
+	["time-lord epochronos"] = {
+		label = "Time-Lord Epochronos",
 		ev = {
-			{ t = 20, every = 20, name = "Shadow Bolt Whirl", dur = 3 },
+			{ t = 2, every = 2, name = "Sand Breath Cast", dur = 3, warn = true },
+			{ t = 13, every = 13, name = "Sand Breath CD", dur = 3, warn = true },
+			{ t = 30, every = 30, name = "Banish", dur = 3, icon = "Interface\\Icons\\spell_shadow_cripple", warn = true },
+			{ t = 30, every = 30, name = "Devouring Plague", dur = 3, icon = "Interface\\Icons\\spell_shadow_shadetruesight", warn = true },
+			{ t = 3, every = 3, name = "Death Coil", dur = 3, icon = "Interface\\Icons\\spell_shadow_deathcoil", warn = true },
 		},
 	},
-	["taerar"] = {
-		label = "Taerar",
+	["twilight corrupter"] = {
+		label = "Twilight Corrupter",
 		ev = {
-			{ t = 20, every = 20, name = "Bane of Awakening", dur = 3 },
+			{ t = 8, every = 8, name = "MC CD", dur = 3, warn = true },
+			{ t = 20, every = 20, name = "Soul Corruption CD", dur = 3, warn = true },
+			{ t = 10, every = 10, name = "Soul Corruption Soon...", dur = 3, warn = true },
+			{ t = 600, every = 600, name = "AP Buff", dur = 3, icon = "Interface\\Icons\\spell_nature_strength", warn = true },
+		},
+	},
+	["twin golems"] = {
+		label = "Twin Golems",
+		ev = {
+			{ t = 15, every = 15, name = "X Bulwark", dur = 3, icon = "Interface\\Icons\\ability_mage_moltenarmor", warn = true },
+		},
+	},
+	["ursol"] = {
+		label = "Ursol",
+		ev = {
+			{ t = 30, every = 30, name = "RP - Immune", dur = 3, icon = "Interface\\Icons\\Spell_Shadow_Cripple", warn = true },
+			{ t = 92, every = 92, name = "Add Phase", dur = 3, icon = "Interface\\Icons\\Spell_Holy_PowerInfusion", warn = true },
+			{ t = 5, every = 5, name = "Roar of Terror", dur = 3, icon = "Interface\\Icons\\Ability_Druid_ChallangingRoar", warn = true },
+		},
+	},
+	["vaelastrasz"] = {
+		label = "Vaelastrasz",
+		ev = {
+			{ t = 15, every = 15, name = "Fire Burning", dur = 3, warn = true },
+		},
+	},
+	["vaelastrasz the corrupt"] = {
+		label = "Vaelastrasz the Corrupt",
+		ev = {
+			{ t = 15, every = 15, name = "Burning Adrenaline CD", dur = 3, warn = true },
+			{ t = 20, every = 20, name = "Burning!", dur = 3, icon = "Interface\\Icons\\spell_shadow_mindbomb", warn = true },
+		},
+	},
+	["viscidus"] = {
+		label = "Viscidus",
+		ev = {
+			{ t = 15, every = 15, name = "Poison Bolt Volley", dur = 3 },
+		},
+	},
+	["warchief rend blackhand"] = {
+		label = "Warchief Rend Blackhand",
+		ev = {
+			{ t = 36.5, every = 36.5, name = "Gyth", dur = 3, warn = true },
 		},
 	},
 	["ysondre"] = {
@@ -411,285 +941,6 @@ M.BOSSES = {
 			{ t = 8, every = 8, name = "Brood Venom Volley", dur = 3, warn = true },
 			{ t = 10, every = 10, name = "Leeching Bite", dur = 3, warn = true },
 			{ t = 20, every = 20, name = "Skitterweb Egg Hatch", dur = 3, warn = true },
-		},
-	},
-	["dark rider champion"] = {
-		label = "Dark Rider Champion",
-		ev = {
-			{ t = 5.5, every = 5.5, name = "Reaver Storm CD", dur = 3, warn = true },
-			{ t = 1.5, every = 1.5, name = "Reaver Storm Cast", dur = 3, warn = true },
-		},
-	},
-	["grizikil"] = {
-		label = "Grizikil",
-		ev = {
-			{ t = 9, every = 9, name = "Flamewave", dur = 3, warn = true },
-		},
-	},
-	["lord blackwald ii"] = {
-		label = "Lord Blackwald II",
-		ev = {
-			{ t = 5.5, every = 5.5, name = "Reaver Storm CD", dur = 3, warn = true },
-			{ t = 1.5, every = 1.5, name = "Reaver Storm Cast", dur = 3, warn = true },
-			{ t = 15, every = 15, name = "Boon on ", dur = 3, warn = true },
-			{ t = 10, every = 10, name = "Empowered", dur = 3, warn = true },
-			{ t = 45, every = 45, name = "Summons add", dur = 3, warn = true },
-		},
-	},
-	["moroes"] = {
-		label = "Moroes",
-		ev = {
-			{ t = 10, every = 10, name = "Players Smoke Bombed", dur = 3, warn = true },
-			{ t = 5, every = 5, name = "Spell Reflect!", dur = 3, warn = true },
-			{ t = 4, every = 4, name = "Kicked", dur = 3, warn = true },
-			{ t = 10, every = 10, name = "Dusted", dur = 3, warn = true },
-		},
-	},
-	["king"] = {
-		label = "King",
-		ev = {
-			{ t = 5, every = 5, name = "King's Fury - Hide!", dur = 3, warn = true },
-			{ t = 11, every = 11, name = "Shield Bash", dur = 3, warn = true },
-		},
-	},
-	["echo of medivh"] = {
-		label = "Echo of Medivh",
-		ev = {
-			{ t = 12, every = 12, name = "Corruption of Medivh", dur = 3, warn = true },
-		},
-	},
-	["keeper gnarlmoon"] = {
-		label = "Keeper Gnarlmoon",
-		ev = {
-			{ t = 5, every = 5, name = "Lunar Shift Casting!", dur = 3, warn = true },
-			{ t = 60, every = 60, name = "Owls Enrage", dur = 3, warn = true },
-		},
-	},
-	["sanv tasdal"] = {
-		label = "Sanv Tas'dal",
-		ev = {
-			{ t = 6, every = 6, name = "Overflowing Hatred", dur = 3, warn = true },
-		},
-	},
-	["erennius"] = {
-		label = "Erennius",
-		ev = {
-			{ t = 6, every = 6, name = "Wail Casting", dur = 3, warn = true },
-			{ t = 3, every = 3, name = "Wail Afflicted", dur = 3, warn = true },
-			{ t = 26, every = 26, name = "Wail of Erennius CD", dur = 3, warn = true },
-		},
-	},
-	["sanctum dragonkin"] = {
-		label = "Sanctum Dragonkin",
-		ev = {
-			{ t = 5, every = 5, name = "Dragonkin Spell Reflect", dur = 3, warn = true },
-		},
-	},
-	["sanctum dreamer"] = {
-		label = "Sanctum Dreamer",
-		ev = {
-			{ t = 10, every = 10, name = "People Sleeping", dur = 3, warn = true },
-		},
-	},
-	["sanctum supressor"] = {
-		label = "Sanctum Supressor",
-		ev = {
-			{ t = 12, every = 12, name = "Supression", dur = 3, warn = true },
-		},
-	},
-	["sanctum wyrm"] = {
-		label = "Sanctum Wyrm",
-		ev = {
-			{ t = 15, every = 15, name = "Poison Bolt Volley", dur = 3, warn = true },
-		},
-	},
-	["sanctum wyrmkin"] = {
-		label = "Sanctum Wyrmkin",
-		ev = {
-			{ t = 30, every = 30, name = "Venom", dur = 3, warn = true },
-		},
-	},
-	["solnius"] = {
-		label = "Solnius",
-		ev = {
-			{ t = 600, every = 600, name = "Solnius is Immune", dur = 3, warn = true },
-			{ t = 45, every = 45, name = "Solnius is Sleeping", dur = 3, warn = true },
-			{ t = 6, every = 6, name = "Wail Casting", dur = 3, warn = true },
-			{ t = 3, every = 3, name = "Wail Afflicted", dur = 3, warn = true },
-			{ t = 26, every = 26, name = "Wail of Erennius CD", dur = 3, warn = true },
-		},
-	},
-	["atiesh"] = {
-		label = "Atiesh",
-		ev = {
-			{ t = 2, every = 2, name = "Unholy Aura", dur = 3, warn = true },
-		},
-	},
-	["dark reaver of karazhan"] = {
-		label = "Dark Reaver of Karazhan",
-		ev = {
-			{ t = 22, every = 22, name = "4 Forlorn Spirit", dur = 3, warn = true },
-			{ t = 10, every = 10, name = "Lurking Shadow", dur = 3, warn = true },
-			{ t = 6, every = 6, name = "Unbalancing", dur = 3, warn = true },
-			{ t = 20, every = 20, name = "Pierce Armor", dur = 3, warn = true },
-		},
-	},
-	["doctor weavil"] = {
-		label = "Doctor Weavil",
-		ev = {
-			{ t = 10, every = 10, name = "Mind Shatter CD", dur = 3, warn = true },
-			{ t = 6, every = 6, name = "Mind Shatter Soon...", dur = 3, warn = true },
-		},
-	},
-	["lord kazzak"] = {
-		label = "Lord Kazzak",
-		ev = {
-			{ t = 180, every = 180, name = "Berserk", dur = 3, warn = true },
-			{ t = 10, every = 10, name = "Mark of Kazzak CD", dur = 3, warn = true },
-			{ t = 60, every = 60, name = "Mark of Kazzak", dur = 3, warn = true },
-			{ t = 14, every = 14, name = "Twisted Reflection CD", dur = 3, warn = true },
-			{ t = 45, every = 45, name = "Twisted Reflect", dur = 3, warn = true },
-			{ t = 10, every = 10, name = "Void Bolt CD", dur = 3, warn = true },
-			{ t = 4, every = 4, name = "Void Bolt!", dur = 3, warn = true },
-		},
-	},
-	["nerubian overseer"] = {
-		label = "Nerubian Overseer",
-		ev = {
-			{ t = 10, every = 10, name = "Shadow Shock", dur = 3, warn = true },
-			{ t = 30, every = 30, name = "Venom Spit", dur = 3, warn = true },
-			{ t = 30, every = 30, name = "Corrosive Poison", dur = 3, warn = true },
-			{ t = 30, every = 30, name = "Necrotic Poison", dur = 3, warn = true },
-			{ t = 10, every = 10, name = "Web Spray", dur = 3, warn = true },
-		},
-	},
-	["ostarius"] = {
-		label = "Ostarius",
-		ev = {
-			{ t = 10, every = 10, name = "Conflag", dur = 3, warn = true },
-			{ t = 12, every = 12, name = "Stomped", dur = 3, warn = true },
-		},
-	},
-	["twilight corrupter"] = {
-		label = "Twilight Corrupter",
-		ev = {
-			{ t = 8, every = 8, name = "MC CD", dur = 3, warn = true },
-			{ t = 20, every = 20, name = "Soul Corruption CD", dur = 3, warn = true },
-			{ t = 10, every = 10, name = "Soul Corruption Soon...", dur = 3, warn = true },
-			{ t = 600, every = 600, name = "AP Buff", dur = 3, warn = true },
-		},
-	},
-	["karrsh the sentinel"] = {
-		label = "Karrsh the Sentinel",
-		ev = {
-			{ t = 12, every = 12, name = "Furious Roar", dur = 3, warn = true },
-		},
-	},
-	["chieftain partath"] = {
-		label = "Chieftain Partath",
-		ev = {
-			{ t = 15, every = 15, name = "Immune", dur = 3, warn = true },
-		},
-	},
-	["ursol"] = {
-		label = "Ursol",
-		ev = {
-			{ t = 30, every = 30, name = "RP - Immune", dur = 3, warn = true },
-			{ t = 92, every = 92, name = "Add Phase", dur = 3, warn = true },
-			{ t = 5, every = 5, name = "Roar of Terror", dur = 3, warn = true },
-		},
-	},
-	["antnormi"] = {
-		label = "Antnormi",
-		ev = {
-			{ t = 20, every = 20, name = "Fear CD", dur = 3, warn = true },
-			{ t = 5, every = 5, name = "Feared!", dur = 3, warn = true },
-			{ t = 10, every = 10, name = "Shadow Shock CD", dur = 3, warn = true },
-		},
-	},
-	["chronar"] = {
-		label = "Chronar",
-		ev = {
-			{ t = 10, every = 10, name = "Spell Reflect", dur = 3, warn = true },
-			{ t = 5, every = 5, name = "Mortal Strike", dur = 3, warn = true },
-		},
-	},
-	["drifting avatar of sand"] = {
-		label = "Drifting Avatar of Sand",
-		ev = {
-			{ t = 5, every = 5, name = "Blinded", dur = 3, warn = true },
-		},
-	},
-	["epidamu"] = {
-		label = "Epidamu",
-		ev = {
-			{ t = 5, every = 5, name = "Drain Mana", dur = 3, warn = true },
-			{ t = 15, every = 15, name = "Temporal Conflux", dur = 3, warn = true },
-		},
-	},
-	["mossheart"] = {
-		label = "Mossheart",
-		ev = {
-			{ t = 180, every = 180, name = "Moss", dur = 3, warn = true },
-			{ t = 25, every = 25, name = "Entangling Roots CD", dur = 3, warn = true },
-			{ t = 12, every = 12, name = "Rejuvenation", dur = 3, warn = true },
-		},
-	},
-	["rotmaw"] = {
-		label = "Rotmaw",
-		ev = {
-			{ t = 240, every = 240, name = "Contagion", dur = 3, warn = true },
-			{ t = 15, every = 15, name = "Consumed", dur = 3, warn = true },
-		},
-	},
-	["time-lord epochronos"] = {
-		label = "Time-Lord Epochronos",
-		ev = {
-			{ t = 2, every = 2, name = "Sand Breath Cast", dur = 3, warn = true },
-			{ t = 13, every = 13, name = "Sand Breath CD", dur = 3, warn = true },
-			{ t = 30, every = 30, name = "Banish", dur = 3, warn = true },
-			{ t = 30, every = 30, name = "Devouring Plague", dur = 3, warn = true },
-			{ t = 3, every = 3, name = "Death Coil", dur = 3, warn = true },
-		},
-	},
-	["the beast"] = {
-		label = "The Beast",
-		ev = {
-			{ t = 10, every = 10, name = "Fear CD", dur = 3, warn = true },
-			{ t = 5, every = 5, name = "Fear Duration", dur = 3, warn = true },
-		},
-	},
-	["general drakkisath"] = {
-		label = "General Drakkisath",
-		ev = {
-			{ t = 10, every = 10, name = "Conflag", dur = 3, warn = true },
-		},
-	},
-	["pyroguard emberseer"] = {
-		label = "Pyroguard Emberseer",
-		ev = {
-			{ t = 6, every = 6, name = "Fire Nova", dur = 3, warn = true },
-		},
-	},
-	["warchief rend blackhand"] = {
-		label = "Warchief Rend Blackhand",
-		ev = {
-			{ t = 36.5, every = 36.5, name = "Gyth", dur = 3, warn = true },
-		},
-	},
-	["solakar flamewreath"] = {
-		label = "Solakar Flamewreath",
-		ev = {
-			{ t = 40, every = 40, name = "Solakar spawns", dur = 3, warn = true },
-			{ t = 5, every = 5, name = "Stun!", dur = 3, warn = true },
-		},
-	},
-
-	["anomalus"] = {
-		label = "Anomalus",
-		ev = {
-			{ t = 15, every = 10, name = "Arcane Overload", dur = 5, warn = true },
-			{ t = 45, every = 45, name = "Arcane Dampening", dur = 3 },
 		},
 	},
 }
@@ -734,16 +985,16 @@ function M.Detect()
 	local key = nil
 	if nm and nm ~= EMPTY and not UnitIsPlayer(unit) then
 		key = fold(nm)
-		if not M.bossByKey[key] then
+		if not M.BOSSES[key] then
 			-- tolerance client FR : "Le Recousu" -> "recousu"
 			local cut = sfind(key, "^l[ae] ")
 			if cut then
 				local alt = strsub(key, cut + 3)
-				if M.bossByKey[alt] then key = alt end
+				if M.BOSSES[alt] then key = alt end
 			end
 		end
 	end
-	if key and M.bossByKey[key] then
+	if key and M.BOSSES[key] then
 		if M.cur ~= key then
 			M.cur = key
 			M.curLabel = M.BOSSES[key].label or nm
@@ -828,33 +1079,43 @@ function M.Tick()
 	end
 	if not M.combatAt then return end
 	local lead = C.Get("bossmods.lead") or 10
-	-- armement / planification des evenements relatifs
+	-- armement / planification des evenements relatifs, deux phases comme BigWigs :
+	--   "lead"   : barre de compte a rebours vers l'evenement (fenetre lead), annonce au depart
+	--   "active" : barre de l'effet en cours (dur secondes) une fois l'evenement arrive
 	local i, ev
 	for i = 1, getn(d.ev) do
 		ev = d.ev[i]
 		local nxt = M.next[ev] or (M.combatAt + (ev.t or 0))
-		local armed = M.armedHas(ev.name)
-		if not armed and now >= nxt - lead and not M.warns[ev] then
+		local leadOn = C.Get("bossmods.incoming") ~= false
+		local activeOn = C.Get("bossmods.active") ~= false
+		-- phase lead
+		if leadOn and not M.armedHas(ev.name, "lead") and now >= nxt - lead and now < nxt and not M.warns[ev] then
 			M.warns[ev] = now
-			tinsert(M.armed, { name = ev.name, endsAt = nxt, dur = (ev.dur or 3), ev = ev })
+			tinsert(M.armed, { name = ev.name, icon = ev.icon, endsAt = nxt, ev = ev, phase = "lead" })
 			M.narmed = M.narmed + 1
 			M.Announce(ev.name, floor(nxt - now + 0.5))
 			if M.win and M.win:IsShown() then M.Paint() end
 		end
+		-- l'evenement est arrive : barre active (si duree) puis repetition planifiee
 		if now >= nxt then
-			-- l'evenement est arrive : repetition planifiee
-			M.next[ev] = nxt + (ev.every or 3600)
-			M.warns[ev] = nil
 			local k
 			for k = M.narmed, 1, -1 do
-				if M.armed[k].ev == ev then
+				if M.armed[k].ev == ev and M.armed[k].phase == "lead" then
 					tremove(M.armed, k)
 					M.narmed = M.narmed - 1
 				end
 			end
+			M.next[ev] = nxt + (ev.every or 3600)
+			M.warns[ev] = nil
+			local dur = ev.dur or 0
+			if activeOn and dur > 0 then
+				tinsert(M.armed, { name = ev.name, icon = ev.icon, endsAt = now + dur, ev = ev, phase = "active" })
+				M.narmed = M.narmed + 1
+			end
 			if M.win and M.win:IsShown() then M.Paint() end
 		end
 	end
+	-- purge des barres arrivees a expiration (actives surtout)
 	local i
 	for i = M.narmed, 1, -1 do
 		if now >= M.armed[i].endsAt then
@@ -866,10 +1127,10 @@ function M.Tick()
 end
 
 -- La barre est-elle deja armee pour ce nom ? (antidoublon pendant le lead)
-function M.armedHas(name)
+function M.armedHas(name, phase)
 	local i
 	for i = 1, M.narmed do
-		if M.armed[i].name == name then return true end
+		if M.armed[i].name == name and (not phase or M.armed[i].phase == phase) then return true end
 	end
 	return false
 end
@@ -901,12 +1162,15 @@ function M.Build()
 		row:SetHeight(M.BARH)
 		row:Hide()
 		row.bar = T.Bar(row)
-		row.bar:SetPoint("BOTTOMLEFT", row, "BOTTOMLEFT", 0, 0)
-		row.bar:SetPoint("BOTTOMRIGHT", row, "BOTTOMRIGHT", 0, 0)
-		row.bar:SetHeight(5)
+		row.bar:SetAllPoints(row)
+		row.icon = row:CreateTexture(nil, "ARTWORK")
+		row.icon:SetWidth(15)
+		row.icon:SetHeight(15)
+		row.icon:SetPoint("LEFT", row, "LEFT", 2, 0)
+		row.icon:Hide()
 		row.name = T.Text(row, 10, T.c.text, "LEFT", true)
-		row.name:SetPoint("TOPLEFT", row, "TOPLEFT", 0, 0)
-		row.name:SetWidth(150)
+		row.name:SetPoint("LEFT", row, "LEFT", 19, 0)
+		row.name:SetWidth(140)
 		row.time = T.Text(row, 10, T.c.text, "RIGHT", true)
 		row.time:SetPoint("TOPRIGHT", row, "TOPRIGHT", 0, 0)
 		row.time:SetWidth(44)
@@ -1018,9 +1282,24 @@ function M.Paint()
 			local row = M["row" .. shown]
 			row:Show()
 			row.name:SetText(e.name)
+			-- icone du sort (option) : texture du jeu ou point d'interrogation
+			if C.Get("bossmods.icons") ~= false and e.icon then
+				row.icon:SetTexture(e.icon)
+				row.icon:Show()
+			else
+				row.icon:Hide()
+			end
 			local left = mmax(0, e.endsAt - now)
 			row.time:SetText(string.format("%.0f", left))
-			local span = mmax(1, C.Get("bossmods.lead") or 10)
+			local span, cr, cg, cb
+			if e.phase == "active" then
+				span = mmax(1, e.ev.dur or 3)
+				cr, cg, cb = T.c.bad[1], T.c.bad[2], T.c.bad[3]
+			else
+				span = mmax(1, C.Get("bossmods.lead") or 10)
+				cr, cg, cb = T.Accent()
+			end
+			row.bar:SetStatusBarColor(cr, cg, cb, 0.8)
 			row.bar:SetValue(mmin(1, left / span))
 		end
 	end
@@ -1083,6 +1362,9 @@ SUI.RegisterModule("bossmods", {
 		opt("width", "number", 40, 220, { min = 120, max = 400, step = 10 }),
 		opt("rows", "number", 50, 6, { min = 1, max = 8, step = 1 }),
 		opt("showmsg", "bool", 60, true),
+		opt("icons", "bool", 70, true),
+		opt("incoming", "bool", 80, true),
+		opt("active", "bool", 90, true),
 	},
 	enable = function() M.Enable() end,
 	disable = function() M.Disable() end,

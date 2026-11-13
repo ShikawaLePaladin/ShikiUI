@@ -55,9 +55,14 @@ M.Tick()
 EQ("retour : ragnaros", M.cur, "ragnaros")
 
 SECTION("t_bossmods : t0 et armement des evenements")
+-- boss de test injecte dans la table publique (timings exacts pour les assertions)
+M.BOSSES["testboss"] = { label = "TestBoss", ev = { { t = 25, every = 25, name = "Wrath of Ragnaros", dur = 3, warn = true }, { t = 90, every = 90, name = "Submerge", dur = 45, warn = true } } }
 C.Set("bossmods.lead", 10)
 C.Set("bossmods.channel", "self")
 BMC_CLEAR()
+CHATCLEAR()
+BMC.name.target = "TestBoss"
+M.Tick()
 CHATCLEAR()
 W.combat = true
 Fire("PLAYER_REGEN_DISABLED")
@@ -76,13 +81,17 @@ M.Tick()
 EQ("anti-doublon", M.narmed, 1)
 -- la barre part a t0+25, repetition replanifiee a t0+50
 Pump(0.25, 40)
-EQ("barre purgee apres l'evenement", M.narmed, 0)
-Pump(0.25, 60)
+EQ("barre active apres l'evenement", M.narmed, 1)
+EQ("phase active", M.armed[1].phase, "active")
+Pump(0.25, 16)
+EQ("barre active purgee apres sa duree", M.narmed, 0)
+Pump(0.25, 44)
 EQ("repetition : rearmee au lead suivant", M.narmed, 1)
-T("repetition : moment replanifie", M.next[M.BOSSES.ragnaros.ev[1]] ~= nil)
+T("repetition : moment replanifie", M.next[M.BOSSES.testboss.ev[1]] ~= nil)
 W.combat = false
 Fire("PLAYER_REGEN_ENABLED")
 M.Tick()
+M.BOSSES["testboss"] = nil
 
 SECTION("t_bossmods : annonces au canal raid")
 M.dbg = {}
