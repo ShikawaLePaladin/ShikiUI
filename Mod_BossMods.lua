@@ -404,6 +404,294 @@ M.BOSSES = {
 		},
 	},
 
+	-- ===== OCTOWOW / TURTLE (donnees extraites de BigWigs TW installe) =====
+	["brood queen araxxna"] = {
+		label = "Brood Queen Araxxna",
+		ev = {
+			{ t = 8, every = 8, name = "Brood Venom Volley", dur = 3, warn = true },
+			{ t = 10, every = 10, name = "Leeching Bite", dur = 3, warn = true },
+			{ t = 20, every = 20, name = "Skitterweb Egg Hatch", dur = 3, warn = true },
+		},
+	},
+	["dark rider champion"] = {
+		label = "Dark Rider Champion",
+		ev = {
+			{ t = 5.5, every = 5.5, name = "Reaver Storm CD", dur = 3, warn = true },
+			{ t = 1.5, every = 1.5, name = "Reaver Storm Cast", dur = 3, warn = true },
+		},
+	},
+	["grizikil"] = {
+		label = "Grizikil",
+		ev = {
+			{ t = 9, every = 9, name = "Flamewave", dur = 3, warn = true },
+		},
+	},
+	["lord blackwald ii"] = {
+		label = "Lord Blackwald II",
+		ev = {
+			{ t = 5.5, every = 5.5, name = "Reaver Storm CD", dur = 3, warn = true },
+			{ t = 1.5, every = 1.5, name = "Reaver Storm Cast", dur = 3, warn = true },
+			{ t = 15, every = 15, name = "Boon on ", dur = 3, warn = true },
+			{ t = 10, every = 10, name = "Empowered", dur = 3, warn = true },
+			{ t = 45, every = 45, name = "Summons add", dur = 3, warn = true },
+		},
+	},
+	["moroes"] = {
+		label = "Moroes",
+		ev = {
+			{ t = 10, every = 10, name = "Players Smoke Bombed", dur = 3, warn = true },
+			{ t = 5, every = 5, name = "Spell Reflect!", dur = 3, warn = true },
+			{ t = 4, every = 4, name = "Kicked", dur = 3, warn = true },
+			{ t = 10, every = 10, name = "Dusted", dur = 3, warn = true },
+		},
+	},
+	["king"] = {
+		label = "King",
+		ev = {
+			{ t = 5, every = 5, name = "King's Fury - Hide!", dur = 3, warn = true },
+			{ t = 11, every = 11, name = "Shield Bash", dur = 3, warn = true },
+		},
+	},
+	["echo of medivh"] = {
+		label = "Echo of Medivh",
+		ev = {
+			{ t = 12, every = 12, name = "Corruption of Medivh", dur = 3, warn = true },
+		},
+	},
+	["keeper gnarlmoon"] = {
+		label = "Keeper Gnarlmoon",
+		ev = {
+			{ t = 5, every = 5, name = "Lunar Shift Casting!", dur = 3, warn = true },
+			{ t = 60, every = 60, name = "Owls Enrage", dur = 3, warn = true },
+		},
+	},
+	["sanv tasdal"] = {
+		label = "Sanv Tas'dal",
+		ev = {
+			{ t = 6, every = 6, name = "Overflowing Hatred", dur = 3, warn = true },
+		},
+	},
+	["erennius"] = {
+		label = "Erennius",
+		ev = {
+			{ t = 6, every = 6, name = "Wail Casting", dur = 3, warn = true },
+			{ t = 3, every = 3, name = "Wail Afflicted", dur = 3, warn = true },
+			{ t = 26, every = 26, name = "Wail of Erennius CD", dur = 3, warn = true },
+		},
+	},
+	["sanctum dragonkin"] = {
+		label = "Sanctum Dragonkin",
+		ev = {
+			{ t = 5, every = 5, name = "Dragonkin Spell Reflect", dur = 3, warn = true },
+		},
+	},
+	["sanctum dreamer"] = {
+		label = "Sanctum Dreamer",
+		ev = {
+			{ t = 10, every = 10, name = "People Sleeping", dur = 3, warn = true },
+		},
+	},
+	["sanctum supressor"] = {
+		label = "Sanctum Supressor",
+		ev = {
+			{ t = 12, every = 12, name = "Supression", dur = 3, warn = true },
+		},
+	},
+	["sanctum wyrm"] = {
+		label = "Sanctum Wyrm",
+		ev = {
+			{ t = 15, every = 15, name = "Poison Bolt Volley", dur = 3, warn = true },
+		},
+	},
+	["sanctum wyrmkin"] = {
+		label = "Sanctum Wyrmkin",
+		ev = {
+			{ t = 30, every = 30, name = "Venom", dur = 3, warn = true },
+		},
+	},
+	["solnius"] = {
+		label = "Solnius",
+		ev = {
+			{ t = 600, every = 600, name = "Solnius is Immune", dur = 3, warn = true },
+			{ t = 45, every = 45, name = "Solnius is Sleeping", dur = 3, warn = true },
+			{ t = 6, every = 6, name = "Wail Casting", dur = 3, warn = true },
+			{ t = 3, every = 3, name = "Wail Afflicted", dur = 3, warn = true },
+			{ t = 26, every = 26, name = "Wail of Erennius CD", dur = 3, warn = true },
+		},
+	},
+	["atiesh"] = {
+		label = "Atiesh",
+		ev = {
+			{ t = 2, every = 2, name = "Unholy Aura", dur = 3, warn = true },
+		},
+	},
+	["dark reaver of karazhan"] = {
+		label = "Dark Reaver of Karazhan",
+		ev = {
+			{ t = 22, every = 22, name = "4 Forlorn Spirit", dur = 3, warn = true },
+			{ t = 10, every = 10, name = "Lurking Shadow", dur = 3, warn = true },
+			{ t = 6, every = 6, name = "Unbalancing", dur = 3, warn = true },
+			{ t = 20, every = 20, name = "Pierce Armor", dur = 3, warn = true },
+		},
+	},
+	["doctor weavil"] = {
+		label = "Doctor Weavil",
+		ev = {
+			{ t = 10, every = 10, name = "Mind Shatter CD", dur = 3, warn = true },
+			{ t = 6, every = 6, name = "Mind Shatter Soon...", dur = 3, warn = true },
+		},
+	},
+	["lord kazzak"] = {
+		label = "Lord Kazzak",
+		ev = {
+			{ t = 180, every = 180, name = "Berserk", dur = 3, warn = true },
+			{ t = 10, every = 10, name = "Mark of Kazzak CD", dur = 3, warn = true },
+			{ t = 60, every = 60, name = "Mark of Kazzak", dur = 3, warn = true },
+			{ t = 14, every = 14, name = "Twisted Reflection CD", dur = 3, warn = true },
+			{ t = 45, every = 45, name = "Twisted Reflect", dur = 3, warn = true },
+			{ t = 10, every = 10, name = "Void Bolt CD", dur = 3, warn = true },
+			{ t = 4, every = 4, name = "Void Bolt!", dur = 3, warn = true },
+		},
+	},
+	["nerubian overseer"] = {
+		label = "Nerubian Overseer",
+		ev = {
+			{ t = 10, every = 10, name = "Shadow Shock", dur = 3, warn = true },
+			{ t = 30, every = 30, name = "Venom Spit", dur = 3, warn = true },
+			{ t = 30, every = 30, name = "Corrosive Poison", dur = 3, warn = true },
+			{ t = 30, every = 30, name = "Necrotic Poison", dur = 3, warn = true },
+			{ t = 10, every = 10, name = "Web Spray", dur = 3, warn = true },
+		},
+	},
+	["ostarius"] = {
+		label = "Ostarius",
+		ev = {
+			{ t = 10, every = 10, name = "Conflag", dur = 3, warn = true },
+			{ t = 12, every = 12, name = "Stomped", dur = 3, warn = true },
+		},
+	},
+	["twilight corrupter"] = {
+		label = "Twilight Corrupter",
+		ev = {
+			{ t = 8, every = 8, name = "MC CD", dur = 3, warn = true },
+			{ t = 20, every = 20, name = "Soul Corruption CD", dur = 3, warn = true },
+			{ t = 10, every = 10, name = "Soul Corruption Soon...", dur = 3, warn = true },
+			{ t = 600, every = 600, name = "AP Buff", dur = 3, warn = true },
+		},
+	},
+	["karrsh the sentinel"] = {
+		label = "Karrsh the Sentinel",
+		ev = {
+			{ t = 12, every = 12, name = "Furious Roar", dur = 3, warn = true },
+		},
+	},
+	["chieftain partath"] = {
+		label = "Chieftain Partath",
+		ev = {
+			{ t = 15, every = 15, name = "Immune", dur = 3, warn = true },
+		},
+	},
+	["ursol"] = {
+		label = "Ursol",
+		ev = {
+			{ t = 30, every = 30, name = "RP - Immune", dur = 3, warn = true },
+			{ t = 92, every = 92, name = "Add Phase", dur = 3, warn = true },
+			{ t = 5, every = 5, name = "Roar of Terror", dur = 3, warn = true },
+		},
+	},
+	["antnormi"] = {
+		label = "Antnormi",
+		ev = {
+			{ t = 20, every = 20, name = "Fear CD", dur = 3, warn = true },
+			{ t = 5, every = 5, name = "Feared!", dur = 3, warn = true },
+			{ t = 10, every = 10, name = "Shadow Shock CD", dur = 3, warn = true },
+		},
+	},
+	["chronar"] = {
+		label = "Chronar",
+		ev = {
+			{ t = 10, every = 10, name = "Spell Reflect", dur = 3, warn = true },
+			{ t = 5, every = 5, name = "Mortal Strike", dur = 3, warn = true },
+		},
+	},
+	["drifting avatar of sand"] = {
+		label = "Drifting Avatar of Sand",
+		ev = {
+			{ t = 5, every = 5, name = "Blinded", dur = 3, warn = true },
+		},
+	},
+	["epidamu"] = {
+		label = "Epidamu",
+		ev = {
+			{ t = 5, every = 5, name = "Drain Mana", dur = 3, warn = true },
+			{ t = 15, every = 15, name = "Temporal Conflux", dur = 3, warn = true },
+		},
+	},
+	["mossheart"] = {
+		label = "Mossheart",
+		ev = {
+			{ t = 180, every = 180, name = "Moss", dur = 3, warn = true },
+			{ t = 25, every = 25, name = "Entangling Roots CD", dur = 3, warn = true },
+			{ t = 12, every = 12, name = "Rejuvenation", dur = 3, warn = true },
+		},
+	},
+	["rotmaw"] = {
+		label = "Rotmaw",
+		ev = {
+			{ t = 240, every = 240, name = "Contagion", dur = 3, warn = true },
+			{ t = 15, every = 15, name = "Consumed", dur = 3, warn = true },
+		},
+	},
+	["time-lord epochronos"] = {
+		label = "Time-Lord Epochronos",
+		ev = {
+			{ t = 2, every = 2, name = "Sand Breath Cast", dur = 3, warn = true },
+			{ t = 13, every = 13, name = "Sand Breath CD", dur = 3, warn = true },
+			{ t = 30, every = 30, name = "Banish", dur = 3, warn = true },
+			{ t = 30, every = 30, name = "Devouring Plague", dur = 3, warn = true },
+			{ t = 3, every = 3, name = "Death Coil", dur = 3, warn = true },
+		},
+	},
+	["the beast"] = {
+		label = "The Beast",
+		ev = {
+			{ t = 10, every = 10, name = "Fear CD", dur = 3, warn = true },
+			{ t = 5, every = 5, name = "Fear Duration", dur = 3, warn = true },
+		},
+	},
+	["general drakkisath"] = {
+		label = "General Drakkisath",
+		ev = {
+			{ t = 10, every = 10, name = "Conflag", dur = 3, warn = true },
+		},
+	},
+	["pyroguard emberseer"] = {
+		label = "Pyroguard Emberseer",
+		ev = {
+			{ t = 6, every = 6, name = "Fire Nova", dur = 3, warn = true },
+		},
+	},
+	["warchief rend blackhand"] = {
+		label = "Warchief Rend Blackhand",
+		ev = {
+			{ t = 36.5, every = 36.5, name = "Gyth", dur = 3, warn = true },
+		},
+	},
+	["solakar flamewreath"] = {
+		label = "Solakar Flamewreath",
+		ev = {
+			{ t = 40, every = 40, name = "Solakar spawns", dur = 3, warn = true },
+			{ t = 5, every = 5, name = "Stun!", dur = 3, warn = true },
+		},
+	},
+
+	["anomalus"] = {
+		label = "Anomalus",
+		ev = {
+			{ t = 15, every = 10, name = "Arcane Overload", dur = 5, warn = true },
+			{ t = 45, every = 45, name = "Arcane Dampening", dur = 3 },
+		},
+	},
 }
 
 M.bossByKey = {}
