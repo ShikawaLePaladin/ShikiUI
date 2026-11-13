@@ -1,0 +1,1070 @@
+-- ShikiUI Mail : courrier en masse (equivalent configurable de TurtleMail ; reecrit, aucune ligne copiee).
+-- Cout declare : LIGHT. Aucun evenement hors de la boite aux lettres : MAIL_SHOW / MAIL_CLOSED seulement ; le reste (MAIL_INBOX_UPDATE,
+-- MAIL_SEND_SUCCESS, UI_ERROR_MESSAGE) n'est ecoute que boite ouverte. Une seule minuterie partagee (SUI.Every, 0,3 s), allumee a l'ouverture de
+-- la boite et rendue a la fermeture. Aucune table creee en combat : 50 lignes de journal et la file d'envoi (tampons paralleles) preallouees une
+-- fois (SUI.WhenSafe). Le module est coupe par le mode Raid (raid = "off") : personne ne ramasse son courrier en raid.
+-- RAMASSAGE : /sui mail take ou le bouton "Tout prendre" parcourt la boite, un geste par tour (argent puis objet puis, si demande, suppression
+--  du courrier vide) et attend MAIL_INBOX_UPDATE (2 s au plus, 3 essais) avant de continuer. JAMAIS un courrier contre remboursement (COD) ni un
+--  courrier de MJ ; arret des qu'il reste moins de mail.keepfree places libres ou que le jeu refuse (inventaire plein). Filtre : tout, hotel des
+--  ventes seulement, tout sauf l'hotel des ventes, argent seulement. La suppression (mail.deleteempty, coupee) ne touche qu'un courrier VIDE, sans
+--  texte ecrit par un joueur.
+-- ENVOI EN MASSE : liste d'objets a envoyer (mail.sendlist, donnee du profil, /sui mail add|remove|clear) ; /sui mail send <nom> (ou le bouton)
+--  envoie un courrier par pile, un a la fois, en attendant MAIL_SEND_SUCCESS ; confirmation obligatoire (mail.confirmsend) : une premiere demande
+--  arme l'envoi 10 s, la seconde l'execute. Aucun argent, aucun COD.
+-- DESTINATAIRES : memorise les derniers destinataires (mail.recent) et les propose en boutons.
+-- JOURNAL : les 50 derniers objets / sommes ramasses (/sui mail log).
+-- SOURCES (relevees dans TurtleMail installe, jamais executees ici) : GetInboxNumItems, GetInboxHeaderInfo (retours 3 expediteur, 5 argent,
+--  6 COD, 8 objet, 11 texte, 13 MJ), GetInboxItem, TakeInboxMoney / TakeInboxItem / DeleteInboxItem(index), CheckInbox, ClickSendMailItemButton,
+--  GetSendMailItem, SendMail(destinataire, sujet, texte), SendMailNameEditBox, MAIL_SHOW / MAIL_CLOSED / MAIL_INBOX_UPDATE / MAIL_SEND_SUCCESS,
+--  hotels des ventes reconnus par "Auction House" dans le nom de l'expediteur (liste de TurtleMail).
+-- NON VERIFIE EN JEU : tout ; la position du panneau a cote de MailFrame ; le texte exact de l'erreur d'inventaire plein ; le 2e retour de
+--  GetContainerNumFreeSlots ; le delai reel du serveur entre un geste et MAIL_INBOX_UPDATE ; ClearCursor avant le depot d'une piece jointe.
+ShikiUI = ShikiUI or {}
+local SUI = ShikiUI
+local C = SUI.Config
+local L = SUI.L
+local T = SUI.Theme
+
+local getn, tinsert = table.getn, table.insert
+local sfind, ssub, slower, sformat = string.find, string.sub, string.lower, string.format
+
+local M = {}
+SUI.Mail = M
+
+local MAXLOG = 50
+local MAXSEND = 100
+local TICK = 0.3
+
+M.on = false
+M.open = false         -- boite aux lettres ouverte
+M.active = false       -- ramassage en cours
+M.idx = 1
+M.fail = 0
+M.waitUpd = false
+M.waitSince = 0
+M.gold, M.items, M.mails = 0, 0, 0
+M.pSender, M.pName, M.pCount, M.pMoney = nil, nil, 0, 0   -- geste en attente de la reponse du serveur
+M.log = {}             -- anneau { t, sender, name, count, money }
+M.lcount, M.lhead = 0, 0
+M.sendList = {}        -- id d'objet -> true
+M.nlist = 0
+M.sb, M.ss = {}, {}    -- file d'envoi : sac, case
+M.ns, M.si = 0, 1
+M.sending = false
+M.sent = 0
+M.to = nil
+M.waitSend = false
+M.armed = nil          -- { to, until } : envoi arme en attente de confirmation
+M.armTo, M.armUntil = nil, 0
+M.dirty = true
+M.lastTo = nil
+M.info = { mails = 0, items = 0, money = 0 }
+
+-- ---------------------------------------------------------------- utilitaires
+local function setText(fs, text)
+	if fs.cur ~= text then
+		fs.cur = text
+		fs:SetText(text)
+	end
+end
+
+function M.Money(c)
+	c = c or 0
+	local g = math.floor(c / 10000)
+	local s = math.floor((c - g * 10000) / 100)
+	return sformat("%dg %ds %dc", g, s, c - g * 10000 - s * 100)
+end
+
+-- Cases libres d un sac (API 1.12 : pas de GetContainerNumFreeSlots, on compte les cases vides).
+function M.BagFree(bag)
+	local n = 0
+	local slots = (GetContainerNumSlots and GetContainerNumSlots(bag)) or 0
+	for s = 1, slots do
+		if not GetContainerItemInfo(bag, s) then n = n + 1 end
+	end
+	return n
+end
+
+function M.Free()
+	local n = 0
+	for bag = 0, 4 do
+		n = n + (M.BagFree(bag) or 0)
+	end
+	return n
+end
+
+function M.IsAH(sender)
+	return sender ~= nil and sfind(sender, "Auction House", 1, true) ~= nil
+end
+
+local function header(i)
+	local _, _, sender, _, money, cod, _, hasItem, _, _, text, _, gm = GetInboxHeaderInfo(i)
+	return sender, money or 0, cod or 0, hasItem, text, gm
+end
+
+-- ---------------------------------------------------------------- journal
+function M.LogAdd(sender, name, count, money)
+	local e = M.log[1]
+	if not e then return end
+	local size = C.Get("mail.logsize")
+	local h = M.lhead + 1
+	if h > size then h = 1 end
+	M.lhead = h
+	e = M.log[h]
+	e.t, e.sender, e.name, e.count, e.money = GetTime(), sender or "?", name, count or 0, money or 0
+	if M.lcount < size then M.lcount = M.lcount + 1 end
+end
+
+function M.LogGet(i)
+	if i < 1 or i > M.lcount then return nil end
+	local size = C.Get("mail.logsize")
+	local idx = M.lhead - (i - 1)
+	if idx < 1 then idx = idx + size end
+	return M.log[idx]
+end
+
+-- ---------------------------------------------------------------- ramassage
+function M.StartCollect()
+	if not M.open then SUI.Print(L("msg.mail.closed")) return false end
+	if M.active then return false end
+	M.active = true
+	M.idx = 1
+	M.fail = 0
+	M.waitUpd = false
+	M.gold, M.items, M.mails = 0, 0, 0
+	M.Refresh()
+	return true
+end
+
+function M.StopCollect(done, why)
+	if not M.active then return end
+	M.active = false
+	M.waitUpd = false
+	M.Forget()
+	if why then
+		SUI.Print(L("msg.mail.stopped", L("msg.mail.why." .. why)))
+	end
+	SUI.Print(L("msg.mail.collected", M.items, M.Money(M.gold)))
+	M.dirty = true
+	M.Refresh()
+end
+
+function M.Wait()
+	M.waitUpd = true
+	M.waitSince = GetTime()
+end
+
+-- Le serveur a repondu : le geste en attente est acquis (totaux et journal).
+function M.Commit()
+	if M.pSender then
+		M.gold = M.gold + M.pMoney
+		M.items = M.items + M.pCount
+		M.LogAdd(M.pSender, M.pName, M.pCount, M.pMoney)
+		M.pSender, M.pName, M.pCount, M.pMoney = nil, nil, 0, 0
+	end
+end
+
+function M.Forget()
+	M.pSender, M.pName, M.pCount, M.pMoney = nil, nil, 0, 0
+end
+
+-- Un geste de ramassage : retourne sans rien faire s'il faut attendre le serveur.
+function M.Step()
+	if M.waitUpd then
+		if GetTime() - M.waitSince < 2 then return end
+		M.waitUpd = false
+		M.Forget()
+		M.fail = M.fail + 1
+		if M.fail >= 3 then
+			M.fail = 0
+			M.idx = M.idx + 1
+		end
+	end
+	if M.idx > GetInboxNumItems() then
+		M.StopCollect(true)
+		return
+	end
+	local i = M.idx
+	local sender, money, cod, hasItem, text, gm = header(i)
+	if cod > 0 or gm then
+		M.idx = i + 1
+		return
+	end
+	local filt = C.Get("mail.filter")
+	local ah = M.IsAH(sender)
+	local skip = (filt == "ah" and not ah) or (filt == "noah" and ah)
+	local canMoney = (not skip) and money > 0 and C.Get("mail.takemoney")
+	local canItem = (not skip) and hasItem and filt ~= "money" and C.Get("mail.takeitems")
+	if canMoney then
+		TakeInboxMoney(i)
+		M.pSender, M.pName, M.pCount, M.pMoney = sender, nil, 0, money
+		M.Wait()
+		return
+	end
+	if canItem then
+		if M.Free() <= C.Get("mail.keepfree") then
+			M.StopCollect(false, "full")
+			return
+		end
+		local name, _, count = GetInboxItem(i)
+		TakeInboxItem(i)
+		if not M.active then return end   -- le jeu a refuse (inventaire plein) : OnError a deja tout arrete
+		M.pSender, M.pName, M.pCount, M.pMoney = sender, name, count or 1, 0
+		M.Wait()
+		return
+	end
+	if (not skip) and C.Get("mail.deleteempty") and money == 0 and not hasItem and not text and filt ~= "money" then
+		DeleteInboxItem(i)
+		M.Wait()
+		return
+	end
+	M.idx = i + 1
+end
+
+function M.OnInbox()
+	if M.waitUpd then M.Commit() end
+	M.waitUpd = false
+	M.fail = 0
+	M.dirty = true
+end
+
+function M.OnError(ev, msg)
+	if not msg then return end
+	if M.sending then
+		M.StopSend(msg)
+	elseif M.active and (sfind(slower(msg), "inventory is full", 1, true) or (getglobal("ERR_INV_FULL") and msg == getglobal("ERR_INV_FULL"))) then
+		-- le texte traduit OU la globale du client (un client non-US n'ecrit pas "inventory is full")
+		M.StopCollect(false, "full")
+	end
+end
+
+-- ---------------------------------------------------------------- liste d'envoi et destinataires
+local function listString()
+	local s = ""
+	for id, _ in pairs(M.sendList) do
+		if s ~= "" then s = s .. "," end
+		s = s .. id
+	end
+	return s
+end
+
+function M.ReadList()
+	for k, _ in pairs(M.sendList) do M.sendList[k] = nil end
+	M.nlist = 0
+	local s = C.Get("mail.sendlist") or ""
+	for id in string.gfind(s, "(%d+)") do
+		local n = tonumber(id)
+		if n and not M.sendList[n] and M.nlist < 100 then
+			M.sendList[n] = true
+			M.nlist = M.nlist + 1
+		end
+	end
+end
+
+local function idOf(ref)
+	local _, _, id = sfind(ref or "", "item:(%d+)")
+	if not id then _, _, id = sfind(ref or "", "^%s*(%d+)%s*$") end
+	return tonumber(id)
+end
+
+function M.ListAdd(ref)
+	local id = idOf(ref)
+	if not id then return false end
+	if not M.sendList[id] then
+		if M.nlist >= 100 then return false end
+		M.sendList[id] = true
+		M.nlist = M.nlist + 1
+	end
+	C.SetBase("mail.sendlist", listString())
+	return true
+end
+
+function M.ListRemove(ref)
+	local id = idOf(ref)
+	if not id or not M.sendList[id] then return false end
+	M.sendList[id] = nil
+	M.nlist = M.nlist - 1
+	C.SetBase("mail.sendlist", listString())
+	return true
+end
+
+function M.ListClear()
+	C.SetBase("mail.sendlist", "")
+end
+
+function M.Recent()
+	local out = {}
+	local s = C.Get("mail.recent") or ""
+	for name in string.gfind(s, "([^,]+)") do tinsert(out, name) end
+	return out
+end
+
+function M.Remember(name)
+	if not C.Get("mail.remember") or type(name) ~= "string" then return end
+	name = string.gsub(name, "^%s+", "")
+	name = string.gsub(name, "%s+$", "")
+	if name == "" or sfind(name, "[,|]") or string.len(name) > 24 then return end
+	local list = M.Recent()
+	local low = slower(name)
+	local s = name
+	local n = 1
+	local max = C.Get("mail.maxrecent")
+	for i = 1, getn(list) do
+		if slower(list[i]) ~= low and n < max then
+			s = s .. "," .. list[i]
+			n = n + 1
+		end
+	end
+	C.SetBase("mail.recent", s)
+	M.dirty = true
+end
+
+-- ---------------------------------------------------------------- envoi en masse
+function M.BuildSendQueue()
+	local n = 0
+	for bag = 0, 4 do
+		local size = GetContainerNumSlots(bag)
+		for slot = 1, size do
+			local link = GetContainerItemLink(bag, slot)
+			if link and n < MAXSEND then
+				local id = idOf(link)
+				if id and M.sendList[id] then
+					n = n + 1
+					M.sb[n], M.ss[n] = bag, slot
+				end
+			end
+		end
+	end
+	M.ns = n
+	return n
+end
+
+-- Demande d'envoi : arme (confirmation) ou execute.
+function M.RequestSend(to, confirmed)
+	if not M.open then SUI.Print(L("msg.mail.closed")) return false end
+	if M.sending then return false end
+	if type(to) ~= "string" or to == "" then SUI.Print(L("msg.mail.noto")) return false end
+	if slower(to) == slower(UnitName("player") or "") then SUI.Print(L("msg.mail.self")) return false end
+	local n = M.BuildSendQueue()
+	if n == 0 then SUI.Print(L("msg.mail.nothing")) return false end
+	if C.Get("mail.confirmsend") and not (confirmed and M.armTo == to and GetTime() < M.armUntil) then
+		M.armTo = to
+		M.armUntil = GetTime() + 10
+		SUI.Print(L("msg.mail.arm", n, to))
+		M.Refresh()
+		return false
+	end
+	M.armTo = nil
+	M.sending = true
+	M.to = to
+	M.si = 1
+	M.sent = 0
+	M.waitSend = false
+	M.Refresh()
+	return true
+end
+
+function M.StopSend(why)
+	if not M.sending then return end
+	M.sending = false
+	M.waitSend = false
+	ClearCursor()
+	if why then SUI.Print(L("msg.mail.sendstopped", why)) end
+	SUI.Print(L("msg.mail.sentdone", M.sent, M.to or "?"))
+	M.Refresh()
+end
+
+function M.SendStep()
+	if M.waitSend then
+		if GetTime() - M.waitSince < 4 then return end
+		M.waitSend = false
+		M.si = M.si + 1
+	end
+	if M.si > M.ns then
+		M.StopSend(nil)
+		return
+	end
+	local bag, slot = M.sb[M.si], M.ss[M.si]
+	ClearCursor()
+	PickupContainerItem(bag, slot)
+	ClickSendMailItemButton()
+	local name = GetSendMailItem()
+	if not name then
+		ClearCursor()
+		M.si = M.si + 1
+		return
+	end
+	SendMail(M.to, name, "")
+	if not M.sending then return end
+	M.waitSend = true
+	M.waitSince = GetTime()
+end
+
+function M.OnSendSuccess()
+	if M.sending and M.waitSend then
+		M.waitSend = false
+		M.sent = M.sent + 1
+		M.si = M.si + 1
+		M.Remember(M.to)
+	elseif M.lastTo then
+		M.Remember(M.lastTo)
+	end
+end
+
+-- ---------------------------------------------------------------- champs de saisie du courrier (destinataire, objet, texte, argent)
+-- Le panneau ne cree AUCUN champ de saisie : on ecrit dans ceux du jeu (SendMailNameEditBox...). Ce qui pouvait les rendre inutilisables :
+--  1. un cadre captant la souris AU-DESSUS d'eux (niveau perime apres la construction, comme dans Menu.SyncLevel ; ou le panneau lui-meme
+--     pose a cote / sur la fenetre) : le clic n'atteint plus le champ ;
+--  2. la zone vide du texte (SendMailScrollFrame) qui ne donne pas le focus au champ du texte ;
+--  3. des scripts Tab / Entree / Echap absents.
+-- M.SyncFields rehausse tout champ recouvert (meme strate seulement), M.WireFields pose clic-zone et scripts manquants, M.SinkPanel descend le
+-- panneau sous la fenetre du courrier quand ils se recouvrent. Le tout est refait a l'ouverture, au passage sur l'onglet Envoyer, puis toutes
+-- les 3 s boite ouverte ; jamais en combat. /sui maildiag montre l'etat, /sui maildiag fix force la reparation.
+local STRATA_RANK = { BACKGROUND = 1, LOW = 2, MEDIUM = 3, HIGH = 4, DIALOG = 5, FULLSCREEN = 6, FULLSCREEN_DIALOG = 7, TOOLTIP = 8 }
+local STRATA_BELOW = { BACKGROUND = "BACKGROUND", LOW = "LOW", MEDIUM = "LOW", HIGH = "MEDIUM", DIALOG = "HIGH", FULLSCREEN = "DIALOG",
+	FULLSCREEN_DIALOG = "FULLSCREEN", TOOLTIP = "FULLSCREEN_DIALOG" }
+M.FIELDS = { "SendMailNameEditBox", "SendMailSubjectEditBox", "SendMailBodyEditBox", "SendMailMoneyGold", "SendMailMoneySilver",
+	"SendMailMoneyCopper" }
+M.NEXT = { SendMailNameEditBox = "SendMailSubjectEditBox", SendMailSubjectEditBox = "SendMailBodyEditBox" }
+M.fixes = 0
+
+local function live(fr)
+	return type(fr) == "table" and type(fr.GetFrameLevel) == "function" and type(fr.GetChildren) == "function"
+end
+
+local function strataOf(fr)
+	local s = fr.GetFrameStrata and fr:GetFrameStrata()
+	if type(s) ~= "string" or not STRATA_RANK[s] then s = "MEDIUM" end
+	return s
+end
+
+local function rankOf(fr)
+	return STRATA_RANK[strataOf(fr)] * 100000 + (fr:GetFrameLevel() or 0)
+end
+
+local function rectOf(fr)
+	local l, b, r, t = fr:GetLeft(), fr:GetBottom(), fr:GetRight(), fr:GetTop()
+	if not (l and b and r and t) then return nil end
+	local s = fr:GetEffectiveScale() or 1
+	return l * s, b * s, r * s, t * s
+end
+
+local function overlap(a, b)
+	local al, ab, ar, at = rectOf(a)
+	local bl, bb, br, bt = rectOf(b)
+	if not al or not bl then return false end
+	return al < br and bl < ar and ab < bt and bb < at
+end
+
+local function describe(fr)
+	return tostring(fr:GetName() or "?") .. "(" .. strataOf(fr) .. " L" .. tostring(fr:GetFrameLevel()) ..
+		(fr:IsMouseEnabled() and " souris" or "") .. ")"
+end
+
+-- Cadres visibles, captant la souris, plus hauts que "eb" et qui le recouvrent en son centre.
+function M.Overlays(eb)
+	local out = {}
+	local l, b, r, t = rectOf(eb)
+	if not l then return out end
+	local cx, cy = (l + r) / 2, (b + t) / 2
+	local mine = rankOf(eb)
+	local function add(k)
+		if k == eb or not live(k) then return end
+		if not (k:IsShown() and k:IsMouseEnabled() and rankOf(k) > mine) then return end
+		local kl, kb, kr, kt = rectOf(k)
+		if not kl or cx < kl or cx > kr or cy < kb or cy > kt then return end
+		for i = 1, getn(out) do
+			if out[i] == k then return end
+		end
+		tinsert(out, k)
+	end
+	local function scan(parent)
+		local kids = { parent:GetChildren() }
+		for i = 1, getn(kids) do
+			if type(kids[i]) == "table" then add(kids[i]) end
+		end
+	end
+	scan(UIParent)
+	local p = eb:GetParent()
+	local depth = 0
+	while live(p) and p ~= UIParent and depth < 8 do
+		add(p)
+		scan(p)
+		p = p:GetParent()
+		depth = depth + 1
+	end
+	return out
+end
+
+-- Vrai si fr est root ou un de ses descendants.
+local function isUnder(fr, root)
+	local p, depth = fr, 0
+	while type(p) == "table" and depth < 12 do
+		if p == root then return true end
+		p = p.GetParent and p:GetParent() or nil
+		depth = depth + 1
+	end
+	return false
+end
+
+-- Rehausse chaque champ recouvert au-dessus de ce qui le recouvre, MAIS seulement si le cadre fautif fait partie de la fenetre du courrier
+-- (MailFrame et ses enfants : niveau perime) ou du panneau ShikiUI ; une autre fenetre legitimement au-dessus (assistant, autre addon) n'est
+-- pas traversee : elle est seulement signalee par /sui maildiag. Meme strate uniquement. Retourne le nombre de champs corriges.
+function M.SyncFields()
+	local fixed = 0
+	local mf = getglobal("MailFrame")
+	for i = 1, getn(M.FIELDS) do
+		local eb = getglobal(M.FIELDS[i])
+		if live(eb) and eb:IsVisible() then
+			local list = M.Overlays(eb)
+			local want
+			local es = strataOf(eb)
+			for k = 1, getn(list) do
+				if strataOf(list[k]) == es and (isUnder(list[k], mf) or isUnder(list[k], M.frame) or isUnder(eb, list[k])) then
+					local lv = (list[k]:GetFrameLevel() or 0) + 1
+					if not want or lv > want then want = lv end
+				end
+			end
+			if want then
+				eb:SetFrameLevel(want)
+				fixed = fixed + 1
+			end
+		end
+	end
+	M.fixes = M.fixes + fixed
+	return fixed
+end
+
+local function focusNext(to)
+	return function()
+		local e = getglobal(to)
+		if e and e.SetFocus then e:SetFocus() end
+	end
+end
+
+local function leaveField()
+	this:ClearFocus()
+end
+
+function M.FocusBody()
+	local eb = getglobal("SendMailBodyEditBox")
+	if live(eb) and eb.SetFocus then
+		eb:SetFocus()
+		return true
+	end
+	return false
+end
+
+-- Marque de saisie : un cadre fin a la couleur d'accent entoure le champ qui a le clavier (le curseur du jeu disparait sur le fond du style).
+local function focusMark(eb, name)
+	if eb.suiMark then return end
+	local host = eb
+	if name == "SendMailBodyEditBox" then
+		local sf = getglobal("SendMailScrollFrame")
+		if live(sf) then host = sf end
+	end
+	local hl = CreateFrame("Frame", nil, host)
+	hl:SetPoint("TOPLEFT", host, "TOPLEFT", -3, 3)
+	hl:SetPoint("BOTTOMRIGHT", host, "BOTTOMRIGHT", 3, -3)
+	hl:EnableMouse(false)
+	hl:SetFrameLevel(host:GetFrameLevel() + 3)
+	hl:Hide()
+	eb.suiMark = hl
+	local function paint()
+		local r, g, b = SUI.Theme.Accent()
+		SUI.Theme.Backdrop(hl, { 0, 0, 0, 0 }, { r, g, b, 1 })
+	end
+	local oldIn, oldOut = eb:GetScript("OnEditFocusGained"), eb:GetScript("OnEditFocusLost")
+	eb:SetScript("OnEditFocusGained", function()
+		if oldIn then oldIn() end
+		paint()
+		hl:Show()
+	end)
+	eb:SetScript("OnEditFocusLost", function()
+		if oldOut then oldOut() end
+		hl:Hide()
+	end)
+end
+
+-- Une seule fois par champ : souris et clavier actifs, Tab / Entree vers le champ suivant, Echap quitte la saisie (seulement si le jeu n'a pas
+-- deja pose le script) ; un clic dans la zone vide du texte donne le focus au champ du texte.
+function M.WireFields()
+	for i = 1, 3 do
+		local name = M.FIELDS[i]
+		local eb = getglobal(name)
+		if live(eb) and not eb.suiMailWired then
+			eb.suiMailWired = true
+			eb:EnableMouse(true)
+			eb:EnableKeyboard(true)
+			focusMark(eb, name)
+			local nxt = M.NEXT[name]
+			if nxt then
+				if not eb:GetScript("OnTabPressed") then eb:SetScript("OnTabPressed", focusNext(nxt)) end
+				if not eb:GetScript("OnEnterPressed") then eb:SetScript("OnEnterPressed", focusNext(nxt)) end
+			end
+			if not eb:GetScript("OnEscapePressed") then eb:SetScript("OnEscapePressed", leaveField) end
+		end
+	end
+	local sf = getglobal("SendMailScrollFrame")
+	if live(sf) and not sf.suiMailWired then
+		sf.suiMailWired = true
+		local old = sf:GetScript("OnMouseDown")
+		sf:EnableMouse(true)
+		sf:SetScript("OnMouseDown", function()
+			if old then old() end
+			M.FocusBody()
+		end)
+	end
+end
+
+local function setStrata(fr, strata, seen)
+	if seen[fr] then return end
+	seen[fr] = true
+	fr:SetFrameStrata(strata)
+	local kids = { fr:GetChildren() }
+	for i = 1, getn(kids) do
+		if type(kids[i]) == "table" and kids[i] ~= fr then setStrata(kids[i], strata, seen) end
+	end
+end
+
+-- Le panneau passe sous la fenetre du courrier quand ils se recouvrent (jamais de clic vole) ; il retrouve sa strate sinon.
+function M.SinkPanel()
+	local f, mf = M.frame, getglobal("MailFrame")
+	if not live(f) or not live(mf) then return false end
+	local want = "MEDIUM"
+	if f:IsShown() and mf:IsShown() and overlap(f, mf) then want = STRATA_BELOW[strataOf(mf)] end
+	if strataOf(f) == want then return false end
+	if SUI.InCombat() then return false end
+	setStrata(f, want, {})
+	return true
+end
+
+-- Tout reparer d'un coup (ouverture, bouton du panneau, /sui maildiag fix). Retourne le nombre de champs rehausses.
+function M.RepairInput()
+	if SUI.InCombat() then return 0 end
+	M.WireFields()
+	M.SinkPanel()
+	return M.SyncFields()
+end
+
+function M.FieldsTick()
+	local sf = getglobal("SendMailFrame")
+	if not live(sf) then return end
+	local vis = sf:IsVisible() and true or false
+	M.fieldTick = (M.fieldTick or 0) + 1
+	if vis and (vis ~= M.sendVis or M.fieldTick >= 10) then
+		M.fieldTick = 0
+		M.RepairInput()
+	end
+	M.sendVis = vis
+end
+
+-- Bouton du panneau : repare puis place le curseur dans le destinataire.
+function M.OnRepair()
+	if not M.open then SUI.Print(L("msg.mail.closed")) return false end
+	local sf = getglobal("SendMailFrame")
+	if not (live(sf) and sf:IsVisible()) then SUI.Print(L("msg.mail.opensend")) return false end
+	local n = M.RepairInput()
+	local eb = getglobal("SendMailNameEditBox")
+	if live(eb) and eb.SetFocus then eb:SetFocus() end
+	SUI.Print(L("msg.mail.repaired", n))
+	return true
+end
+
+-- /sui maildiag : etat des fenetres du courrier et de chaque champ (qui le recouvre ?). "fix" force la reparation avant le releve.
+function M.Diag(fix)
+	local out = {}
+	local function add(s)
+		tinsert(out, s)
+		SUI.Print(s)
+		SUI.LogError("maildiag", s)
+	end
+	if fix then add(L("msg.mail.diag.fixed", M.RepairInput())) end
+	add(L("msg.mail.diag.head", M.open and 1 or 0, M.on and 1 or 0, M.fixes))
+	local gk = getglobal("GetCurrentKeyBoardFocus")
+	local kf = type(gk) == "function" and gk() or nil
+	add("saisie clavier : " .. ((kf and kf.GetName and kf:GetName()) or (kf and "cadre sans nom") or "aucun champ"))
+	add("TurtleMail=" .. (getglobal("TurtleMail_To") ~= nil and "charge" or "non") .. " WIM=" .. (getglobal("WIM_Windows") ~= nil and "charge" or "non") .. " pfUI=" .. (getglobal("pfUI") ~= nil and "charge" or "non"))
+	local f = M.frame
+	if live(f) then add("panneau " .. describe(f) .. " visible=" .. (f:IsShown() and "1" or "0")) end
+	local names = { "MailFrame", "SendMailFrame", "SendMailScrollFrame" }
+	for i = 1, getn(names) do
+		local fr = getglobal(names[i])
+		if live(fr) then
+			add(names[i] .. " " .. describe(fr) .. " visible=" .. (fr:IsVisible() and "1" or "0") .. ((fr.suiMailWired and " clic-zone") or ""))
+		else
+			add(names[i] .. " : absent")
+		end
+	end
+	for i = 1, getn(M.FIELDS) do
+		local eb = getglobal(M.FIELDS[i])
+		if live(eb) then
+			local line = M.FIELDS[i] .. " " .. describe(eb) .. " visible=" .. (eb:IsVisible() and "1" or "0")
+			if eb.HasFocus then line = line .. " focus=" .. (eb:HasFocus() and "1" or "0") end
+			add(line)
+			local list = M.Overlays(eb)
+			for k = 1, getn(list) do
+				if k <= 4 then add("  AU-DESSUS : " .. describe(list[k])) end
+			end
+			if getn(list) == 0 then add("  " .. L("msg.mail.diag.clear")) end
+		end
+	end
+	M.lastDiag = out
+	return out
+end
+
+-- ---------------------------------------------------------------- panneau
+-- Infobulle d'un bouton du panneau (garde l'effet de survol du Theme).
+function M.Tip(b, key)
+	local oldIn, oldOut = b:GetScript("OnEnter"), b:GetScript("OnLeave")
+	b:SetScript("OnEnter", function()
+		if oldIn then oldIn() end
+		local g = getglobal("GameTooltip")
+		if g then
+			g:SetOwner(this, "ANCHOR_RIGHT")
+			g:SetText(L(key), nil, nil, nil, nil, 1)
+			g:Show()
+		end
+	end)
+	b:SetScript("OnLeave", function()
+		if oldOut then oldOut() end
+		local g = getglobal("GameTooltip")
+		if g then g:Hide() end
+	end)
+end
+
+function M.Count()
+	local info = M.info
+	info.mails, info.items, info.money = GetInboxNumItems(), 0, 0
+	local n = info.mails
+	if n > 50 then n = 50 end
+	for i = 1, n do
+		local _, money, cod, hasItem = header(i)
+		if cod == 0 then
+			info.money = info.money + money
+			if hasItem then info.items = info.items + 1 end
+		end
+	end
+end
+
+function M.Refresh()
+	local f = M.frame
+	if not f then return end
+	if M.open then M.Count() end
+	local info = M.info
+	if M.active then
+		setText(f.status, L("msg.mail.working", M.idx, info.mails))
+	elseif M.sending then
+		setText(f.status, L("msg.mail.sending", M.si, M.ns))
+	else
+		setText(f.status, L("msg.mail.status", info.mails, info.items, M.Money(info.money)))
+	end
+	T.SetButtonText(f.take, M.active and L("msg.mail.btn.stop") or L("msg.mail.btn.take"))
+	local arming = M.armTo and GetTime() < M.armUntil
+	T.SetButtonText(f.send, arming and L("msg.mail.btn.confirm") or L("msg.mail.btn.send"))
+	local recent = M.Recent()
+	local max = C.Get("mail.maxrecent")
+	if max > 8 then max = 8 end
+	for i = 1, 8 do
+		local b = f.recent[i]
+		if i <= max and recent[i] then
+			setText(b.label, recent[i])
+			b.name = recent[i]
+			b:Show()
+		else
+			b:Hide()
+		end
+	end
+	M.dirty = false
+end
+
+function M.Tick()
+	if not M.open then return end
+	if M.armTo and GetTime() >= M.armUntil then
+		M.armTo = nil
+		M.dirty = true
+	end
+	local box = getglobal("SendMailNameEditBox")
+	if box then
+		local txt = box:GetText()
+		if txt and txt ~= "" then M.lastTo = txt end
+	end
+	if C.Get("mail.fixfields") then
+		M.FieldsTick()
+		if M.frame and M.frame:IsShown() and not SUI.InCombat() then M.SinkPanel() end
+	end
+	if M.active then M.Step() end
+	if M.sending then M.SendStep() end
+	if M.dirty or M.active or M.sending then M.Refresh() end
+end
+
+function M.ApplyOptions()
+	local f = M.frame
+	if not f then return end
+	if M.open and C.Get("mail.panel") then f:Show() else f:Hide() end
+end
+
+-- Deplacement : Maj + glisser sur le fond du panneau (hors boutons), en plus de la poignee du mode "Deplacer l'interface".
+-- Meme enregistrement que le Mover (position par mode, remise a zero), effet immediat.
+function M.DragStart(f)
+	if type(IsShiftKeyDown) ~= "function" or not IsShiftKeyDown() or SUI.InCombat() then return false end
+	if arg1 ~= nil and arg1 ~= "LeftButton" then return false end
+	f:StartMoving()
+	M.dragging = true
+	return true
+end
+
+function M.DragStop(f)
+	if not M.dragging then return false end
+	M.dragging = false
+	f:StopMovingOrSizing()
+	local l, b = f:GetLeft(), f:GetBottom()
+	local rec = SUI.Mover and SUI.Mover.items and SUI.Mover.items["mail"]
+	if l and b and rec and SUI.Mover.Commit then
+		local sc = f:GetScale() or 1
+		SUI.Mover.Commit(rec, l * sc, b * sc)
+	elseif l and b and SUI.Layout then      -- sans Mover : memoriser quand meme (sinon Layout.Apply ramenerait le cadre en arriere)
+		local sc = f:GetScale() or 1
+		local _, _, s = C.GetPos(SUI.Layout.ReadKey("mail"))
+		C.SetPos(SUI.Layout.WriteKey("mail"), l * sc, b * sc, s)
+		SUI.Layout.Apply("mail")
+	elseif SUI.Layout then
+		SUI.Layout.Apply("mail")
+	end
+	return true
+end
+
+function M.Place(f)
+	local reg = SUI.Mover and SUI.Mover.Register
+	if not (reg and reg("mail", f, { label = "mod.mover.n.mail", point = "LEFT", x = 420, y = 40, scale = true })) then
+		SUI.Layout.Register(f, "mail", "LEFT", 420, 40)
+	end
+	f:SetScript("OnMouseDown", function() M.DragStart(f) end)
+	f:SetScript("OnMouseUp", function() M.DragStop(f) end)
+	f:SetScript("OnHide", function() M.DragStop(f) end)
+end
+
+function M.Build()
+	if M.frame then return end
+	local f = T.Panel(UIParent, 250, 114)
+	f:SetFrameStrata("MEDIUM")
+	f:EnableMouse(true)
+	f:Hide()
+	f.status = T.Text(f, 11, T.c.text, "LEFT")
+	f.status:SetPoint("TOPLEFT", f, "TOPLEFT", 8, -8)
+	f.status:SetWidth(212)
+	f.take = T.Button(f, L("msg.mail.btn.take"), 112, 20, function()
+		if M.active then M.StopCollect(false) else M.StartCollect() end
+	end)
+	f.take:SetPoint("TOPLEFT", f, "TOPLEFT", 8, -26)
+	f.send = T.Button(f, L("msg.mail.btn.send"), 112, 20, function()
+		local box = getglobal("SendMailNameEditBox")
+		local to = box and box:GetText() or ""
+		if to == "" then to = M.Recent()[1] or "" end
+		M.RequestSend(to, true)
+	end)
+	f.send:SetPoint("TOPRIGHT", f, "TOPRIGHT", -8, -26)
+	-- engrenage : ouvre les reglages du module (coin haut droit du panneau ; le niveau est recale a chaque affichage)
+	T.GearButton(f, "mail", { size = 16, point = "TOPRIGHT", x = -8, y = -6, title = L("msg.mail.gear") })
+	M.Tip(f.take, "tip.mail.btn.take")
+	M.Tip(f.send, "tip.mail.btn.send")
+	-- Aide a la saisie : repare les champs du courrier (voir M.RepairInput) et place le curseur dans le destinataire.
+	f.fix = T.Button(f, L("msg.mail.btn.fix"), 234, 18, function() M.OnRepair() end)
+	f.fix:SetPoint("TOPLEFT", f, "TOPLEFT", 8, -90)
+	M.Tip(f.fix, "tip.mail.btn.fix")
+	f.recent = {}
+	for i = 1, 8 do
+		local b = T.Button(f, "", 56, 16, function(btn)
+			local box = getglobal("SendMailNameEditBox")
+			if box and btn.name then
+				box:SetText(btn.name)
+				local sj = getglobal("SendMailSubjectEditBox")
+				if live(sj) and sj.SetFocus then sj:SetFocus() end      -- destinataire pose : on passe a l'objet
+			end
+		end)
+		b.label:SetWidth(52)
+		local r = math.floor((i - 1) / 4)
+		b:SetPoint("TOPLEFT", f, "TOPLEFT", 8 + (i - 1 - r * 4) * 58, -52 - r * 18)
+		f.recent[i] = b
+	end
+	M.frame = f
+	M.Place(f)
+	for i = 1, MAXLOG do M.log[i] = { t = 0, sender = "", name = nil, count = 0, money = 0 } end
+	M.ApplyOptions()
+end
+
+-- ---------------------------------------------------------------- evenements et cycle de vie
+function M.OnShow()
+	M.open = true
+	M.dirty = true
+	M.lastTo = nil
+	M.armTo = nil
+	SUI.On("MAIL_INBOX_UPDATE", M.OnInbox)
+	SUI.On("MAIL_SEND_SUCCESS", M.OnSendSuccess)
+	SUI.On("UI_ERROR_MESSAGE", M.OnError)
+	if M.task then SUI.Cancel(M.task) end
+	M.task = SUI.Every(TICK, M.Tick, "mail.tick")
+	M.sendVis, M.fieldTick = nil, 10
+	M.ApplyOptions()
+	M.Refresh()
+	if C.Get("mail.fixfields") then
+		-- les fenetres du courrier prennent leur niveau definitif apres MAIL_SHOW : on repare juste apres, hors combat
+		SUI.After(0.3, function()
+			if M.open and M.on and not SUI.InCombat() then M.RepairInput() end
+		end, "mail.fix")
+	end
+	if C.Get("mail.autotake") then
+		SUI.After(1, function()
+			if M.open and M.on then M.StartCollect() end
+		end, "mail.auto")
+	end
+end
+
+function M.OnClose()
+	M.open = false
+	M.Release()
+	if M.frame then M.frame:Hide() end
+end
+
+-- Rend minuterie et evenements ecoutes boite ouverte ; arrete tout travail en cours.
+function M.Release()
+	M.active = false
+	M.sending = false
+	M.waitSend = false
+	M.waitUpd = false
+	M.armTo = nil
+	if M.task then
+		SUI.Cancel(M.task)
+		M.task = nil
+	end
+	SUI.Off("MAIL_INBOX_UPDATE", M.OnInbox)
+	SUI.Off("MAIL_SEND_SUCCESS", M.OnSendSuccess)
+	SUI.Off("UI_ERROR_MESSAGE", M.OnError)
+end
+
+function M.OnKey(key, value)
+	if key == nil or key == "mail.sendlist" then M.ReadList() end
+	if key == nil or key == "mail.logsize" then
+		local size = C.Get("mail.logsize")
+		if M.lcount > size then M.lcount = size end
+		if M.lhead > size then
+			M.lhead = 0
+			M.lcount = 0
+		end
+	end
+	M.ApplyOptions()
+	M.dirty = true
+end
+
+function M.Enable()
+	M.on = true
+	M.ReadList()
+	SUI.WhenSafe(M.Build)
+	SUI.On("MAIL_SHOW", M.OnShow)
+	SUI.On("MAIL_CLOSED", M.OnClose)
+	if not M.watching then
+		M.watching = true
+		C.Watch("mail.", M.OnKey)
+	end
+end
+
+function M.Disable()
+	M.on = false
+	SUI.Off("MAIL_SHOW", M.OnShow)
+	SUI.Off("MAIL_CLOSED", M.OnClose)
+	M.open = false
+	M.Release()
+	if M.frame then M.frame:Hide() end
+end
+
+-- ---------------------------------------------------------------- commandes
+function M.Command(rest)
+	local word, arg = rest, ""
+	local sp = sfind(rest, " ", 1, true)
+	if sp then
+		word = ssub(rest, 1, sp - 1)
+		arg = ssub(rest, sp + 1)
+	end
+	word = slower(word)
+	if word == "take" then
+		M.StartCollect()
+	elseif word == "diag" then
+		M.Diag(slower(arg) == "fix")
+	elseif word == "stop" then
+		M.StopCollect(false)
+		M.StopSend(nil)
+	elseif word == "add" then
+		if M.ListAdd(arg) then SUI.Print(L("msg.mail.added", M.nlist)) else SUI.Print(L("msg.mail.badref")) end
+	elseif word == "remove" then
+		if M.ListRemove(arg) then SUI.Print(L("msg.mail.removed", M.nlist)) else SUI.Print(L("msg.mail.badref")) end
+	elseif word == "clear" then
+		M.ListClear()
+		SUI.Print(L("msg.mail.cleared"))
+	elseif word == "list" then
+		if M.nlist == 0 then SUI.Print(L("msg.mail.list.none")) end
+		for id, _ in pairs(M.sendList) do SUI.Print(L("msg.mail.list.line", id)) end
+	elseif word == "send" then
+		local to, confirmed = arg, false
+		local _, _, a, b = sfind(arg, "^(%S+)%s+(%S+)$")
+		if a and slower(b) == "ok" then to, confirmed = a, true end
+		M.RequestSend(to, confirmed)
+	elseif word == "log" then
+		local n = tonumber(arg) or 10
+		if M.lcount == 0 then SUI.Print(L("msg.mail.log.none")) end
+		for i = 1, n do
+			local e = M.LogGet(i)
+			if not e then break end
+			if e.money > 0 then
+				SUI.Print(L("msg.mail.log.money", e.sender, M.Money(e.money)))
+			else
+				SUI.Print(L("msg.mail.log.item", e.sender, e.name or "?", e.count))
+			end
+		end
+	else
+		SUI.Print(L("msg.mail.help", M.open and 1 or 0, M.nlist))
+	end
+end
+
+-- ---------------------------------------------------------------- declaration
+SUI.RegisterCategory("mail", 33)
+
+local function opt(key, typ, order, def, extra)
+	local o = { key = "mail." .. key, type = typ, cat = "mail", label = "opt.mail." .. key, tip = "tip.mail." .. key, default = def, order = order }
+	if extra then for k, v in pairs(extra) do o[k] = v end end
+	return o
+end
+
+SUI.RegisterModule("mail", {
+	default = false,
+	cost = "light",
+	raid = "off",
+	options = {
+		opt("panel", "bool", 10, true, { simple = true }),
+		opt("fixfields", "bool", 15, true, { simple = true }),
+		opt("takemoney", "bool", 20, true, { simple = true }),
+		opt("takeitems", "bool", 30, true, { simple = true }),
+		opt("filter", "choice", 40, "all", { choices = { "all", "ah", "noah", "money" }, simple = true }),
+		opt("autotake", "bool", 50, false, { simple = true }),
+		opt("keepfree", "number", 60, 0, { min = 0, max = 20, step = 1 }),
+		opt("deleteempty", "bool", 70, false),
+		opt("confirmsend", "bool", 80, true, { simple = true }),
+		opt("remember", "bool", 90, true),
+		opt("maxrecent", "number", 100, 4, { min = 1, max = 8, step = 1 }),
+		opt("logsize", "number", 110, 30, { min = 10, max = 50, step = 10 }),
+	},
+	enable = function() M.Enable() end,
+	disable = function() M.Disable() end,
+})
+
+-- Donnees (pas des reglages de menu) : liste d'envoi "id,id" et derniers destinataires "Nom,Nom".
+SUI.Config.Register({ ["mail.sendlist"] = "", ["mail.recent"] = "" })
+
+-- Equivalent pfUI : aucun module de courrier releve dans pfUI\modules (pas de ligne Migrate.MAP).
+
+SUI.RegisterCommand("mail", function(rest) M.Command(rest or "") end, "help.mail")
+
+-- /sui maildiag [fix] : pourquoi on ne peut pas ecrire dans le courrier (qui recouvre chaque champ) ; "fix" repare tout de suite.
+SUI.RegisterCommand("maildiag", function(rest)
+	local _, _, w = sfind(rest or "", "^%s*(%S*)")
+	M.Diag(slower(w or "") == "fix")
+end, "help.mail.diag")
