@@ -849,8 +849,11 @@ function M.Wrap(name)
 	if type(orig) ~= "function" or M.wrapped[name] then return end
 	M.wrapped[name] = true
 	setglobal(name, function(a, b)
-		local r1, r2 = orig(a, b)
+		-- l'original (code Blizzard/FrameXML) peut lever une erreur (ex. Cooldown.lua a l'ouverture de
+		-- banque) : elle ne doit jamais remonter dans notre dispatcher ni dans le journal
+		local ok, r1, r2 = pcall(orig, a, b)
 		if M.on then pcall(tabHook, a) end
+		if not ok then return nil end
 		return r1, r2
 	end)
 end

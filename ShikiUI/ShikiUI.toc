@@ -86,6 +86,8 @@ Locale_ChatTabs.lua
 Mod_ChatTabs.lua
 Locale_ClickHeal.lua
 Mod_ClickHeal.lua
+Locale_Esport.lua
+Mod_Esport.lua
 Locale_Finder.lua
 Mod_Finder.lua
 Locale_Group.lua

@@ -31,8 +31,19 @@ SUI.errlog = {}
 
 function SUI.LogError(source, msg)
 	local log = SUI.errlog
-	local line = tostring((time and time()) or 0) .. "|" .. tostring(source) .. "|" .. string.sub(tostring(msg), 1, 600)
+	local now = (time and time()) or 0
+	local line = tostring(now) .. "|" .. tostring(source) .. "|" .. string.sub(tostring(msg), 1, 600)
 	if log[getn(log)] == line then return end
+	-- dedoublonnage par source : la meme source a moins de 5 s d'ecart est un spam (diagnostics repetes),
+	-- on remplace la derniere entree au lieu d'en empiler une nouvelle
+	local last = log[getn(log)]
+	if last then
+		local _, _, lt, lsrc = string.find(last, "^(%d+)|([^|]+)|")
+		if lt and lsrc == tostring(source) and now - tonumber(lt) < 5 then
+			log[getn(log)] = line
+			return
+		end
+	end
 	tinsert(log, line)
 	while getn(log) > ERRMAX do tremove(log, 1) end
 	local C = SUI.Config
