@@ -1,0 +1,30 @@
+// Mutations du service de deplacement (Mover.lua). Format : [fichier, motif, remplacement, libelle[, suite]]. Motif present EXACTEMENT une fois.
+const S = 't_mover.lua';
+const F = 'Mover.lua';
+module.exports = [
+  [F, 'M.SNAP = 6', 'M.SNAP = 0', 'mover : distance d\'aimantation', S],
+  [F, 'local alt = IsAltKeyDown() and true or false', 'local alt = false', 'mover : Alt coupe l\'aimant', S],
+  [F, 'if IsShiftKeyDown() then step = M.STEPBIG end', '', 'mover : Maj = fleches de 10 px', S],
+  [F, 'arg1 * 0.05', 'arg1 * 0.1', 'mover : pas de la molette', S],
+  [F, 'M.Reset(rec.id)\n\t\tif M.panel', 'if M.panel', 'mover : clic droit reinitialise le cadre', S],
+  [F, 'if SUI.InCombat() then\n\t\tif not M.queued then', 'if false then\n\t\tif not M.queued then', 'mover : interdit en combat', S],
+  [F, 'M.confirm = true\n\tT.SetButtonText(bn.reset, L("mod.mover.btn.confirm"))', 'M.Reset("all")\n\tM.confirm = true\n\tT.SetButtonText(bn.reset, L("mod.mover.btn.confirm"))', 'mover : tout reinitialiser demande une confirmation', S],
+  [F, 'if rec.preview then M.Preview(rec.id, false) end', '', 'mover : les apercus sont retires a la sortie', S],
+  [F, 'M.PlaceCenter(b, pivot + dist, cy)', 'M.PlaceCenter(b, pivot - dist, cy)', 'mover : Joueur / Cible symetriques', S],
+  [F, 'if not rec.handle and not SUI.InCombat() then rec.handle = M.NewHandle(rec) end', 'if not rec.handle then rec.handle = M.NewHandle(rec) end', 'mover : aucune poignee creee en combat', S],
+  [F, 'elseif value == true and M.active then', 'elseif false then', 'mover : ui.locked vrai ferme le mode', S],
+  [F, 'h.label:SetText(name)', 'h.label:SetText("")', 'mover : chaque poignee porte un nom', S],
+  [F, 'if keep == false then M.Restore() end', '', 'mover : Annuler restaure les positions', S],
+  [F, 'local nl, nb = M.FromOffsets(rec, px, py)', 'local nl, nb = M.FromOffsets(rec, py, px)', 'mover : panneau X / Y', S],
+  [F, 'M.Commit(rec, UIParent:GetWidth() / 2 - w / 2, b0)', 'M.Commit(rec, UIParent:GetWidth() / 2 + w / 2, b0)', 'mover : centrer horizontalement', S],
+  [F, 'M.reopenMenu = false\n\t\tmn.Show()', 'M.reopenMenu = false', 'mover : le menu se rouvre a la sortie', S],
+  [F, 'if C.Get("mover.snap") then', 'if false then', 'mover : option d\'aimantation', S],
+  [F, 'if not rec.scaleOk then return end\n\tlocal s = M.ScaleOf(rec) + arg1', 'local s = M.ScaleOf(rec) + arg1', 'mover : cadre sans echelle', S],
+  [F, 'if M.showAll then\n\t\tfor i = 1, getn(M.order) do', 'if false then\n\t\tfor i = 1, getn(M.order) do', 'mover : sortie de Montrer tout', S],
+  [F, 'if dist < mind then dist = mind end', '', 'mover : ecart minimal entre Joueur et Cible', S],
+  [F, 'C.ClearPosAll(id)\n\tLayout.Apply(id)', 'C.ClearPos(id)\n\tLayout.Apply(id)', 'mover : reinitialiser efface aussi les positions par mode', S],
+  [F, 'SUI.RegisterCommand("deplacer", M.Command, "help.mover.alias")', '', 'mover : alias /sui deplacer', S],
+  [F, 'SUI.RegisterCommand("move", M.Command, "help.mover")', 'SUI.RegisterCommand("move", M.Command)', 'mover : /sui move dans l\'aide', S],
+  ['Theme.lua', 'if SUI.Config.GetPos(k) then return k end', 'return k', 'layout : repli sur la position Normal en mode Raid', S],
+  ['Theme.lua', 'if m and m ~= "normal" then return key .. "|" .. m end', '', 'layout : position propre au mode Raid', S],
+];

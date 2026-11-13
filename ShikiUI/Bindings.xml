@@ -1,0 +1,6 @@
+<!-- ShikiUI Bindings.xml : charge automatiquement par le client (convention du dossier d'addon, aucune entree de .toc). -->
+<Bindings>
+	<Binding name="SHIKIUI_PALLYPOWER" header="SHIKIUI">
+		if ShikiUI and ShikiUI.PallyPower and ShikiUI.PallyPower.CastAll then ShikiUI.PallyPower.CastAll() end
+	</Binding>
+</Bindings>

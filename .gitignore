@@ -1,0 +1,20 @@
+# Sauvegardes locales et artefacts
+backup_*/
+*.bak
+*.bak-*
+*_bak
+*.orig
+*.tmp
+
+# Node (tests hors jeu)
+node_modules/
+package-lock.json
+
+# Logs et fichiers de travail
+*.log
+/tmp/
+out/
+
+# Fichiers système
+Thumbs.db
+Desktop.ini

@@ -1,0 +1,2 @@
+-- mock_raid : rien de propre a ce module. Les aides des modules group / raid / clickheal sont dans mock_group.lua
+-- (GRP_SETUP, GRP_PARTY, GRP_RAID, GRP_UNIT, GRP_SPELLS, GRP_ACE, GRP_TASKS).

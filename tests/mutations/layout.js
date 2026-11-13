@@ -1,0 +1,21 @@
+// Mutations de Layouts.lua (mises en page) et des garde-fous de profil associes.
+module.exports = [
+  ['Layouts.lua', 'if def.reset then C.ResetPositions() end', '', 'layout : la mise en page classique n\'efface pas les positions', 't_layout.lua'],
+  ['Layouts.lua', 'if role and type(def.roles) == "table" and def.roles[role] then', 'if false then', 'layout : variantes par role ignorees', 't_layout.lua'],
+  ['Layouts.lua', '\tC.cur.layout = id\n', '', 'layout : mise en page non memorisee', 't_layout.lua'],
+  ['Layouts.lua', 'if key == "role" and C.Get("layout.followrole") and C.cur.layout and SUI.layouts[C.cur.layout] then', 'if key == "role" and C.cur.layout and SUI.layouts[C.cur.layout] then', 'layout : suivi du role non desactivable', 't_layout.lua'],
+  ['Layouts.lua', 'if key == "role" and C.Get("layout.followrole") and C.cur.layout and SUI.layouts[C.cur.layout] then', 'if false then', 'layout : suivi du role absent', 't_layout.lua'],
+  ['Layouts.lua', 'if type(id) ~= "string" or not string.find(id, "^[a-z][a-z0-9]+$") or string.len(id) > 24 or type(def) ~= "table" then return false end', 'if type(id) ~= "string" then return false end', 'layout : identifiant invalide accepte', 't_layout.lua'],
+  ['Layouts.lua', 'if SUI.layouts[id] then return false end', '', 'layout : ecrasement d\'une mise en page', 't_layout.lua'],
+  ['Layouts.lua', 'C.SetPos(key, ax * w + dx, ay * h + dy)', 'C.SetPos(key, ax * w, ay * h)', 'layout : decalage ignore', 't_layout.lua'],
+  ['Layouts.lua', 'if type(ax) ~= "number" or type(ay) ~= "number" then return false end', '', 'layout : position invalide acceptee', 't_layout.lua'],
+  ['Layouts.lua', 'if role and not C.roles[role] then', 'if false then', 'layout : role inconnu accepte', 't_layout.lua'],
+  ['Layouts.lua', 'if place(key, e) then ok = ok + 1 else bad = bad + 1 end', 'place(key, e); ok = ok + 1', 'layout : positions invalides non comptees', 't_layout.lua'],
+  ['Layouts.lua', 'if C.SetBase(k, val) then ok = ok + 1 else bad = bad + 1 end', 'C.SetBase(k, val); ok = ok + 1', 'layout : reglages invalides non comptes', 't_layout.lua'],
+  ['Layouts.lua', 'if Layout.items[key] then Layout.Apply(key) end', '', 'layout : cadre non deplace', 't_layout.lua'],
+  ['Layouts.lua', 'if C.SetBase(k, val)', 'if C.Set(k, val)', 'layout : ecrit dans le mode courant au lieu du profil', 't_layout.lua'],
+  ['Config.lua', 'if type(p.layout) ~= "string" or not string.find(p.layout, "^[a-z][a-z0-9]+$") or string.len(p.layout) > 24 then p.layout = nil end', '', 'config : mise en page de la sauvegarde non verifiee', 't_layout.lua'],
+  ['Config.lua', 'if type(p.layout) == "string" and string.find(p.layout, "^[a-z][a-z0-9]+$") and string.len(p.layout) <= 24 then prof.layout = p.layout end', 'prof.layout = p.layout', 'config : mise en page importee non verifiee', 't_layout.lua'],
+  ['Config.lua', 'role = Cfg.cur.role, layout = Cfg.cur.layout,', 'role = Cfg.cur.role,', 'config : export sans la mise en page', 't_layout.lua'],
+  ['Config.lua', '\tCfg.cur.layout = nil\n\tCfg.RebuildPresets()', '\tCfg.RebuildPresets()', 'config : ResetProfile garde la mise en page', 't_layout.lua'],
+];
