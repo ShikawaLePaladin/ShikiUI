@@ -767,8 +767,35 @@ function M.Detect()
 end
 
 -- ---------------------------------------------------------------- annonce
+function M.ShowMsg(main, sub)
+	local mf = M.msg
+	if not mf or not C.Get("bossmods.showmsg") then return end
+	mf.txt1:SetText(main or EMPTY)
+	mf.txt2:SetText(sub or EMPTY)
+	mf:Show()
+	M.msgHideAt = GetTime() + 4
+	if not M.msgTask then
+		M.msgTask = SUI.Every(0.25, M.MsgTick, "bossmods.msg", true)
+	end
+end
+
+function M.MsgTick()
+	local mf = M.msg
+	if not mf then M.MsgStop() return end
+	if M.msgHideAt and GetTime() >= M.msgHideAt then M.MsgStop() end
+end
+
+function M.MsgStop()
+	if M.msgTask then
+		SUI.Cancel(M.msgTask)
+		M.msgTask = nil
+	end
+	if M.msg then M.msg:Hide() end
+end
+
 function M.Announce(name, secs)
 	local chan = C.Get("bossmods.channel") or "self"
+	if C.Get("bossmods.showmsg") and M.msg then M.ShowMsg(name, L("msg.bossmods.soon", name, secs)) end
 	if chan == "raid" and GetNumRaidMembers() > 0 then
 		SendChatMessage(L("msg.bossmods.soon", name, secs), "RAID_WARNING")
 	elseif chan == "party" and GetNumPartyMembers() > 0 then
@@ -788,6 +815,10 @@ end
 
 function M.Tick()
 	if not M.on then return end
+	if M.testing then
+		if M.win and M.win:IsShown() then M.Paint() end
+		return
+	end
 	M.Detect()
 	local d = M.cur and M.BOSSES[M.cur]
 	if not d then return end
@@ -846,8 +877,9 @@ end
 -- ---------------------------------------------------------------- fenetre et barres
 function M.Build()
 	if M.win then return end
+	local wbar = C.Get("bossmods.width") or 220
 	local f = CreateFrame("Frame", "ShikiUI_BossModsWin", UIParent)
-	f:SetWidth(220)
+	f:SetWidth(wbar)
 	f:SetHeight(M.BARH * M.MAXBARS + 26)
 	T.Backdrop(f, T.c.panel, T.c.border)
 	f:SetFrameStrata("LOW")
@@ -885,6 +917,26 @@ function M.Build()
 	if SUI.Mover and SUI.Mover.Register then
 		SUI.Mover.Register("bossmods.win", f, { label = L("mod.bossmods.title"), scale = false })
 	end
+	-- ancre des annonces a l'ecran : un cadre separe, deplacable independamment (comme les ancres BigWigs)
+	local mf = CreateFrame("Frame", "ShikiUI_BossModsMsg", UIParent)
+	mf:SetWidth(260)
+	mf:SetHeight(54)
+	T.Backdrop(mf, T.c.panel, T.c.border)
+	mf:SetFrameStrata("HIGH")
+	mf:EnableMouse(true)
+	mf:SetClampedToScreen(true)
+	mf:Hide()
+	M.msg = mf
+	mf.txt1 = T.Text(mf, 13, T.c.warn, "CENTER", true)
+	mf.txt1:SetPoint("TOP", mf, "TOP", 0, -8)
+	mf.txt1:SetWidth(250)
+	mf.txt2 = T.Text(mf, 11, T.c.text, "CENTER", true)
+	mf.txt2:SetPoint("BOTTOM", mf, "BOTTOM", 0, 8)
+	mf.txt2:SetWidth(250)
+	SUI.Layout.Register(mf, "bossmods.msg", "CENTER", 0, 180)
+	if SUI.Mover and SUI.Mover.Register then
+		SUI.Mover.Register("bossmods.msg", mf, { label = L("mod.bossmods.msgtitle"), scale = false })
+	end
 	T.OnAccent(function()
 		if M.win and M.win:IsShown() then M.Paint() end
 	end)
@@ -907,6 +959,20 @@ end
 
 function M.ToggleWin()
 	if M.win and M.win:IsShown() then M.Close() else M.Open() end
+end
+
+function M.ApplySize()
+	if not M.win then return end
+	local wbar = C.Get("bossmods.width") or 220
+	local rows = C.Get("bossmods.rows") or 6
+	local i
+	for i = 1, M.MAXBARS do
+		local row = M["row" .. i]
+		row:SetWidth(wbar - 16)
+		if i <= rows then row:SetPoint("TOPLEFT", M.win, "TOPLEFT", 8, -24 - (i - 1) * (M.BARH + M.GAP)) end
+	end
+	M.win:SetWidth(wbar)
+	M.win:SetHeight(M.BARH * M.MAXBARS + 26)
 end
 
 function M.EnsureTask()
@@ -943,9 +1009,10 @@ function M.Paint()
 			end
 		end
 	end
+	local rows = C.Get("bossmods.rows") or 6
 	local shown = 0
 	for i = 1, M.narmed do
-		if shown < M.MAXBARS then
+		if shown < M.MAXBARS and shown < rows then
 			local e = M.armed[order[i]]
 			shown = shown + 1
 			local row = M["row" .. shown]
@@ -975,15 +1042,20 @@ end
 
 function M.Disable()
 	M.on = false
+	M.testing = false
 	if M.task then
 		SUI.Cancel(M.task)
 		M.task = nil
 	end
+	M.MsgStop()
+	M.armed = {}
+	M.narmed = 0
 	M.Close()
 end
 
 function M.OnKey(key)
 	if key == nil or string.find(key or EMPTY, "^bossmods%.") then
+		if key == "bossmods.width" or key == "bossmods.rows" or key == nil then M.ApplySize() end
 		if M.win and M.win:IsShown() then M.Paint() end
 	end
 end
@@ -1008,12 +1080,57 @@ SUI.RegisterModule("bossmods", {
 		opt("lead", "number", 10, 10, { min = 0, max = 30, step = 1 }),
 		opt("channel", "choice", 20, "self", { choices = { "self", "raid", "party" }, choiceText = chanText }),
 		opt("sound", "bool", 30, true),
+		opt("width", "number", 40, 220, { min = 120, max = 400, step = 10 }),
+		opt("rows", "number", 50, 6, { min = 1, max = 8, step = 1 }),
+		opt("showmsg", "bool", 60, true),
 	},
 	enable = function() M.Enable() end,
 	disable = function() M.Disable() end,
 })
 
--- /sui bossmods [open|close] : la fenetre d'alarmes de raid.
+-- Mode test : barres et annonces FICTIVES pour placer l'interface sans etre en raid.
+function M.Test()
+	M.testing = not M.testing
+	if not M.testing then
+		M.armed = {}
+		M.narmed = 0
+		M.cur = nil
+		M.curLabel = EMPTY
+		M.MsgStop()
+		if M.win then M.Paint() end
+		SUI.Print(L("msg.bossmods.testoff"))
+		return
+	end
+	SUI.WhenSafe(function()
+		if not M.testing then return end
+		M.Build()
+		M.win:Show()
+		M.ApplySize()
+		M.cur = "test"
+		M.curLabel = "TEST"
+		M.armed = {}
+		M.narmed = 0
+		local now = GetTime()
+		local samples = {
+			{ name = "Exemple : cast important", endsAt = 20, dur = 8, warn = true },
+			{ name = "Exemple : debuff a dissiper", endsAt = 14, dur = 6, warn = true },
+			{ name = "Exemple : add a tuer", endsAt = 9, dur = 9, warn = true },
+			{ name = "Exemple : evenement urgent", endsAt = 5, dur = 5, warn = true },
+		}
+		local i
+		for i = 1, getn(samples) do
+			local e = samples[i]
+			tinsert(M.armed, { name = e.name, endsAt = now + e.endsAt, dur = e.dur, ev = { dur = e.endsAt }, test = true })
+			M.narmed = M.narmed + 1
+			if e.warn then M.ShowMsg(e.name, L("mod.bossmods.title")) end
+		end
+		if C.Get("bossmods.sound") then PlaySoundFile("Sound\\Interface\\RaidWarning.wav") end
+		M.Paint()
+		SUI.Print(L("msg.bossmods.teston"))
+	end)
+end
+
+-- /sui bossmods [open|close|test] : la fenetre d'alarmes de raid.
 SUI.RegisterCommand("bossmods", function(rest)
 	if not M.on then
 		C.Set("modules.bossmods", true)
@@ -1023,6 +1140,8 @@ SUI.RegisterCommand("bossmods", function(rest)
 		M.Open()
 	elseif rest == "close" then
 		M.Close()
+	elseif rest == "test" then
+		M.Test()
 	else
 		M.ToggleWin()
 	end

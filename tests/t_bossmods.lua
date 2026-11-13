@@ -141,4 +141,43 @@ C.Set("modules.bossmods", true)
 SETTLE()
 EQ("rallume", mod.enabled, true)
 EQ("aucune erreur interne finale " .. tostring(SUI.lastErr), SUI.errCount, 0)
+
+SECTION("t_bossmods : options barres, ancre annonces, mode test")
+C.Set("bossmods.width", 300)
+C.Set("bossmods.rows", 3)
+SETTLE()
+M.dbg2 = {}
+M.dbg2 = {}
+local nw = 0
+for i = 1, table.getn(C.watchers) do if C.watchers[i].prefix == "bossmods." and C.watchers[i].fn == M.OnKey then nw = nw + 1 end end
+print("WDBG watchers matching OnKey = " .. nw .. " / total " .. table.getn(C.watchers))
+M.OnKey("bossmods.width")
+print("WDBG direct apply w=" .. tostring(M.win:GetWidth()))
+C.Set("bossmods.width", 300)
+C.Set("bossmods.rows", 3)
+SETTLE()
+for i = 1, table.getn(M.dbg2) do print("K" .. i .. ": " .. tostring(M.dbg2[i])) end
+print("DBGW win=" .. tostring(M.win ~= nil) .. " w=" .. tostring(M.win and M.win:GetWidth()))
+EQ("largeur appliquee", M.win:GetWidth(), 300)
+C.Set("bossmods.width", 220)
+-- 4 barres armees mais rows=3 : une seule ligne masquee a l'affichage
+M.Test()
+SETTLE(20)
+T("mode test : arme", M.testing and M.narmed == 4)
+M.Paint()
+local shown = 0
+for i = 1, 8 do if M["row" .. i]:IsShown() then shown = shown + 1 end end
+EQ("3 lignes visibles sur 4 armees", shown, 3)
+T("ancre d'annonces creee", M.msg ~= nil)
+T("ancre deplacable", SUI.Layout.items["bossmods.msg"] ~= nil)
+-- annonces de test : chez vous seulement (jamais RAID_WARNING)
+EQ("test : pas de raid warning", BMC_ACTS(), "")
+C.Set("bossmods.showmsg", false)
+M.Test()
+EQ("test arrete", M.testing, false)
+EQ("barres vides apres le test", M.narmed, 0)
+C.Set("bossmods.rows", 6)
+C.Set("bossmods.width", 220)
+SETTLE()
+EQ("aucune erreur interne " .. tostring(SUI.lastErr), SUI.errCount, 0)
 DONE()
