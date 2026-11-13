@@ -179,6 +179,51 @@ SUI.RegisterLayout("healer", { label = "mod.layout.name.healer",
 	pos = { ["unit.player"] = { 0.5, 0.2, -250, 0 }, ["unit.target"] = { 0.5, 0.2, 80, 0 }, ["unit.targettarget"] = { 0.5, 0.2, 80, -44 },
 		["meter.win"] = { 0.84, 0.2, 0, 0 }, ["threat.win"] = { 0.84, 0.42, 0, 0 } } })
 
+-- ================================================================ dispositions groupe / raid (v2)
+-- raidleft : groupe et raid colles a gauche, joueur/cible en bas-gauche, compteur en bas-droite.
+SUI.RegisterLayout("raidleft", { label = "mod.layout.name.raidleft",
+	v = { ["units.width"] = 170 },
+	pos = { ["group"] = { 0.0, 0.72, 12, 0 }, ["raid"] = { 0.0, 0.98, 12, 0 },
+		["unit.player"] = { 0.0, 0.24, 12, 0 }, ["unit.target"] = { 0.0, 0.24, 190, 0 }, ["unit.targettarget"] = { 0.0, 0.24, 190, -46 },
+		["meter.win1"] = { 0.99, 0.24, -250, 0 }, ["threat.win"] = { 0.99, 0.46, -250, 0 } } })
+
+-- healcenter : soigneur en raid = raid en colonnes au centre-gauche, cadres perso en bas-centre, compteur et menace a gauche.
+SUI.RegisterLayout("healcenter", { label = "mod.layout.name.healcenter",
+	v = { ["units.width"] = 180 },
+	pos = { ["group"] = { 0.28, 0.95, 0, 0 }, ["raid"] = { 0.28, 0.99, 0, 0 },
+		["unit.player"] = { 0.5, 0.16, -270, 0 }, ["unit.target"] = { 0.5, 0.16, 90, 0 }, ["unit.targettarget"] = { 0.5, 0.16, 90, -46 },
+		["meter.win1"] = { 0.0, 0.7, 12, 0 }, ["threat.win"] = { 0.0, 0.45, 12, 0 } } })
+
+-- tankui : tank = raid haut-gauche, cadres perso haut-centre, menace en bas-droite pres des barres.
+SUI.RegisterLayout("tankui", { label = "mod.layout.name.tankui",
+	v = { ["units.width"] = 200, ["units.height"] = 30 },
+	pos = { ["group"] = { 0.0, 0.98, 12, 0 }, ["raid"] = { 0.0, 0.98, 12, 0 },
+		["unit.player"] = { 0.5, 0.88, -280, 0 }, ["unit.target"] = { 0.5, 0.88, 90, 0 }, ["unit.targettarget"] = { 0.5, 0.88, 90, -46 },
+		["threat.win"] = { 0.99, 0.2, -250, 0 }, ["meter.win1"] = { 0.99, 0.42, -250, 0 },
+		["bossmods.win"] = { 0.99, 0.7, -250, 0 } } })
+
+-- dpsui : dps = meter et menace a droite, raid a gauche, cadres perso en bas-gauche.
+SUI.RegisterLayout("dpsui", { label = "mod.layout.name.dpsui",
+	pos = { ["group"] = { 0.0, 0.95, 12, 0 }, ["raid"] = { 0.0, 0.99, 12, 0 },
+		["unit.player"] = { 0.3, 0.16, -90, 0 }, ["unit.target"] = { 0.3, 0.16, 100, 0 }, ["unit.targettarget"] = { 0.3, 0.16, 100, -46 },
+		["meter.win1"] = { 0.99, 0.55, -250, 0 }, ["threat.win"] = { 0.99, 0.32, -250, 0 },
+		["bossmods.win"] = { 0.99, 0.14, -250, 0 } } })
+
+-- pvpui : pvp = cadres perso au centre-bas, groupe compact a gauche, ennemis epingles au centre, meter discret en bas-droite.
+SUI.RegisterLayout("pvpui", { label = "mod.layout.name.pvpui",
+	v = { ["units.width"] = 190, ["units.height"] = 28 },
+	pos = { ["unit.player"] = { 0.5, 0.2, -280, 0 }, ["unit.target"] = { 0.5, 0.2, 100, 0 }, ["unit.targettarget"] = { 0.5, 0.2, 100, -46 },
+		["group"] = { 0.0, 0.55, 12, 0 }, ["group.enemies"] = { 0.5, 0.62, 0, 0 },
+		["meter.win1"] = { 0.99, 0.12, -240, 0 } } })
+
+-- arenabox : arene = ennemis epingles au centre (bien visibles), cadres perso juste en dessous, groupe a gauche.
+SUI.RegisterLayout("arenabox", { label = "mod.layout.name.arenabox",
+	v = { ["units.width"] = 200, ["units.height"] = 30 },
+	pos = { ["group.enemies"] = { 0.5, 0.72, 0, 0 }, ["unit.player"] = { 0.5, 0.52, -290, 0 }, ["unit.target"] = { 0.5, 0.52, 100, 0 },
+		["unit.targettarget"] = { 0.5, 0.52, 100, -48 }, ["group"] = { 0.0, 0.7, 12, 0 },
+		["meter.win1"] = { 0.99, 0.3, -250, 0 } } })
+
+
 -- ================================================================ LIENS entre modules
 -- API (stable, utilisee par le Mover, le menu et l'apercu) :
 --   Layout.SetLink(enfant, parent, cote, dx, dy) -> ok [, raison]     cote = TOP | BOTTOM | LEFT | RIGHT ; dx, dy omis = ecart standard
