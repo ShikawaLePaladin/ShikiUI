@@ -214,6 +214,196 @@ M.BOSSES = {
 			{ t = 35, every = 35, name = "Teleport", dur = 3, warn = true },
 		},
 	},
+	-- ===== ZG =====
+	["venoxis"] = {
+		label = "Venoxis",
+		ev = {
+			{ t = 45, every = 45, name = "Renataki's Blessing", dur = 3, warn = true },
+		},
+	},
+	["mar'li"] = {
+		label = "Mar'li",
+		ev = {
+			{ t = 20, every = 20, name = "Enrage", dur = 3 },
+		},
+	},
+	["mandokir"] = {
+		label = "Mandokir",
+		ev = {
+			{ t = 60, every = 60, name = "Frightening Shout", dur = 3, warn = true },
+		},
+	},
+	["jindo the hexxer"] = {
+		label = "Jindo",
+		ev = {
+			{ t = 25, every = 25, name = "Hex", dur = 3, warn = true },
+		},
+	},
+	-- ===== AQ20 =====
+	["general rajaxx"] = {
+		label = "General Rajaxx",
+		ev = {
+			{ t = 30, every = 30, name = "Wave", dur = 5, warn = true },
+		},
+	},
+	["moam"] = {
+		label = "Moam",
+		ev = {
+			{ t = 90, every = 90, name = "Mana Burn", dur = 3, warn = true },
+		},
+	},
+	["buru the gorger"] = {
+		label = "Buru",
+		ev = {
+			{ t = 30, every = 30, name = "Dismember", dur = 3 },
+		},
+	},
+	["ayamiss the hunter"] = {
+		label = "Ayamiss",
+		ev = {
+			{ t = 25, every = 25, name = "Stinger Spray", dur = 3 },
+		},
+	},
+	-- ===== AQ40 =====
+	["the prophet skeram"] = {
+		label = "Skeram",
+		ev = {
+			{ t = 25, every = 25, name = "Earth Shock", dur = 3 },
+		},
+	},
+	["battleguard sartura"] = {
+		label = "Sartura",
+		ev = {
+			{ t = 45, every = 45, name = "Whirlwind", dur = 5, warn = true },
+		},
+	},
+	["fankriss the unyielding"] = {
+		label = "Fankriss",
+		ev = {
+			{ t = 30, every = 30, name = "Mortal Wound", dur = 3 },
+		},
+	},
+	["princess huhuran"] = {
+		label = "Huhuran",
+		ev = {
+			{ t = 30, every = 30, name = "Wyvern Sting", dur = 3, warn = true },
+			{ t = 30, every = 30, name = "Frenzy", dur = 3 },
+		},
+	},
+	["viscidus"] = {
+		label = "Viscidus",
+		ev = {
+			{ t = 15, every = 15, name = "Poison Bolt Volley", dur = 3 },
+		},
+	},
+	["emperor vek'lor"] = {
+		label = "Vek'lor",
+		ev = {
+			{ t = 30, every = 30, name = "Explode Bug", dur = 3 },
+		},
+	},
+	["ouro"] = {
+		label = "Ouro",
+		ev = {
+			{ t = 20, every = 20, name = "Sand Blast", dur = 3, warn = true },
+		},
+	},
+	["c'thun"] = {
+		label = "C'Thun",
+		ev = {
+			{ t = 45, every = 45, name = "Eye Beam", dur = 3, warn = true },
+			{ t = 40, every = 40, name = "Dark Glare", dur = 3, warn = true },
+		},
+	},
+	-- ===== NAXX =====
+	["anub'rekhan"] = {
+		label = "Anub'Rekhan",
+		ev = {
+			{ t = 20, every = 20, name = "Locust Swarm", dur = 12, warn = true },
+		},
+	},
+	["grand widow faerlina"] = {
+		label = "Faerlina",
+		ev = {
+			{ t = 60, every = 60, name = "Rain of Fire", dur = 3 },
+		},
+	},
+	["noth the plaguebringer"] = {
+		label = "Noth",
+		ev = {
+			{ t = 25, every = 25, name = "Curse of the Plaguebringer", dur = 3, warn = true },
+			{ t = 90, every = 90, name = "Blink", dur = 3 },
+		},
+	},
+	["heigan the unclean"] = {
+		label = "Heigan",
+		ev = {
+			{ t = 15, every = 15, name = "Eruption", dur = 3 },
+		},
+	},
+	["patchwerk"] = {
+		label = "Patchwerk",
+		ev = {
+			{ t = 30, every = 30, name = "Hateful Strike", dur = 3 },
+		},
+	},
+	["grobbulus"] = {
+		label = "Grobbulus",
+		ev = {
+			{ t = 12, every = 12, name = "Poison Cloud", dur = 3, warn = true },
+		},
+	},
+	["gluth"] = {
+		label = "Gluth",
+		ev = {
+			{ t = 20, every = 20, name = "Terrifying Roar", dur = 3, warn = true },
+			{ t = 15, every = 15, name = "Decimate", dur = 3 },
+		},
+	},
+	["instructor razuvious"] = {
+		label = "Razuvious",
+		ev = {
+			{ t = 25, every = 25, name = "Jagged Knife", dur = 3 },
+		},
+	},
+	["gothik the harvester"] = {
+		label = "Gothik",
+		ev = {
+			{ t = 30, every = 30, name = "Harvest Soul", dur = 3 },
+		},
+	},
+	["the four horsemen"] = {
+		label = "Four Horsemen",
+		ev = {
+			{ t = 12, every = 12, name = "Mark", dur = 3, warn = true },
+		},
+	},
+	-- ===== MONDE =====
+	["emeriss"] = {
+		label = "Emeriss",
+		ev = {
+			{ t = 15, every = 15, name = "Volatile Infection", dur = 3 },
+		},
+	},
+	["lethon"] = {
+		label = "Lethon",
+		ev = {
+			{ t = 20, every = 20, name = "Shadow Bolt Whirl", dur = 3 },
+		},
+	},
+	["taerar"] = {
+		label = "Taerar",
+		ev = {
+			{ t = 20, every = 20, name = "Bane of Awakening", dur = 3 },
+		},
+	},
+	["ysondre"] = {
+		label = "Ysondre",
+		ev = {
+			{ t = 20, every = 20, name = "Lightning Wave", dur = 3 },
+		},
+	},
+
 }
 
 M.bossByKey = {}

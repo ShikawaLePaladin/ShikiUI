@@ -1939,3 +1939,80 @@ P.Register("bags", { watch = { "bags." }, build = bagsBuild, update = bagsUpdate
 -- NOTES - NON VERIFIE EN JEU (1.12) : (1) GetStringWidth juste apres SetText (positionnement des segments de la discussion) ; (2) la
 -- taille reduite de police ; (3) les vraies cles d'options des barres d'action (actionbars.main.buttons / perrow, cdshade) lues en repli
 -- sur des valeurs d'exemple si elles manquent. Contenus d'exemple fixes : noms, textes, valeurs.
+
+-- ================================================================ ECRAN : mini-carte de la disposition reelle
+-- Dessine l'ecran entier et la position REELLE de chaque cadre enregistre (Layout.Rect) : joueur/cible, groupe,
+-- raid, ennemis epingles, compteur, menace, marques, alarmes de boss, benedictions, minimap. Un clic sur un
+-- cadre saute a sa categorie de reglages. Se redessine quand une disposition ou une position change.
+local SCREEN_FRAMES = {
+	{ key = "unit.player", label = "perso", cat = "units" },
+	{ key = "unit.target", label = "cible", cat = "units" },
+	{ key = "unit.targettarget", label = "c2", cat = "units" },
+	{ key = "group", label = "groupe", cat = "group" },
+	{ key = "group.enemies", label = "ennemis", cat = "group" },
+	{ key = "raid", label = "raid", cat = "raid" },
+	{ key = "meter.win1", label = "compteur", cat = "meter" },
+	{ key = "threat.win", label = "menace", cat = "threat" },
+	{ key = "marks.bar", label = "marques", cat = "marks" },
+	{ key = "bossmods.win", label = "alarmes", cat = "bossmods" },
+	{ key = "pp.win", label = "benes", cat = "pallypower" },
+	{ key = "minimap", label = "minimap", cat = "minimap" },
+}
+
+local function screenBuild(parent, w, h)
+	local root = CreateFrame("Frame", nil, parent)
+	root.st = { boxes = {} }
+	root.bg = root:CreateTexture(nil, "BACKGROUND")
+	root.bg:SetTexture(T.tex.white)
+	root.bg:SetAllPoints(root)
+	root.bg:SetVertexColor(T.c.bg[1], T.c.bg[2], T.c.bg[3], 0.5)
+	for i = 1, getn(SCREEN_FRAMES) do
+		local d = SCREEN_FRAMES[i]
+		local box = CreateFrame("Frame", nil, root)
+		box:SetBackdrop({ bgFile = T.tex.white, edgeFile = nil, tile = false })
+		box.label = txt(box, 9, T.c.text, "CENTER", true)
+		box.label:SetAllPoints(box)
+		box.label:SetText(d.label)
+		box.cat = d.cat
+		box.key = d.key
+		root.st.boxes[i] = box
+		local z = P.Zone(root, "f" .. i, 4)
+		z:SetAllPoints(box)
+	end
+	return root
+end
+
+local function screenUpdate(root, w, h)
+	local st = root.st
+	local ar, ag, ab = T.Accent()
+	for i = 1, getn(SCREEN_FRAMES) do
+		local d = SCREEN_FRAMES[i]
+		local box = st.boxes[i]
+		local r = Layout and Layout.Rect and Layout.Rect(d.key)
+		if r then
+			local bl, bb = r[1] / w, r[2] / h          -- UIParent -> fraction (l, b en unites UIParent)
+			local bw = (r[3] or 80) / w
+			local bh = (r[4] or 20) / h
+			box:ClearAllPoints()
+			box:SetPoint("TOPLEFT", root, "TOPLEFT", floor(bl * w) + 2, -floor((1 - bb - bh) * h) - 2)
+			box:SetWidth(mmax(14, floor(bw * w) - 4))
+			box:SetHeight(mmax(8, floor(bh * h) - 4))
+			box:SetBackdropColor(ar, ag, ab, 0.35)
+			box.label:Show()
+			box:Show()
+		else
+			box:Hide()
+		end
+	end
+end
+
+local function screenClick(zone)
+	local _, _, n = string.find(zone, "^f(%d+)$")
+	local i = tonumber(n)
+	if i and SCREEN_FRAMES[i] then return "cat:" .. SCREEN_FRAMES[i].cat end
+	return nil
+end
+
+P.Register("screen", { title = "mod.preview.screen.title", watch = { "layout.", "units.", "group.", "raid.", "meter.", "threat.", "marks.", "bossmods." },
+	build = screenBuild, update = screenUpdate, click = screenClick })
+

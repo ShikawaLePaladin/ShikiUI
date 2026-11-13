@@ -221,6 +221,16 @@ function M.BuildPreview(f)
 	pv.title = T.Text(pv, 12, T.c.text, "LEFT")
 	pv.title:SetPoint("TOPLEFT", pv, "TOPLEFT", 8, -7)
 	pv.title:SetHeight(14)
+	pv.bScreen = T.Button(pv, L("mod.preview.screen.toggle"), 64, 14, function()
+		-- bascule : apercu de l'ecran <-> apercu de la categorie courante
+		if P.curId == "screen" then
+			P.Show(P.Pick())
+		else
+			P.Show("screen")
+		end
+	end)
+	pv.bScreen:SetPoint("TOPRIGHT", pv, "TOPRIGHT", -8, -24)
+	pv.bScreen:Hide()   -- montre par P.Show quand un autre apercu est actif
 	pv.status = T.Text(pv, 10, T.c.warn, "RIGHT")
 	pv.status:SetPoint("TOPRIGHT", pv, "TOPRIGHT", -8, -8)
 	pv.status:SetHeight(12)
@@ -396,11 +406,17 @@ function P.Show(id)
 	if not def then
 		pv.title:SetText(L("mod.preview.title"))
 		pv.status:SetText("")
+		pv.bScreen:Hide()
 		P.Message(L("mod.preview.none"))
 		return
 	end
 	local name = def.title and M.Has(def.title) and L(def.title) or M.CatLabel(def.id)
 	pv.title:SetText(L("mod.preview.for", name))
+	if id ~= "screen" and P.reg.screen then
+		pv.bScreen:Show()
+	else
+		pv.bScreen:Hide()
+	end
 	P.UpdateStatus(def)
 	if not P.Ensure(def) then
 		P.Message(def.failed and L("mod.preview.error") or L("mod.preview.combat"))
