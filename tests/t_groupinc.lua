@@ -249,6 +249,54 @@ Fire("UNIT_CASTEVENT", "0xP1", "0xUNKNOWN", "START", 2061, 1500)
 EQ("GUID : cible hors groupe ignoree", E.mine.name, nil)
 EXT.superwow(false)
 
+SECTION("t_groupinc : soins des AUTRES soigneurs sur joueur / cible (SuperWoW)")
+EXT.superwow(true)
+SpellInfo = function(id) return NAMES[id] end
+C.Set("units.incheal", true)
+C.Set("modules.group", true)
+SETTLE()
+Pump(0.2, 2)
+E.myGuid = nil
+W.units.player.guid = "0xP1"
+W.units.target = { name = "Pote", hp = 1000, hpMax = 1000, class = "PRIEST", canAttack = false, guid = "0xGT9" }
+W.units.target.canAttack = false
+W.units.player.hp = 1000 ; W.units.player.hpMax = 2000
+Pump(0.1, 2)
+E.others = {}
+-- un autre soigneur lance un Flash Heal sur le joueur
+Fire("UNIT_CASTEVENT", "0xAMI2", "0xP1", "START", 2061, 1500)
+EQ("autre soigneur : entre notee", E.others["0xAMI2"] ~= nil, true)
+EQ("autre soigneur : cible resolve (moi)", E.others["0xAMI2"].t, W.units.player.name)
+T("UnitsIncoming(player) > 0", (SUI.UnitsIncoming("player", W.units.player.name, "0xP1") or 0) > 0)
+EQ("cadre joueur : barre de pre-soin armee", SUI.Units.frames.player.heal ~= nil, true)
+SUI.Units.frames.player.dHp = true
+SUI.Units.Flush()
+T("pre-soin visible sur le cadre joueur", SUI.Units.frames.player.heal:GetValue() > SUI.Units.frames.player.lhp / SUI.Units.frames.player.lmx)
+-- fin d'incantation : la barre repart
+Fire("UNIT_CASTEVENT", "0xAMI2", "0xP1", "CAST", 2061)
+EQ("fin d'incantation : entree effacee", E.others["0xAMI2"], nil)
+EQ("UnitsIncoming(player) = 0", SUI.UnitsIncoming("player", W.units.player.name, "0xP1") or 0, 0)
+-- echec : efface aussi
+Fire("UNIT_CASTEVENT", "0xAMI2", "0xP1", "START", 2061, 1500)
+Fire("UNIT_CASTEVENT", "0xAMI2", "0xP1", "FAIL", 2061)
+EQ("echec : entree effacee", E.others["0xAMI2"], nil)
+-- un autre soigneur soigne la CIBLE du jeu (cadre target)
+Fire("UNIT_CASTEVENT", "0xAMI3", "0xGT9", "START", 2061, 2000)
+EQ("cible du jeu : entre notee", E.others["0xAMI3"] ~= nil, true)
+EQ("cible du jeu : cible resolve", E.others["0xAMI3"].t, "Pote")
+T("UnitsIncoming(target) > 0", (SUI.UnitsIncoming("target", "Pote", "0xGT9") or 0) > 0)
+-- sort hors liste : rien
+Fire("UNIT_CASTEVENT", "0xAMI2", "0xGT9", "START", 99, 1500)
+EQ("sort hors liste : rien", E.others["0xAMI2"], nil)
+-- expiration apres le delai
+Fire("UNIT_CASTEVENT", "0xAMI4", "0xP1", "START", 2061, 3000)
+Pump(0.25, 20)   -- 5 s : l'entree (3 s + 1.5) est expiree
+EQ("expire : UnitsIncoming(player) = 0", SUI.UnitsIncoming("player", W.units.player.name, "0xP1") or 0, 0)
+EQ("expire : entree purgeee", E.others["0xAMI4"], nil)
+E.others = {}
+EXT.superwow(false)
+C.Set("units.incheal", false)
+
 SECTION("t_groupinc : raid")
 GRP_CLEAR()
 GRP_RAID(10)

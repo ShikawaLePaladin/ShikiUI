@@ -974,6 +974,7 @@ E.HEALALIAS = {
 E.bookRank = {}              -- sort de E.HEALS -> plus haut rang connu
 E.mine = { name = nil, amount = 0, at = 0, endAt = 0, src = nil }   -- ma incantation de soin en cours : cible (nom) et montant estime
 E.pend = { spell = nil, rank = nil, unit = nil, at = 0 }            -- dernier lancement annonce par ShikiUI (clic sur un cadre)
+E.others = {}                 -- soins des AUTRES soigneurs (SuperWoW) : [guid lanceur] = { t = nom cible, amt, endAt }
 E.INC_EV = { "SPELLCAST_START", "SPELLCAST_STOP", "SPELLCAST_FAILED", "SPELLCAST_INTERRUPTED" }
 
 -- Nom de E.HEALS correspondant a un nom de sort du client (anglais ou francais), ou nil.
@@ -1077,6 +1078,16 @@ function E.IncomingFor(name, guid)
 	local inc = 0
 	local m = E.mine
 	if name and m.name == name and m.amount > inc then inc = m.amount end
+	-- soins des autres soigneurs notes par SuperWoW (UNIT_CASTEVENT), entrees expirees ignorees et purgees
+	local now = GetTime()
+	local k, v
+	for k, v in pairs(E.others) do
+		if v.endAt < now then
+			E.others[k] = nil
+		elseif name and v.t == name and v.amt > inc then
+			inc = v.amt
+		end
+	end
 	for i = 1, getn(E.instances) do
 		local g = E.instances[i]
 		if g.active and g.kind ~= "pins" and g.cfg.incoming and g.cfg.incsrc ~= "me" then
@@ -1147,6 +1158,47 @@ local function nameOfGuid(gd)
 	return nil
 end
 
+-- Soins des AUTRES soigneurs (SuperWoW, UNIT_CASTEVENT) : on note l'incantation de lanceurs qui ne sont pas moi.
+-- Montant estime au rang le plus haut connu du grimoire (le rang du lanceur est inconnu) ; expire apres l'incantation.
+function E.OtherCastEvent(a1, a2, a3, a4)
+	local now = GetTime()
+	local e = E.others[a1]
+	if a3 == "FAIL" or a3 == "CAST" then
+		if e then E.others[a1] = nil end
+		return
+	end
+	if a3 ~= "START" then return end
+	local key = E.HealKey(spellName(a4))
+	if not key then return end
+	local tgt = a2
+	if not tgt or tgt == "" then return end
+	local tname = nameOfGuid(tgt)
+	if not tname then
+		-- cadres joueur / cible de Units.lua : hors instances de groupe, on resout le joueur et la cible du jeu
+		if tgt == E.myGuid then
+			tname = UnitName("player")
+		elseif SUI.Api and SUI.Api.GUID then
+			local tg = SUI.Api.GUID("target")
+			if tg and tg == tgt then tname = UnitName("target") end
+		end
+	end
+	if not tname then return end
+	if e and e.t == tname then return end        -- deja note vers la meme cible (anti-doublon)
+	local ms = tonumber(getglobal("arg5")) or 0
+	local amt = E.HealAmount(key, nil, ms)
+	if amt <= 0 then return end
+	-- purge des entrees expirees si la table grossit (cap 16)
+	if not e then
+		local n, k, v = 0
+		for k, v in pairs(E.others) do
+			n = n + 1
+			if n > 16 or v.endAt < now then E.others[k] = nil end
+		end
+	end
+	E.others[a1] = { t = tname, amt = amt, endAt = now + (ms / 1000) + 1.5 }
+	if SUI.UnitsHealNotify then SUI.UnitsHealNotify() end
+end
+
 -- UNIT_CASTEVENT (SuperWoW) pour moi : START donne la cible exacte, CAST / FAIL la fin.
 function E.MyCastEvent(a2, a3, a4)
 	if a3 == "START" then
@@ -1174,6 +1226,7 @@ function E.OnCastEvent(ev, a1, a2, a3, a4)
 		E.myGuid = gd
 	end
 	if E.wantInc and a1 == E.myGuid and (a3 == "START" or a3 == "CAST" or a3 == "FAIL") then E.MyCastEvent(a2, a3, a4) end
+	if E.wantInc and a1 ~= E.myGuid then E.OtherCastEvent(a1, a2, a3, a4) end
 	if a3 == "CAST" and a1 == E.myGuid and E.wantHots then
 		local nm = spellName(a4)
 		if nm and E.HOTS[nm] then
