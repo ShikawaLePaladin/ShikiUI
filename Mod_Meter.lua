@@ -369,6 +369,7 @@ end
 
 -- ---------------------------------------------------------------- segments
 function M.StartSegment(now)
+	M.fought = true
 	local s = M.TakeShell()
 	M.segId = M.segId + 1
 	s.id = M.segId
@@ -2588,14 +2589,23 @@ function M.Wake()
 	SUI.On("UNIT_PET", M.OnRoster)
 	SUI.On("PLAYER_ENTERING_WORLD", M.OnRoster)
 	SUI.On("PLAYER_TARGET_CHANGED", M.OnTarget)
+	SUI.On("PLAYER_REGEN_ENABLED", M.OnCombatEnd)
 	if SUI.Api.superwow then SUI.On("UNIT_CASTEVENT", M.OnCastEvent) end
 	M.task = SUI.Every(M.cfg.refresh, M.Tick, "meter.tick", true)
+end
+
+-- Fin de combat : remise a zero automatique si meter.autoreset est coche (et un combat a eu lieu).
+function M.OnCombatEnd()
+	if not M.cfg.autoreset or not M.fought then return end
+	M.fought = nil
+	M.Reset()
 end
 
 function M.Sleep()
 	if not M.awake then return end
 	M.awake = false
 	M.Detach()
+	SUI.Off("PLAYER_REGEN_ENABLED", M.OnCombatEnd)
 	SUI.Off("PARTY_MEMBERS_CHANGED", M.OnRoster)
 	SUI.Off("RAID_ROSTER_UPDATE", M.OnRoster)
 	SUI.Off("UNIT_PET", M.OnRoster)
