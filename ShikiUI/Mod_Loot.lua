@@ -505,8 +505,12 @@ function M.Refresh()
 		setText(f.title, L("msg.loot.history"))
 		rowColor(f.title, T.c.text[1], T.c.text[2], T.c.text[3])
 		M.bar:Hide()
+		f.icon:Hide()
 	else
 		setText(f.title, it.name ~= "" and it.name or L("msg.loot.history"))
+		local gi = getglobal("GetItemIcon")
+		local tex = (gi and it.id) and gi(it.id) or nil
+		if tex then f.icon:SetTexture(tex) ; f.icon:Show() else f.icon:Hide() end
 		if it.q >= 0 then
 			local r, g, b = GetItemQualityColor(it.q)
 			rowColor(f.title, r, g, b)
@@ -619,13 +623,19 @@ function M.Build()
 	f:SetFrameStrata("MEDIUM")
 	f:EnableMouse(true)
 	f:Hide()
+	f.icon = f:CreateTexture(nil, "ARTWORK")
+	f.icon:SetWidth(20)
+	f.icon:SetHeight(20)
+	f.icon:SetPoint("TOPLEFT", f, "TOPLEFT", 7, -6)
+	f.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+	f.icon:Hide()
 	f.title = T.Text(f, 12, T.c.text, "LEFT")
-	f.title:SetPoint("TOPLEFT", f, "TOPLEFT", 8, -7)
+	f.title:SetPoint("TOPLEFT", f, "TOPLEFT", 32, -7)
 	f.close = T.Button(f, "x", 18, 16, function() M.Close() end)
 	f.close:SetPoint("TOPRIGHT", f, "TOPRIGHT", -5, -5)
 	f.hist = T.Button(f, L("msg.loot.btn.hist"), 44, 16, function() M.ToggleHistory() end)
 	f.hist:SetPoint("RIGHT", f.close, "LEFT", -3, 0)
-	f.title:SetWidth(170)
+	f.title:SetWidth(148)
 	lookText(f.title, 12)
 	-- engrenage : ouvre les reglages du module, a gauche du bouton Historique
 	T.GearButton(f, "loot", { size = 16, point = "TOPRIGHT", x = -72, y = -5, title = L("msg.loot.gear"),
@@ -670,6 +680,8 @@ function M.Build()
 	end
 	M.frame = f
 	SUI.Layout.Register(f, "loot", "CENTER", 0, 120)
+	local li = SUI.Layout.items["loot"]
+	if li then li.mul = function() return C.Get("loot.scale") / 100 end end
 	M.ApplyOptions()
 end
 
@@ -1694,6 +1706,7 @@ function M.OnKey(key, value)
 	end
 	if (key == nil or key == "loot.lootscale") and SUI.Layout.items["lootwin"] then SUI.Layout.Apply("lootwin") end
 	if (key == nil or key == "loot.rollscale") and SUI.Layout.items["lootroll"] then SUI.Layout.Apply("lootroll") end
+	if (key == nil or key == "loot.scale") and SUI.Layout.items["loot"] then SUI.Layout.Apply("loot") end
 	if key == "loot.rollframe" and not C.Get("loot.rollframe") then M.RRClear() end
 	if key == "loot.lootrows" and M.lootOpen then M.RefreshLoot() end
 	M.ApplyOptions()
@@ -1845,6 +1858,7 @@ local LOOT_OPTIONS = {
 		opt("rollframe", "bool", 340, true, { simple = true }),
 		opt("rollmax", "number", 350, 4, { min = 1, max = 8, step = 1 }),
 		opt("rollscale", "number", 360, 100, { min = 60, max = 150, step = 10 }),
+		opt("scale", "number", 365, 100, { min = 60, max = 150, step = 10 }),
 		opt("rollhold", "number", 370, 8, { min = 2, max = 30, step = 1 }),
 		opt("keepblizz", "bool", 380, false),
 }
