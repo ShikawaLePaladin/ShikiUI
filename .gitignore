@@ -18,3 +18,11 @@ out/
 # Fichiers système
 Thumbs.db
 Desktop.ini
+
+# Depôt public = addon uniquement (tests/outils/docs restent en local)
+tests/
+tools/
+docs/
+MODULES.md
+PARITY.md
+SPEC.md
