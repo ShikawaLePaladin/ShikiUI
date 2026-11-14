@@ -650,9 +650,15 @@ function M.Build()
 	f.tip:SetPoint("TOPLEFT", f, "TOPLEFT", 4, -4)
 	f.tip:EnableMouse(true)
 	f.tip:SetScript("OnEnter", function()
-		if M.item and M.item.link ~= "" then
+		if M.item and (M.item.id or (M.item.link ~= "" and string.find(M.item.link, "|H", 1, true))) then
 			GameTooltip:SetOwner(this, "ANCHOR_RIGHT")
-			GameTooltip:SetHyperlink(M.item.link)
+			-- lien standard item:ID en priorite ; certains addons (AtlasLoot) interceptent SetHyperlink et
+			-- rejettent les liens de chat bruts : pcall pour ne jamais afficher d erreur a l ecran
+			local ok = false
+			if M.item.id then ok = pcall(GameTooltip.SetHyperlink, GameTooltip, "item:" .. M.item.id) end
+			if not ok and string.find(M.item.link, "|H", 1, true) then
+				pcall(GameTooltip.SetHyperlink, GameTooltip, M.item.link)
+			end
 			GameTooltip:Show()
 		end
 	end)
