@@ -1296,6 +1296,15 @@ function WR.style(pg)
 		end
 	end
 	M.WizPreview(sel.style)
+	-- VRAIE taille : l'apercu est mis a l'echelle choisie (Petite 0.9, Normale 1.0, Grande 1.1)
+	do
+		local sc = sel.scale or 1
+		local pv2 = pg.pv
+		pv2:SetScale(sc)
+		-- compenser : un SetScale sur le preview le retrecit dans son coin d'ancrage TOPLEFT, on garde l'emplacement
+		pv2:ClearAllPoints()
+		pv2:SetPoint("TOPLEFT", pg, "TOPLEFT", CX, CY - 114)
+	end
 	pg.sizeLabel:SetText(L("mod.menu.wiz.style.size"))
 	for i = 1, 3 do
 		T.SetButtonText(pg.sz[i], L(SIZE_KEYS[i]))
@@ -1908,6 +1917,15 @@ function M.WizCancel()
 	if ws and ws.sel.locale ~= ws.orig.locale then
 		SUI.Config.Set("ui.locale", ws.orig.locale)
 		SUI.SetLocale(SUI.Config.Get("ui.locale"))
+	end
+	-- remettre proprement l etat du menu : le wizard a pu changer des reglages a la volee (langue, apercu),
+	-- on force un rendu complet et la geometry renelle du menu a la fermeture
+	M.ws = nil
+	if M.frame and M.frame:IsShown() then
+		M.ApplyScale()
+		M.RebuildNav()
+		M.Translate()
+		M.Render()
 	end
 	SUI.Config.SetGlobal("firstRun", false)
 	f:Hide()
