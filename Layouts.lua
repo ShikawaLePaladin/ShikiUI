@@ -87,6 +87,31 @@ function Layout.ApplyPreset(id, role)
 	C.cur.layout = id
 	Layout.applied = Layout.applied + 1
 	C.Notify("layout", id)
+	-- Les elements LIES par defaut (castbar, buffs/debuffs joueur et cible) ne suivent les cadres que si
+-- aucune position enregistree ne fait obstacle : apres un reset complet on re-ecrit les liens explicites,
+-- ainsi ils se collent aux NOUVEAUX cadres au lieu de rester a leur ancienne place (chevauchements vus en jeu).
+	if def.reset and Layout.WriteLink and Layout.GapOffsets then
+		local relink = {
+			-- la CHAINE d'origine : buffs au-dessus du cadre, armes au-dessus des buffs, debuffs joueur a gauche ;
+			-- cible : debuffs au-dessus du cadre, buffs au-dessus des debuffs ; castbars dessous
+			{ "castbar.player", "unit.player", "BOTTOM" },
+			{ "castbar.target", "unit.target", "BOTTOM" },
+			{ "auras.pb", "unit.player", "TOP" },
+			{ "auras.pw", "auras.pb", "TOP" },
+			{ "auras.pd", "unit.player", "LEFT" },
+			{ "auras.td", "unit.target", "TOP" },
+			{ "auras.tb", "auras.td", "TOP" },
+		}
+		local ri
+		for ri = 1, table.getn(relink) do
+			local child, parent, side = relink[ri][1], relink[ri][2], relink[ri][3]
+			if Layout.items[child] and Layout.items[parent] then
+				if Layout.ResetLink then Layout.ResetLink(child) end
+				local gx, gy = Layout.GapOffsets(side)
+				Layout.WriteLink(child, parent, side, gx, gy)
+			end
+		end
+	end
 	return true, "msg.layout.applied", ok, bad
 end
 

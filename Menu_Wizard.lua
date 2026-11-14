@@ -1300,10 +1300,10 @@ function WR.style(pg)
 	do
 		local sc = sel.scale or 1
 		local pv2 = pg.pv
-		pv2:SetScale(sc)
-		-- compenser : un SetScale sur le preview le retrecit dans son coin d'ancrage TOPLEFT, on garde l'emplacement
 		pv2:ClearAllPoints()
-		pv2:SetPoint("TOPLEFT", pg, "TOPLEFT", CX, CY - 114)
+		-- centre de la zone reservee (330 x 170 a partir de CX, CY-114) : le SetScale retrecit autour du centre, le cadre reste en place
+		pv2:SetPoint("CENTER", pg, "TOPLEFT", CX + 165, -(114 + 85))
+		pv2:SetScale(sc)
 	end
 	pg.sizeLabel:SetText(L("mod.menu.wiz.style.size"))
 	for i = 1, 3 do
