@@ -34,6 +34,7 @@ local T = SUI.Theme
 
 local getn, tinsert = table.getn, table.insert
 local floor, ceil = math.floor, math.ceil
+local mmax = math.max
 local sfind, ssub, slen, sgsub, slower, sformat = string.find, string.sub, string.len, string.gsub, string.lower, string.format
 
 local M = {}
@@ -501,6 +502,7 @@ function M.Refresh()
 	if not f or not f:IsShown() then return end
 	local it = M.item
 	local rows = C.Get("loot.rows")
+	local shown = 0
 	if M.view == "history" then
 		setText(f.title, L("msg.loot.history"))
 		rowColor(f.title, T.c.text[1], T.c.text[2], T.c.text[3])
@@ -552,6 +554,7 @@ function M.Refresh()
 				end
 			end
 			if a then
+				shown = shown + 1
 				setText(row.name, a)
 				setText(row.kind, b)
 				setText(row.val, c)
@@ -567,6 +570,10 @@ function M.Refresh()
 			end
 		end
 	end
+	-- hauteur adaptee au contenu : pas de grand vide quand peu de jets
+	local btns = C.Get("loot.buttons") and M.view == "rolls"
+	local want = 46 + mmax(shown, 3) * 15 + (btns and 26 or 4)
+	if M.frame:GetHeight() ~= want then M.frame:SetHeight(want) end
 end
 
 function M.Show()
@@ -636,6 +643,20 @@ function M.Build()
 	f.hist = T.Button(f, L("msg.loot.btn.hist"), 44, 16, function() M.ToggleHistory() end)
 	f.hist:SetPoint("RIGHT", f.close, "LEFT", -3, 0)
 	f.title:SetWidth(148)
+	-- survol de la zone titre / icone : infobulle du stat de l'objet en cours
+	f.tip = CreateFrame("Button", nil, f)
+	f.tip:SetWidth(210)
+	f.tip:SetHeight(24)
+	f.tip:SetPoint("TOPLEFT", f, "TOPLEFT", 4, -4)
+	f.tip:EnableMouse(true)
+	f.tip:SetScript("OnEnter", function()
+		if M.item and M.item.link ~= "" then
+			GameTooltip:SetOwner(this, "ANCHOR_RIGHT")
+			GameTooltip:SetHyperlink(M.item.link)
+			GameTooltip:Show()
+		end
+	end)
+	f.tip:SetScript("OnLeave", function() GameTooltip:Hide() end)
 	lookText(f.title, 12)
 	-- engrenage : ouvre les reglages du module, a gauche du bouton Historique
 	T.GearButton(f, "loot", { size = 16, point = "TOPRIGHT", x = -72, y = -5, title = L("msg.loot.gear"),
