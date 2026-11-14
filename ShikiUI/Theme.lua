@@ -782,11 +782,15 @@ function Layout.Register(frame, key, point, x, y)
 	if SUI.Mover then SUI.Mover.Adopt(key, frame) end
 end
 
-function Layout.Apply(key)
+-- Position enregistree = coin BAS-GAUCHE en unites UIParent. Quand l'echelle change, un cadre large
+-- (anchore a droite, ex. auras TOPRIGHT) change de taille a l'ecran : garder le meme bas-gauche le DECALE
+-- visuellement de toute sa largeur. On compense : le point d'ANCRE du cadre (it.point) reste fixe a l'ecran.
+function Layout.Apply(key, keepAnchor)
 	local it = Layout.items[key]
 	if not it then return end
 	local f = it.frame
 	local l, b, s = SUI.Config.GetPos(Layout.ReadKey(key))
+	local oldsc = f:GetScale() or 1
 	local sc = SUI.Config.Get("ui.scale") * (s or 1)
 	if type(it.mul) == "function" then      -- echelle propre au module (ex. micro-menu), combinee a celle du Mover
 		local m = it.mul()
@@ -795,14 +799,29 @@ function Layout.Apply(key)
 	f:SetScale(sc)
 	f:ClearAllPoints()
 	if l then
-		f:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", l / sc, b / sc)
+		if keepAnchor and it.point and math.abs(oldsc - sc) > 0.001 then
+			-- le coin bas-gauche enregistre ne bouge pas a l'ecran : recale par l'ecart d'ancrage entre les deux echelles
+			local fw = (f:GetWidth() or 0)
+			local fh = (f:GetHeight() or 0)
+			local ax, ay = 0.5, 0.5
+			local p = it.point
+			if p and string.find(p, "LEFT") then ax = 0 elseif p and string.find(p, "RIGHT") then ax = 1 end
+			if p and string.find(p, "TOP") then ay = 1 elseif p and string.find(p, "BOTTOM") then ay = 0 end
+			-- la position enregistree l/b correspond au bas-gauche A L'ANCIENNE ECHELLE du cadre de taille fixe fw/fh :
+			-- son ancre etait a (l + fw*oldsc*ax, b + fh*oldsc*ay) en unites UIParent ; on la preserve
+			local nl = l + fw * (oldsc - sc) * ax
+			local nb = b + fh * (oldsc - sc) * ay
+			f:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", nl / sc, nb / sc)
+		else
+			f:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", l / sc, b / sc)
+		end
 	else
 		f:SetPoint(it.point, UIParent, it.point, it.x, it.y)
 	end
 end
 
 function Layout.ApplyAll()
-	for key, _ in pairs(Layout.items) do Layout.Apply(key) end
+	for key, _ in pairs(Layout.items) do Layout.Apply(key, true) end
 end
 
 -- Remet la bordure normale des cadres enregistres (les poignees de deplacement sont dessinees par le Mover, jamais sur les cadres).

@@ -792,7 +792,10 @@ function M.Tick()
 	local box = getglobal("SendMailNameEditBox")
 	if box then
 		local txt = box:GetText()
-		if txt and txt ~= "" then M.lastTo = txt end
+		if txt and txt ~= "" then
+			if txt ~= M.lastTo then M.mdirty = true end     -- le destinataire affiche dans le panneau multiple suit le champ du jeu
+			M.lastTo = txt
+		end
 	end
 	if C.Get("mail.fixfields") then
 		M.FieldsTick()
@@ -1058,6 +1061,8 @@ function M.MailErr(msg)
 		or sfind(m, "introuvable", 1, true) or sfind(m, "inconnu", 1, true) or sfind(m, "doesn't exist", 1, true) then
 		return "player"
 	end
+	if sfind(m, "inventory", 1, true) or sfind(m, "inventaire", 1, true) then return nil end
+	if sfind(m, "enough money", 1, true) or sfind(m, "enough gold", 1, true) or sfind(m, "pas assez", 1, true) then return "money" end
 	if sfind(m, "full", 1, true) or sfind(m, "plein", 1, true) then return "full" end
 	if sfind(m, "bound", 1, true) or sfind(m, "cannot mail", 1, true) or sfind(m, "can't mail", 1, true) or sfind(m, "li\195\169", 1, true) then
 		return "bound"
@@ -1161,6 +1166,8 @@ function M.MultiFinish(why)
 	if not M.mrun then return end
 	M.mrun, M.mwait = false, false
 	M.MultiRelease()
+	local setm = getglobal("SetSendMailMoney")
+	if type(setm) == "function" then setm(0) end     -- l'or par courrier ne doit pas rester dans le champ du jeu
 	for i = M.nml, 1, -1 do
 		if M.ml[i].done then
 			table.remove(M.ml, i)
@@ -1199,7 +1206,7 @@ function M.MultiFail(e, why)
 	M.MultiSkip(e, why)
 	M.mi = M.mi + 1
 	M.mnext = GetTime() + (C.Get("mail.multidelay") or 1)
-	if why == "player" or why == "full" then M.mcons = M.mcons + 1 else M.mcons = 0 end
+	if why == "player" or why == "full" or why == "money" then M.mcons = M.mcons + 1 else M.mcons = 0 end
 end
 
 function M.MultiStep()
@@ -1230,7 +1237,7 @@ function M.MultiStep()
 	end
 	local g = M.MultiGold()
 	local setm = getglobal("SetSendMailMoney")
-	if g > 0 and type(setm) == "function" then setm(g * 10000) end
+	if type(setm) == "function" then setm(g * 10000) end   -- toujours : ne jamais joindre un montant reste dans le champ
 	M.mwait = true             -- avant SendMail : une erreur peut arriver pendant l'appel
 	M.msince = GetTime()
 	SendMail(M.mto, M.MultiSubject() or name, "")
