@@ -797,3 +797,55 @@ SUI.RegisterLayout("wideui", { label = "mod.layout.name.wideui", reset = true,
 		["bossmods.win"] = { 0.99, 0.3, -260, 0 }, ["marks.bar"] = { 0.99, 0.15, -230, 0 },
 		["minimap"] = { 0.99, 0.99, -180, -20 }, ["totems.bar"] = { 0.76, 0.02, -260, 4 },
 	} })
+
+-- ================================================================ COMPLEMENT : TOUS LES MODULES
+-- Les 6 presets d'ecran ci-dessus placent l'essentiel ; ce bloc ajoute TOUS les autres modules positionnables
+-- (sacs, chat-copie, messages, chercheur, tracker, pallypower, powerauras, butin, bijoux, courrier, HDV, HUD,
+-- annonces de boss, compteur 2/3) a CHAQUE preset qui ne les couvre pas deja. Zones choisies pour eviter les
+-- elements deja poses par les presets (centre libre, colonnes laterales moyennes).
+local EXTRA_KEYS = { "bags.window", "bags.bank", "chat.copy", "messages.win", "messages.hist", "messages.badge",
+	"messages.toasts", "finder.win", "tracker.win", "pp.win", "powerauras.banner", "powerauras.z", "loot",
+	"lootwin", "lootroll", "items", "mail", "auction", "hud", "bossmods.msg", "meter.win2", "meter.win3" }
+local EXTRAS = {
+	["bags.window"] = { 0.99, 0.30, -24, 0 },       -- colonne droite, sous la zone compteur/menace
+	["bags.bank"] = { 0.01, 0.30, 24, 0 },          -- colonne gauche, milieu
+	["chat.copy"] = { 0.35, 0.92, 0, 0 },
+	["messages.win"] = { 0.5, 0.86, 0, 0 },
+	["messages.hist"] = { 0.65, 0.92, 0, 0 },
+	["messages.badge"] = { 0.99, 0.70, -60, 0 },
+	["messages.toasts"] = { 0.99, 0.50, -40, 0 },
+	["finder.win"] = { 0.35, 0.80, 0, 0 },
+	["tracker.win"] = { 0.99, 0.58, -24, 0 },
+	["pp.win"] = { 0.65, 0.80, 0, 0 },
+	["powerauras.banner"] = { 0.5, 0.62, 0, 0 },
+	["powerauras.z"] = { 0.5, 0.50, 0, 0 },
+	["loot"] = { 0.5, 0.50, 140, 0 },
+	["lootwin"] = { 0.5, 0.50, -260, 0 },
+	["lootroll"] = { 0.35, 0.55, 0, 0 },
+	["items"] = { 0.02, 0.12, 0, 0 },
+	["mail"] = { 0.5, 0.5, 0, 0 },
+	["auction"] = { 0.5, 0.5, 0, 0 },
+	["hud"] = { 0.5, 0.94, 0, 0 },
+	["bossmods.msg"] = { 0.5, 0.70, 0, 0 },
+	["meter.win2"] = { 0.99, 0.60, -520, 0 },
+	["meter.win3"] = { 0.99, 0.60, -780, 0 },
+}
+-- Exceptions par preset : la colonne droite de pvparena et tankraid est chargee, on serre les ajouts.
+local EXTRA_TWEAK = {
+	pvparena = { ["bags.window"] = { 0.99, 0.30, -24, 0 }, ["tracker.win"] = { 0.99, 0.86, -24, 0 },
+		["messages.badge"] = { 0.99, 0.90, -60, 0 }, ["messages.toasts"] = { 0.35, 0.68, 0, 0 } },
+	tankraid = { ["bags.window"] = { 0.99, 0.30, -24, 0 }, ["tracker.win"] = { 0.99, 0.58, -24, 0 } },
+}
+for i = 1, table.getn(SUI.layoutOrder) do
+	local id = SUI.layoutOrder[i]
+	local def = SUI.layouts[id]
+	if def and def.pos and def.reset then
+		local tweak = EXTRA_TWEAK[id]
+		for j = 1, table.getn(EXTRA_KEYS) do
+			local k = EXTRA_KEYS[j]
+			if not def.pos[k] then
+				def.pos[k] = (tweak and tweak[k]) or EXTRAS[k]
+			end
+		end
+	end
+end
