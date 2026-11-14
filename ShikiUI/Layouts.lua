@@ -803,10 +803,11 @@ SUI.RegisterLayout("wideui", { label = "mod.layout.name.wideui", reset = true,
 -- (sacs, chat-copie, messages, chercheur, tracker, pallypower, powerauras, butin, bijoux, courrier, HDV, HUD,
 -- annonces de boss, compteur 2/3) a CHAQUE preset qui ne les couvre pas deja. Zones choisies pour eviter les
 -- elements deja poses par les presets (centre libre, colonnes laterales moyennes).
-local EXTRA_KEYS = { "bags.window", "bags.bank", "chat.copy", "messages.win", "messages.hist", "messages.badge",
-	"messages.toasts", "finder.win", "tracker.win", "pp.win", "powerauras.banner", "powerauras.z", "loot",
+local EXTRA_KEYS = { "chat.main", "bags.window", "bags.bank", "chat.copy", "messages.win", "messages.hist", "messages.badge",
+	"messages.toasts", "finder.win", "tracker.win", "pp.win", "powerauras.banner", "loot",
 	"lootwin", "lootroll", "items", "mail", "auction", "hud", "bossmods.msg", "meter.win2", "meter.win3" }
 local EXTRAS = {
+	["chat.main"] = { 0.0, 0.02, 12, 40 },          -- chat TOUJOURS visible en bas-gauche apres un preset (le reset effacait sa position)
 	["bags.window"] = { 0.99, 0.30, -24, 0 },       -- colonne droite, sous la zone compteur/menace
 	["bags.bank"] = { 0.01, 0.30, 24, 0 },          -- colonne gauche, milieu
 	["chat.copy"] = { 0.35, 0.92, 0, 0 },
@@ -818,7 +819,6 @@ local EXTRAS = {
 	["tracker.win"] = { 0.99, 0.58, -24, 0 },
 	["pp.win"] = { 0.65, 0.80, 0, 0 },
 	["powerauras.banner"] = { 0.5, 0.62, 0, 0 },
-	["powerauras.z"] = { 0.5, 0.50, 0, 0 },
 	["loot"] = { 0.5, 0.50, 140, 0 },
 	["lootwin"] = { 0.5, 0.50, -260, 0 },
 	["lootroll"] = { 0.35, 0.55, 0, 0 },

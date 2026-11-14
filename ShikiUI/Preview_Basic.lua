@@ -1957,6 +1957,7 @@ local SCREEN_FRAMES = {
 	{ key = "bossmods.win", label = "alarmes", cat = "bossmods" },
 	{ key = "pp.win", label = "benes", cat = "pallypower" },
 	{ key = "minimap", label = "minimap", cat = "minimap" },
+	{ key = "chat.main", label = "chat", cat = "chat" },
 	-- modules ajoutes aux presets (tout est maintenant place par les mises en page)
 	{ key = "bags.window", label = "sacs", cat = "bags" },
 	{ key = "bags.bank", label = "banque", cat = "bags" },
@@ -2026,6 +2027,6 @@ local function screenClick(zone)
 	return nil
 end
 
-P.Register("screen", { title = "mod.preview.screen.title", watch = { "layout.", "units.", "group.", "raid.", "meter.", "threat.", "marks.", "bossmods.", "bags.", "messages.", "powerauras.", "tracker.", "finder.", "items.", "totems.", "tanktools.", "esport." },
+P.Register("screen", { title = "mod.preview.screen.title", watch = { "layout.", "units.", "group.", "raid.", "meter.", "threat.", "marks.", "bossmods.", "chat.", "bags.", "messages.", "powerauras.", "tracker.", "finder.", "items.", "totems.", "tanktools.", "esport." },
 	build = screenBuild, update = screenUpdate, click = screenClick })
 
