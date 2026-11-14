@@ -189,4 +189,48 @@ C.Set("bossmods.rows", 6)
 C.Set("bossmods.width", 220)
 SETTLE()
 EQ("aucune erreur interne " .. tostring(SUI.lastErr), SUI.errCount, 0)
+
+SECTION("t_bossmods : pull timer et synchronisation")
+C.Set("bossmods.pull", true)
+C.Set("bossmods.channel", "self")
+M.dbg2 = {}
+BMC_CLEAR()
+BMC.raid = {}
+BMC.party = {}
+CHATCLEAR()
+BMC.name.target = nil
+M.Tick()
+-- pull hors raid : barre + annonces chez soi, pas de SendChatMessage
+M.Pull(10)
+T("barre de pull armee", M.narmed == 1 and M.armed[1].pull)
+EQ("pas de broadcast hors raid", BMC_ACTS(), "")
+Pump(0.25, 44)
+CONTAINS("decompte 5..1 chez soi", CHATTEXT(), "PULL MAINTENANT")
+EQ("barre de pull purgee", M.narmed, 0)
+-- pull en raid : annonce RAID_WARNING + sync envoyee
+CHATCLEAR()
+BMC_CLEAR()
+BMC_RAID(10)
+M.Pull(5)
+Pump(0.25, 2)
+CONTAINS("annonce pull au raid", BMC_ACTS(), "Pull dans 5 s")
+T("sync envoyee via SendAddonMessage", BMC_ADDONS() > 0)
+-- reception du sync d'un autre officier : meme barre localement, pas de re-broadcast
+BMC_CLEAR()
+BMC_ADDONRECV("ShikiUIBW", "pull:12:AutreOfficier")
+EQ("pull recu : barre armee", M.narmed, 1)
+Pump(0.25, 52)
+CONTAINS("pull recu : decompte local", BMC_ACTS(), "PULL MAINTENANT")
+-- fin de combat : les barres de boss partent, les pulls restent
+BMC.name.target = "Ragnaros"
+M.Tick()
+W.combat = true
+Fire("PLAYER_REGEN_DISABLED")
+M.Tick()
+T("combat : barres de boss", M.narmed >= 1)
+W.combat = false
+Fire("PLAYER_REGEN_ENABLED")
+M.Tick()
+EQ("fin de combat : barres de boss purgees", M.narmed, 0)
+EQ("aucune erreur interne " .. tostring(SUI.lastErr), SUI.errCount, 0)
 DONE()

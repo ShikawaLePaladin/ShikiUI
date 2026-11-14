@@ -6,7 +6,7 @@ TNK_SETUP()
 THR_SETUP()
 BOOT()
 THR_GROUP()
-SETTLE()
+SETTLE() ; C.Set("modules.bossmods", false)
 local M = SUI.Threat
 local L = SUI.L
 local T3 = SUI.Theme

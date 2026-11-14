@@ -85,7 +85,8 @@ function M.Target(idx)
 end
 
 -- ---------------------------------------------------------------- barre
-local function mkClick(b)
+local function mkClick()
+	local b = this
 	local idx = b.idx
 	if IsShiftKeyDown and IsShiftKeyDown() then
 		-- Maj + clic : poser / retirer ce marqueur sur ta cible

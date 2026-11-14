@@ -533,7 +533,7 @@ EQ("Personnaliser ouvre le menu sur le style", M.cat, "style")
 EQ("mode Tout", M.mode, "all")
 -- mises en page
 local lay = 0
-for i = 1, 8 do if P.layoutButtons[i]:IsShown() then lay = lay + 1 end end
+for i = 1, table.getn(SUI.layoutOrder) do if P.layoutButtons[i]:IsShown() then lay = lay + 1 end end
 EQ("un bouton par mise en page", lay, table.getn(SUI.layoutOrder))
 -- combat : pas de construction
 P.Hide()

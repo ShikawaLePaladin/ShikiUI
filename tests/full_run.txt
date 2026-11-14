@@ -1,0 +1,1261 @@
+== structure (.toc) ==
+toc a jour (36 module(s))
+== lint50 ==
+../ShikiUI/Addons.lua: LINT OK (locals de tete : 18/200)
+../ShikiUI/Api.lua: LINT OK (locals de tete : 5/200)
+../ShikiUI/Backup.lua: LINT OK (locals de tete : 11/200)
+../ShikiUI/Bind.lua: LINT OK (locals de tete : 23/200)
+../ShikiUI/Cmd.lua: LINT OK (locals de tete : 13/200)
+../ShikiUI/Config.lua: LINT OK (locals de tete : 12/200)
+../ShikiUI/Core.lua: LINT OK (locals de tete : 21/200)
+../ShikiUI/GameMenu.lua: LINT OK (locals de tete : 9/200)
+../ShikiUI/Layouts.lua: LINT OK (locals de tete : 35/200)
+../ShikiUI/Locale.lua: LINT OK (locals de tete : 1/200)
+../ShikiUI/Locale_Actionbars.lua: LINT OK (locals de tete : 1/200)
+../ShikiUI/Locale_Addons.lua: LINT OK (locals de tete : 1/200)
+../ShikiUI/Locale_Auction.lua: LINT OK (locals de tete : 1/200)
+../ShikiUI/Locale_Auras.lua: LINT OK (locals de tete : 1/200)
+../ShikiUI/Locale_Bags.lua: LINT OK (locals de tete : 1/200)
+../ShikiUI/Locale_Bind.lua: LINT OK (locals de tete : 1/200)
+../ShikiUI/Locale_BossMods.lua: LINT OK (locals de tete : 1/200)
+../ShikiUI/Locale_Bulletin.lua: LINT OK (locals de tete : 1/200)
+../ShikiUI/Locale_CastBar.lua: LINT OK (locals de tete : 1/200)
+../ShikiUI/Locale_CharStats.lua: LINT OK (locals de tete : 1/200)
+../ShikiUI/Locale_Chat.lua: LINT OK (locals de tete : 1/200)
+../ShikiUI/Locale_ChatTabs.lua: LINT OK (locals de tete : 1/200)
+../ShikiUI/Locale_ClickHeal.lua: LINT OK (locals de tete : 1/200)
+../ShikiUI/Locale_Esport.lua: LINT OK (locals de tete : 1/200)
+../ShikiUI/Locale_Finder.lua: LINT OK (locals de tete : 1/200)
+../ShikiUI/Locale_Group.lua: LINT OK (locals de tete : 1/200)
+../ShikiUI/Locale_Items.lua: LINT OK (locals de tete : 1/200)
+../ShikiUI/Locale_Layout.lua: LINT OK (locals de tete : 1/200)
+../ShikiUI/Locale_Loot.lua: LINT OK (locals de tete : 1/200)
+../ShikiUI/Locale_Macros.lua: LINT OK (locals de tete : 1/200)
+../ShikiUI/Locale_Mail.lua: LINT OK (locals de tete : 1/200)
+../ShikiUI/Locale_Marks.lua: LINT OK (locals de tete : 1/200)
+../ShikiUI/Locale_Menu.lua: LINT OK (locals de tete : 1/200)
+../ShikiUI/Locale_Messages.lua: LINT OK (locals de tete : 1/200)
+../ShikiUI/Locale_Meter.lua: LINT OK (locals de tete : 1/200)
+../ShikiUI/Locale_Minimap.lua: LINT OK (locals de tete : 1/200)
+../ShikiUI/Locale_Mode.lua: LINT OK (locals de tete : 1/200)
+../ShikiUI/Locale_Mover.lua: LINT OK (locals de tete : 1/200)
+../ShikiUI/Locale_Nameplates.lua: LINT OK (locals de tete : 1/200)
+../ShikiUI/Locale_PallyPower.lua: LINT OK (locals de tete : 1/200)
+../ShikiUI/Locale_PowerAuras.lua: LINT OK (locals de tete : 1/200)
+../ShikiUI/Locale_Preview.lua: LINT OK (locals de tete : 1/200)
+../ShikiUI/Locale_Raid.lua: LINT OK (locals de tete : 1/200)
+../ShikiUI/Locale_Setup.lua: LINT OK (locals de tete : 1/200)
+../ShikiUI/Locale_Skin.lua: LINT OK (locals de tete : 1/200)
+../ShikiUI/Locale_Social.lua: LINT OK (locals de tete : 1/200)
+../ShikiUI/Locale_Specs.lua: LINT OK (locals de tete : 1/200)
+../ShikiUI/Locale_Style.lua: LINT OK (locals de tete : 1/200)
+../ShikiUI/Locale_TankTools.lua: LINT OK (locals de tete : 1/200)
+../ShikiUI/Locale_Target.lua: LINT OK (locals de tete : 1/200)
+../ShikiUI/Locale_Threat.lua: LINT OK (locals de tete : 1/200)
+../ShikiUI/Locale_Tooltip.lua: LINT OK (locals de tete : 1/200)
+../ShikiUI/Locale_Totems.lua: LINT OK (locals de tete : 1/200)
+../ShikiUI/Locale_Tracker.lua: LINT OK (locals de tete : 1/200)
+../ShikiUI/Locale_Vendor.lua: LINT OK (locals de tete : 1/200)
+../ShikiUI/Locale_Visibility.lua: LINT OK (locals de tete : 1/200)
+../ShikiUI/Locale_Windows.lua: LINT OK (locals de tete : 1/200)
+../ShikiUI/Menu.lua: LINT OK (locals de tete : 24/200)
+../ShikiUI/Menu_Pages.lua: LINT OK (locals de tete : 29/200)
+../ShikiUI/Menu_Preview.lua: LINT OK (locals de tete : 17/200)
+../ShikiUI/Menu_Profiles.lua: LINT OK (locals de tete : 16/200)
+../ShikiUI/Menu_Wizard.lua: LINT OK (locals de tete : 55/200)
+../ShikiUI/Migrate.lua: LINT OK (locals de tete : 8/200)
+../ShikiUI/Mod_Actionbars.lua: LINT OK (locals de tete : 55/200)
+../ShikiUI/Mod_Auction.lua: LINT OK (locals de tete : 55/200)
+../ShikiUI/Mod_Auras.lua: LINT OK (locals de tete : 23/200)
+../ShikiUI/Mod_Bags.lua: LINT OK (locals de tete : 77/200)
+../ShikiUI/Mod_BossMods.lua: LINT OK (locals de tete : 23/200)
+../ShikiUI/Mod_Bulletin.lua: LINT OK (locals de tete : 10/200)
+../ShikiUI/Mod_CastBar.lua: LINT OK (locals de tete : 22/200)
+../ShikiUI/Mod_CharStats.lua: LINT OK (locals de tete : 52/200)
+../ShikiUI/Mod_Chat.lua: LINT OK (locals de tete : 43/200)
+../ShikiUI/Mod_ChatTabs.lua: LINT OK (locals de tete : 43/200)
+../ShikiUI/Mod_ClickHeal.lua: LINT OK (locals de tete : 44/200)
+../ShikiUI/Mod_Esport.lua: LINT OK (locals de tete : 22/200)
+../ShikiUI/Mod_Finder.lua: LINT OK (locals de tete : 107/200)  [1 alerte(s)]
+  alerte ligne 412: 30 upvalues (limite 32, alerte des 20)
+../ShikiUI/Mod_Group.lua: LINT OK (locals de tete : 49/200)
+../ShikiUI/Mod_Items.lua: LINT OK (locals de tete : 36/200)
+../ShikiUI/Mod_Loot.lua: LINT OK (locals de tete : 68/200)
+../ShikiUI/Mod_Macros.lua: LINT OK (locals de tete : 86/200)
+../ShikiUI/Mod_Mail.lua: LINT OK (locals de tete : 32/200)
+../ShikiUI/Mod_Marks.lua: LINT OK (locals de tete : 14/200)
+../ShikiUI/Mod_Messages.lua: LINT OK (locals de tete : 54/200)
+../ShikiUI/Mod_Meter.lua: LINT OK (locals de tete : 69/200)  [1 alerte(s)]
+  alerte ligne 1639: 23 upvalues (limite 32, alerte des 20)
+../ShikiUI/Mod_Minimap.lua: LINT OK (locals de tete : 59/200)
+../ShikiUI/Mod_Nameplates.lua: LINT OK (locals de tete : 35/200)
+../ShikiUI/Mod_PallyPower.lua: LINT OK (locals de tete : 28/200)
+../ShikiUI/Mod_PowerAuras.lua: LINT OK (locals de tete : 47/200)
+../ShikiUI/Mod_Raid.lua: LINT OK (locals de tete : 6/200)
+../ShikiUI/Mod_Skin.lua: LINT OK (locals de tete : 48/200)
+../ShikiUI/Mod_Social.lua: LINT OK (locals de tete : 31/200)
+../ShikiUI/Mod_Specs.lua: LINT OK (locals de tete : 30/200)
+../ShikiUI/Mod_TankTools.lua: LINT OK (locals de tete : 18/200)
+../ShikiUI/Mod_Threat.lua: LINT OK (locals de tete : 41/200)
+../ShikiUI/Mod_Tooltip.lua: LINT OK (locals de tete : 21/200)
+../ShikiUI/Mod_Totems.lua: LINT OK (locals de tete : 20/200)
+../ShikiUI/Mod_Tracker.lua: LINT OK (locals de tete : 44/200)
+../ShikiUI/Mod_Vendor.lua: LINT OK (locals de tete : 33/200)
+../ShikiUI/Mod_Windows.lua: LINT OK (locals de tete : 21/200)
+../ShikiUI/Mode.lua: LINT OK (locals de tete : 21/200)
+../ShikiUI/Mover.lua: LINT OK (locals de tete : 35/200)
+../ShikiUI/Perf.lua: LINT OK (locals de tete : 10/200)
+../ShikiUI/Preview_Basic.lua: LINT OK (locals de tete : 112/200)
+../ShikiUI/Preview_Layout.lua: LINT OK (locals de tete : 23/200)
+../ShikiUI/Preview_Raid.lua: LINT OK (locals de tete : 40/200)
+../ShikiUI/Serial.lua: LINT OK (locals de tete : 9/200)
+../ShikiUI/Style.lua: LINT OK (locals de tete : 31/200)
+../ShikiUI/StyleUI.lua: LINT OK (locals de tete : 16/200)
+../ShikiUI/Style_Blizzard.lua: LINT OK (locals de tete : 1/200)
+../ShikiUI/Style_Braise.lua: LINT OK (locals de tete : 1/200)
+../ShikiUI/Style_Elvstyle.lua: LINT OK (locals de tete : 1/200)
+../ShikiUI/Style_Foret.lua: LINT OK (locals de tete : 1/200)
+../ShikiUI/Style_Glace.lua: LINT OK (locals de tete : 1/200)
+../ShikiUI/Style_Graphite.lua: LINT OK (locals de tete : 1/200)
+../ShikiUI/Style_Light.lua: LINT OK (locals de tete : 1/200)
+../ShikiUI/Style_Minuit.lua: LINT OK (locals de tete : 1/200)
+../ShikiUI/Style_Opale.lua: LINT OK (locals de tete : 1/200)
+../ShikiUI/Style_Pfstyle.lua: LINT OK (locals de tete : 1/200)
+../ShikiUI/Style_Shiki.lua: LINT OK (locals de tete : 1/200)
+../ShikiUI/Style_Tactical.lua: LINT OK (locals de tete : 1/200)
+../ShikiUI/Target.lua: LINT OK (locals de tete : 11/200)
+../ShikiUI/Theme.lua: LINT OK (locals de tete : 31/200)
+../ShikiUI/Units.lua: LINT OK (locals de tete : 33/200)
+../ShikiUI/Visibility.lua: LINT OK (locals de tete : 28/200)
+../docs/template/Mod_Template.lua: LINT OK (locals de tete : 6/200)
+../docs/template/Locale_Template.lua: LINT OK (locals de tete : 1/200)
+== fermetures de boucle ==
+FERMETURES DE BOUCLE OK
+== traductions ==
+fr : 5158 cles, en : 5158 cles (47 fichier(s) Locale_*, 36 module(s))
+  (information) cles non referencees litteralement : focus.wait, focus.none, focus.is, errors.cleared, errors.tested, errors.count, migrate.none, migrate.head, migrate.line, migrate.rest, migrate.blizz, migrate.usage, migrate.unknown, migrate.nopfui, migrate.take.done, migrate.back.done, migrate.both.done, migrate.hold.done, migrate.state.free, migrate.state.shiki, migrate.state.wait, migrate.state.leaving, migrate.state.returning, migrate.state.both, menu.simple, menu.expert, menu.search, menu.role, wiz.role, wiz.size, wiz.finish, wiz.skip, style.blizzard.label, style.blizzard.desc, style.braise.label, style.braise.desc, style.elvstyle.label, style.elvstyle.desc, style.foret.label, style.foret.desc, style.glace.label, style.glace.desc, style.graphite.label, style.graphite.desc, style.light.label, style.light.desc, style.minuit.label, style.minuit.desc, style.opale.label, style.opale.desc, style.pfstyle.label, style.pfstyle.desc, style.shiki.label, style.shiki.desc, style.tactical.label, style.tactical.desc
+TRADUCTIONS OK
+== styles en dur (modules) ==
+AUTOCONTROLE OK (7 fautes detectees, 5 cas valides acceptes)
+MODULES SANS STYLE EN DUR (41 fichier(s))
+== t_actionbars.lua ==
+# t_actionbars : contrat et etat au demarrage
+# t_actionbars : activation, sept barres, emplacements
+# t_actionbars : affichage d'un bouton
+# t_actionbars : mise en page
+# t_actionbars : pages et formes de la barre principale
+# t_actionbars : recharges
+# t_actionbars : recharge globale, balayage, chiffre
+# t_actionbars : portee, ressource, etat
+# t_actionbars : clics, glisser, infobulles
+# t_actionbars : visibilite par barre
+# t_actionbars : formes (druide, guerrier...)
+# t_actionbars : familier
+# t_actionbars : raccourcis (service SUI.Bind)
+# t_actionbars : commande /sui bars
+# t_actionbars : combat (aucune creation)
+# t_actionbars : barres de Blizzard masquees
+# t_actionbars : mode Raid
+# t_actionbars : sorts de finition (Execution grise au-dessus de 20% de vie)
+# t_actionbars : textes et reglages
+# t_actionbars : desactivation
+# t_actionbars : pfUI fait tourner son equivalent -> ShikiUI attend
+# t_actionbars : micro-menu, reglages appliques
+# t_actionbars : icones vives, barre d'experience et masquage a chaud, micro-menu sur plusieurs lignes
+# t_actionbars : opacite hors combat / en combat, fondu
+# t_actionbars : fin
+  984 ok, 0 echec(s)
+== t_actionstance.lua ==
+# t_actionstance : guerrier, grise selon la posture
+# t_actionstance : posture requise (bouton et infobulle)
+# t_actionstance : changement de posture au clic
+# t_actionstance : indicateur sur la barre de formes
+# t_actionstance : options, noms francais, macros
+# t_actionstance : en combat, aucune infobulle scrutee
+# t_actionstance : druide
+# t_actionstance : voleur (camouflage par aura) et forme d'ombre
+# t_actionstance : donnees, traductions, cycle de vie
+  172 ok, 0 echec(s)
+== t_addons.lua ==
+# t_addons : liste
+# t_addons : filtres et recherche
+# t_addons : bascule, addons critiques, rechargement
+# t_addons : page du menu
+# t_addons : memoire
+# t_addons : ensembles Normal / Raid
+# t_addons : commande /sui addons
+# t_addons : sans API d'addons
+# t_addons : menu Echap
+# t_addons : boutons Deplacer / Raccourcis du menu
+# t_addons : combat
+  142 ok, 0 echec(s)
+== t_api.lua ==
+# t_api : client nu
+# t_api : SuperWoW
+# t_api : Nampower
+# t_api : ClassicAPI
+# t_api : UnitXP
+# t_api : distance
+# t_api : integrations Shiki*
+  77 ok, 0 echec(s)
+== t_auction.lua ==
+# t_auction : contrat et construction
+DBGH updtype=nil orig=false on=false
+# t_auction : recherche et tri
+# t_auction : prix propose
+# t_auction : pages
+# t_auction : defilement et lignes
+# t_auction : cadence et delai
+# t_auction : mise en vente
+# t_auction : memoire des prix
+# t_auction : commandes et panneau
+# t_auction : reglages
+# t_auction : fermeture, combat et coupure
+DBGH updtype=nil orig=false on=false
+# t_auction : hauteur du panneau suit les lignes
+# t_auction : deplacement (Mover + Maj-glisser)
+# t_auction : interface ShikiUI / Blizzard
+DBGH updtype=nil orig=false on=false
+# t_auction : onglets
+# t_auction : filtres et requete
+# t_auction : tri et bonnes affaires
+# t_auction : suggestions, recents et favoris
+# t_auction : achat et enchere confirmes
+# t_auction : vente et lots
+# t_auction : mes ventes
+# t_auction : analyse
+# t_auction : historique local
+# t_auction : niveaux des cadres et diagnostic
+# t_auction : commandes de l'interface
+# t_auction : engrenage
+# t_auction : fuites et fermeture
+DBGH updtype=nil orig=false on=false
+# t_auction : protection Blizzard browse update
+DBG rawset fait, origBrowse=false	global type=function
+DBGH updtype=function orig=false on=false
+DBG avant pcall global=rawErr2? false origBrowse set=true true global type=function modenabled=true cfgmod=true
+DBG g1=rawErr? false origBrowse=true
+DBG2 g2=rawErr? false g2=orig? false
+  620 ok, 0 echec(s)
+== t_auras.lua ==
+# t_auras : formats du temps
+# t_auras : contrat, coupe par defaut, construction hors combat
+# t_auras : positions par defaut sans chevauchement
+# t_auras : buffs du joueur
+# t_auras : debuffs du joueur
+# t_auras : augmentations d'arme
+# t_auras : cible
+# t_auras : reglages
+# t_auras : cadres du jeu et deverrouillage
+# t_auras : un reglage agit tout de suite (sans attendre la minuterie)
+# t_auras : mode Raid, commande, langues
+# t_auras : aucune creation en combat
+# t_auras : visibilite commune et police des minuteries
+# t_auras : desactivation
+  177 ok, 0 echec(s)
+== t_backup.lua ==
+# t_backup : instantanes
+# t_backup : automatiques, copie identique, rotation
+# t_backup : jamais d'ecrasement sans instantane
+# t_backup : connexion / deconnexion
+# t_backup : commande /sui backup
+# t_backup : l'import pfUI n'existe plus
+# t_backup : page Profils et sauvegardes
+# t_backup : assistant face a pfUI
+  130 ok, 0 echec(s)
+== t_bags.lua ==
+# t_bags : contrat et etat au demarrage
+# t_bags : activation et remplacement des fonctions d'ouverture
+# t_bags : emplacements, mise en page, affichage
+# t_bags : evenements groupes (pas de travail dans l'evenement)
+# t_bags : camelote (valeur) avec l'API de prix
+# t_bags : recherche et filtres
+# t_bags : tri
+# t_bags : tri refuse (combat, curseur) et interrompu
+# t_bags : sacs speciaux ignores par le tri (API de sac disponible)
+# t_bags : reglages
+# t_bags : taille d'un sac qui change, et combat
+# t_bags : banque
+# t_bags : banque, une erreur de bouton ne coupe pas la boucle
+# t_bags : commande /sui bags
+# t_bags : mode Raid
+# t_bags : textes et reglages
+# t_bags : coupure du module
+# t_bags : pfUI fait tourner son equivalent -> ShikiUI attend
+# t_bags : reglages a chaud, icones, emplacements de sacs du jeu
+# t_bags : banque Blizzard (GetInventorySlotInfo) et deplacement
+# t_bags : classement par categories
+# t_bags : affichage par categories
+# t_bags : memoire par personnage
+# t_bags : vue hors-ligne
+# t_bags : tout deposer en banque
+# t_bags : infobulles des boutons et engrenage
+# t_bags : fin
+  756 ok, 0 echec(s)
+== t_bind.lua ==
+# t_bind : reconnaissance des boutons
+# t_bind : entree, sortie
+# t_bind : poser, effacer
+# t_bind : conflits
+# t_bind : annuler, retablir, tout abandonner
+# t_bind : touche refusee par le client
+# t_bind : commande /sui bind
+# t_bind : survol par la minuterie
+# t_bind : bouton Raccourcis du menu
+# t_bind : Echap ferme aussi le bandeau (UISpecialFrames) - le mode reste ouvert sur un bouton
+# t_bind : molette, touches reservees, aucun bouton survole
+# t_bind : banque, familier, enregistrement a la deconnexion
+# t_bind : /sui bind check et clean
+  178 ok, 0 echec(s)
+== t_boot.lua ==
+# t_boot : base existante
+# t_boot : contenu des SavedVariables
+# t_boot : autre personnage
+  22 ok, 0 echec(s)
+== t_boot2.lua ==
+# t_boot2 : premier lancement
+  10 ok, 0 echec(s)
+== t_bossmods.lua ==
+# t_bossmods : enregistrement et contrat
+# t_bossmods : detection du boss
+# t_bossmods : t0 et armement des evenements
+# t_bossmods : annonces au canal raid
+RD-2: nil
+RD-1: nil
+RD0: nil
+RC layout.links calls=112
+RC perf.sample calls=56
+RC units.flush calls=227
+RC units.tot calls=222
+RC units.range calls=222
+RC bossmods.tick calls=222
+RC marks.scan calls=111
+RDerr rateMul=1 lastErr=nil errCount=0 taskDead=nil RDstate cur=onyxia combatAt=true narmed=1 task=true on=true
+# t_bossmods : barres triees et purge a l'affichage
+# t_bossmods : commande et coupure propre
+# t_bossmods : options barres, ancre annonces, mode test
+WDBG watchers matching OnKey = 1 / total 22
+WDBG direct apply w=300.0
+DBGW win=true w=300.0
+# t_bossmods : pull timer et synchronisation
+  63 ok, 0 echec(s)
+== t_bulletin.lua ==
+# t_bulletin : contrat
+# t_bulletin : DBB absent, cout nul
+# t_bulletin : DBB charge sans fenetre
+# t_bulletin : ouvrir, fermer, habiller
+# t_bulletin : repeinture a chaud et option d'habillage
+# t_bulletin : memoriser la position
+# t_bulletin : coupure
+# t_bulletin : un autre addon s'est enveloppe par-dessus
+# t_bulletin : DBB disparait
+# t_bulletin : menu et langues
+  113 ok, 0 echec(s)
+== t_castbar.lua ==
+# t_castbar : contrat, coupe par defaut, construction hors combat
+# t_castbar : incantation du joueur
+# t_castbar : cible (UNIT_CASTEVENT, SuperWoW)
+# t_castbar : focus
+# t_castbar : Nampower
+# t_castbar : aucune creation en combat
+# t_castbar : reglages
+# t_castbar : essai, mode Raid, commande
+# t_castbar : reglages d'apparence en direct pendant une incantation
+# t_castbar : visibilite commune et aspect
+# t_castbar : desactivation
+  169 ok, 0 echec(s)
+== t_charstats.lua ==
+# t_charstats : formules du builder
+# t_charstats : construction hors combat
+# t_charstats : equipement et talents
+# t_charstats : preset de classe (paladin) et valeurs affichees
+# t_charstats : bouclier, deux armes
+# t_charstats : sections, lignes et role, memorises par personnage
+# t_charstats : infobulles
+# t_charstats : fonctions optionnelles du client etendu
+# t_charstats : evenements
+# t_charstats : options
+# t_charstats : mode Raid
+# t_charstats : erreurs jamais avalees, diagnostic
+# t_charstats : creation et cycle de vie
+# t_charstats : visibilite commune et engrenage
+# t_charstats : repli sans fonctions de chances du client
+# t_charstats : cas du builder (valeurs figees)
+  385 ok, 0 echec(s)
+== t_chat.lua ==
+# t_chat : coexistence pfUI et construction hors combat
+# t_chat : horodatage
+# t_chat : couleurs de classe
+# t_chat : liens web
+# t_chat : canaux et filtres
+# t_chat : historique et copie
+# t_chat : onglets et messages non lus
+# t_chat : roulette, fond, police, fleches
+# t_chat : mode Raid
+# t_chat : cadre deplacable chat.main (Mover)
+# t_chat : barre d'onglets et zone de saisie deplacables
+# t_chat : poignees alignees sous echelle (ui.scale et echelle de la fenetre)
+# t_chat : reglages inverses (police, lignes, non-lus) et module coupe
+# t_chat : desactivation et reactivation
+# t_chat : couleurs de classe, noms difficiles (aucune perte du pseudo)
+# t_chat : mots-cles (surbrillance, son, onglet)
+  268 ok, 0 echec(s)
+== t_chattabs.lua ==
+# t_chattabs : enregistrement et contrat
+# t_chattabs : types de messages
+# t_chattabs : canaux
+# t_chattabs : modeles
+# t_chattabs : creer, renommer, fermer
+# t_chattabs : ordre des onglets
+# t_chattabs : sauvegarde par personnage et restauration
+# t_chattabs : restauration a la connexion
+# t_chattabs : reinitialisation
+# t_chattabs : menu contextuel
+# t_chattabs : page du menu
+# t_chattabs : creation puis deplacement (barre et dock)
+# t_chattabs : guilde, de bout en bout
+# t_chattabs : fenetres libres, detacher, rattacher, ranger
+# t_chattabs : commande
+# t_chattabs : desactivation
+# t_chattabs : setup (Guilde / Monde / Donjon)
+# t_chattabs : onglets usuels, selection, auto-ancrage
+# t_chattabs : creation automatique (option) et astuce
+# t_chattabs : fermeture fiable (suppression d'un onglet)
+  334 ok, 0 echec(s)
+== t_clickall.lua ==
+# t_clickall : menu
+DBGH updtype=nil orig=false on=false
+DBGH updtype=nil orig=false on=false
+DBGH updtype=nil orig=false on=false
+DBGH updtype=nil orig=false on=false
+DBGH updtype=nil orig=false on=false
+DBGH updtype=nil orig=false on=false
+DBGH updtype=nil orig=false on=false
+DBGH updtype=nil orig=false on=false
+DBGH updtype=nil orig=false on=false
+  menu : 7238 clics
+# t_clickall : assistant
+  assistant : 90 clics
+# t_clickall : fenetres secondaires
+  fenetres secondaires : 666 clics
+  total : 8020 clics, 0 en echec
+  8300 ok, 0 echec(s)
+== t_clickheal.lua ==
+# t_clickheal : contrat et options
+# t_clickheal : activation, classe, grimoire
+# t_clickheal : lancement avec echange de cible (sans SuperWoW)
+# t_clickheal : lancement direct (SuperWoW)
+# t_clickheal : grimoire FR (client frFR d'OctoWow)
+# t_clickheal : rangs
+# t_clickheal : modificateurs
+# t_clickheal : dissipation
+# t_clickheal : resurrection automatique, sort inconnu
+# t_clickheal : roulette
+# t_clickheal : infobulle d'aide
+# t_clickheal : commandes
+# t_clickheal : grimoire en combat, modes
+# t_clickheal : cadres de raid
+# t_clickheal : desactivation
+  122 ok, 0 echec(s)
+== t_clickheal_book.lua ==
+# t_clickheal_book : options et module coupe
+# t_clickheal_book : activation
+# t_clickheal_book : aspects et places
+# t_clickheal_book : sorts surlignes dans le grimoire
+# t_clickheal_book : infobulle des sorts du grimoire
+# t_clickheal_book : clics sur le bouton
+# t_clickheal_book : combat
+# t_clickheal_book : erreur interne jamais visible dans le grimoire
+# t_clickheal_book : cycle de vie
+  91 ok, 0 echec(s)
+== t_clickheal_respec.lua ==
+# t_clickheal_respec : grimoire vide pendant la respec
+# t_clickheal_respec : le client finit de remplir le grimoire sans nouvel evenement
+# t_clickheal_respec : second passage differe
+# t_clickheal_respec : en combat rien n'est relu
+# t_clickheal_respec : module coupe, plus d'ecoute
+  13 ok, 0 echec(s)
+== t_cmd.lua ==
+# t_cmd : aide et inconnues
+# t_cmd : menu
+# t_cmd : status
+# t_cmd : performance et urgence
+# t_cmd : verrouillage
+# t_cmd : profils
+# t_cmd : roles
+# t_cmd : langue
+# t_cmd : export / import
+# t_cmd : debogage
+# t_cmd : alias
+  86 ok, 0 echec(s)
+== t_combat.lua ==
+# t_combat : demarrage en plein combat (rechargement d'interface)
+# t_combat : sortie de combat
+# t_combat : en combat apres construction
+# t_combat : fenetres de transfert
+  24 ok, 0 echec(s)
+== t_config.lua ==
+# t_config : avant Init
+# t_config : base corrompue
+# t_config : validation
+# t_config : lecture / ecriture
+# t_config : cles globales
+# t_config : profils
+# t_config : reinitialisation
+# t_config : roles
+# t_config : positions
+# t_config : export / import
+# t_config : imports hostiles
+  174 ok, 0 echec(s)
+== t_core.lua ==
+# t_core : demarrage
+# t_core : routeur
+# t_core : minuterie
+# t_core : echelle d'urgence
+# t_core : WhenSafe / sortie de combat
+# t_core : modules
+# t_core : deconnexion
+  58 ok, 0 echec(s)
+# t_core : journal d'erreurs persistant
+== t_esport.lua ==
+# t_esport : enregistrement et contrat
+# t_esport : detection des ennemis
+# t_esport : DR via SuperWoW
+# t_esport : DR via le journal (sans SuperWoW)
+# t_esport : fenetre, clic, taille
+  41 ok, 0 echec(s)
+== t_finder.lua ==
+# t_finder : enregistrement et contrat
+# t_finder : analyse EN
+# t_finder : analyse FR
+# t_finder : annonces ecartees
+# t_finder : normalisation
+# t_finder : ecoute minimale (module actif, fenetre fermee, aucune alerte)
+# t_finder : ouverture en combat
+# t_finder : ecoute a l'ouverture
+# t_finder : anti-doublon et regroupement
+# t_finder : filtres, tri, recherche
+# t_finder : fenetre et cartes
+# t_finder : defilement
+# t_finder : actions sur une carte
+# t_finder : ignorer un auteur
+# t_finder : expiration et tampon circulaire
+# t_finder : alertes
+# t_finder : alertes depuis les filtres et par commande
+# t_finder : selecteur d'instance
+# t_finder : composition d'une annonce
+# t_finder : poster une annonce (jamais automatique)
+# t_finder : niveaux des cadres
+# t_finder : boutons d'acces
+# t_finder : engrenage
+# t_finder : ecoute permanente, desactivation
+# t_finder : commandes
+# t_finder : langue anglaise
+  528 ok, 0 echec(s)
+== t_group.lua ==
+# t_group : contrat, coupe par defaut, construction hors combat
+# t_group : roster du groupe
+# t_group : vie, puissance, couleurs, texte
+# t_group : mort, hors ligne, estompe hors de portee
+# t_group : evenements groupes, budget, aucun travail inutile
+# t_group : debuffs, dissipation, alertes
+# t_group : aggro (cible de la cible) et Banzai, soins entrants HealComm
+# t_group : cible surlignee, marques, chef, role, tri
+# t_group : nom coupe sans casser un caractere UTF-8
+# t_group : clics et survol
+# t_group : ennemis epingles
+# t_group : reglages sans attendre le tour lent (opacite, portee, aggro, ennemis epingles)
+# t_group : reglages, geometrie, evenements dynamiques
+# t_group : langues
+# t_group : desactivation, reactivation
+# t_group : en combat, aucune creation
+  258 ok, 0 echec(s)
+== t_groupheal.lua ==
+# t_groupheal : options et valeurs par defaut
+# t_groupheal : debuff dissipable, priorite des types
+# t_groupheal : HoT du joueur sans SuperWoW
+# t_groupheal : HoT et resurrection avec SuperWoW (UNIT_CASTEVENT)
+# t_groupheal : resurrection HealComm / Puppeteer, soins entrants Puppeteer
+# t_groupheal : clic ShikiUI -> HoT note (sans SuperWoW), jeton rinse
+# t_groupheal : cadres de raid
+  113 ok, 0 echec(s)
+== t_groupinc.lua ==
+# t_groupinc : reglage et valeurs par defaut
+# t_groupinc : montant estime
+# t_groupinc : ma cible = la cible du jeu
+# t_groupinc : cible hostile ou absente -> soi-meme
+# t_groupinc : clic ShikiUI -> cible annoncee
+# t_groupinc : le jeton d unite change de joueur
+# t_groupinc : delai de securite (fin jamais signalee)
+# t_groupinc : reglage moi / tous avec HealComm
+# t_groupinc : desactivation
+# t_groupinc : cible exacte par GUID (SuperWoW)
+# t_groupinc : raid
+  87 ok, 0 echec(s)
+== t_groupmana.lua ==
+# t_groupmana : groupe, soigneurs seulement
+# t_groupmana : valeur, formes du druide, rafraichissement
+# t_groupmana : tous les lanceurs, chasseurs, aucune
+# t_groupmana : role manuel et pourcentage
+# t_groupmana : raid
+  46 ok, 0 echec(s)
+== t_items.lua ==
+# t_items : contrat et construction
+# t_items : enregistrer, lister, supprimer
+# t_items : equiper un jeu
+# t_items : objet absent, verrous, curseur occupe
+# t_items : echange entre emplacements portes (bagues)
+# t_items : combat et mort
+# t_items : echange automatique par evenement
+# t_items : barre de bijoux
+# t_items : boutons de jeux et reglages
+# t_items : commandes
+# t_items : coupure et pfUI
+# t_items : reglages a chaud, API absente
+# t_items : fenetre Builds
+# t_items : raccourcis et jeu suivant
+# t_items : jeu par specialisation
+# t_items : monture
+# t_items : bouton Builds de la barre
+# t_items : annonce et connexion
+# t_items : bouton de contexte sur la fenetre du personnage
+# t_items : menu rapide des jeux
+# t_items : menu rapide, monture
+# t_items : menu rapide, jeux par specialisation
+# t_items : acces depuis la barre, le menu des bijoux, les commandes
+# t_items : dupliquer, copier vers une spe
+# t_items : export, import, comparaison
+# t_items : fenetre Builds etendue
+# t_items : coupure du module, bouton de contexte
+  605 ok, 0 echec(s)
+== t_layout.lua ==
+# t_layout : registre
+# t_layout : application
+# t_layout : variantes par role
+# t_layout : reinitialisation et glisser-deposer
+# t_layout : style x mise en page x mode x role
+# t_layout : un ecart de l'utilisateur dans un mode bat la mise en page
+# t_layout : sauvegarde
+# t_layout : commande
+# t_layout : panneau
+  477 ok, 0 echec(s)
+== t_links.lua ==
+# t_links : validation de l'API
+# t_links : suivi du parent
+# t_links : decalage et quatre cotes
+# t_links : chaine, cycles, parcours
+# t_links : parent absent (module coupe)
+# t_links : mode raid
+# t_links : liens conseillees, reinitialisation, detachement persistant, anciennes positions
+# t_links : option layout.links
+# t_links : rien ne bouge en combat
+# t_links : liens conseilles reels (cles de positions existantes)
+# t_links : Mover - parent entraine ses enfants
+# t_links : Mover - deplacer un enfant ajuste son decalage
+# t_links : Mover - cote qui brille, proposition, lien
+# t_links : Mover - tirer un enfant trop loin le detache ; symbole o-o ; menu Accroche a
+  257 ok, 0 echec(s)
+== t_locale.lua ==
+# t_locale : cles dynamiques
+# t_locale : parcours complet dans les deux langues
+# t_locale : comportement de L
+  6397 ok, 0 echec(s)
+== t_loot.lua ==
+# t_loot : contrat et construction
+# t_loot : motifs de texte du jeu
+# t_loot : declenchement par le chef de butin
+# t_loot : jets, tri, premier jet
+# t_loot : fin du jet et gagnant
+# t_loot : annonce du gagnant
+# t_loot : /sui loot start
+# t_loot : qualite minimale et declencheurs
+# t_loot : regles de jet de groupe
+# t_loot : commande des regles
+# t_loot : historique
+# t_loot : reglages, modes, rien en combat
+# t_loot : fenetre de butin compacte
+# t_loot : chef de butin
+# t_loot : fenetre de butin coupee
+# t_loot : motifs des messages de jet
+# t_loot : jets de groupe (fenetre)
+# t_loot : jets de groupe (cas)
+# t_loot : engrenage, barres et polices
+# t_loot : coupure et pfUI
+# t_loot : fenetre coupee en direct
+  394 ok, 0 echec(s)
+== t_macros.lua ==
+# t_macros : contrat
+# t_macros : detection d'un addon equivalent
+# t_macros : enveloppeurs et commandes absentes du jeu
+# t_macros : alternatives, modificateurs, negation
+# t_macros : unites (@unite, target=)
+# t_macros : conditions d'unite
+# t_macros : conditions du joueur
+# t_macros : auras (SuperWoW : identifiant de sort)
+# t_macros : auras sans SuperWoW (lecture par infobulle)
+# t_macros : sorts, equipement, aptitudes reactives, incantation
+# t_macros : erreurs de syntaxe
+# t_macros : cache d'analyse
+# t_macros : /target, /assist, /cleartarget, attaque, familier
+# t_macros : /use, /equip
+# t_macros : /castsequence
+# t_macros : /cancelaura, /cancelform, /stopmacro
+# t_macros : #showtooltip et chat
+# t_macros : mode bavard
+# t_macros : analyse pour l'editeur
+# t_macros : compactage
+# t_macros : coloration, completion, insertion
+# t_macros : editeur de macros
+# t_macros : commandes /sui macros
+# t_macros : reglages
+# t_macros : autre addon qui reprend une commande
+# t_macros : modes et profils
+# t_macros : desactivation
+  490 ok, 0 echec(s)
+== t_mail.lua ==
+# t_mail : contrat et construction
+# t_mail : ouverture et fermeture de la boite
+# t_mail : ramassage en masse
+# t_mail : filtres
+# t_mail : places libres et inventaire plein
+# t_mail : suppression des courriers vides
+# t_mail : serveur muet et reprise
+# t_mail : ramassage automatique, arret et fermeture
+# t_mail : liste d'envoi
+# t_mail : envoi en masse
+# t_mail : envoi sans confirmation, erreur, commande
+# t_mail : destinataires memorises
+# t_mail : journal circulaire
+# t_mail : reglages et panneau
+# t_mail : combat et allocation
+# t_mail : engrenage
+# t_mail : coupure
+# t_mail : deplacement (Mover + Maj-glisser)
+# t_mail : saisie du courrier (champs recouverts, clic-zone, Tab, panneau)
+# t_mail : saisie - scripts Tab / Entree / Echap et clic dans la zone du texte
+# t_mail : saisie - panneau sous la fenetre du courrier
+# t_mail : saisie - ouverture, minuterie, option, bouton, diagnostic
+  324 ok, 0 echec(s)
+== t_marks.lua ==
+# t_marks : enregistrement et contrat
+# t_marks : detection des marques
+# t_marks : clic = cibler
+# t_marks : Maj + clic = poser le marqueur
+# t_marks : taille des icones
+# t_marks : ouverture / fermeture / commande
+# t_marks : coupure propre
+  33 ok, 0 echec(s)
+== t_menu.lua ==
+# t_menu : ouverture et structure
+# t_menu : navigation par familles
+# t_menu : accueil
+# t_menu : page Modules
+# t_menu : page d'un module (sections, modes, indicateurs)
+# t_menu : reinitialisation d'un module
+# t_menu : page Styles
+# t_menu : recherche globale
+# t_menu : defilement
+# t_menu : rien ne depasse
+# t_menu : pools stables
+# t_menu : style (aucune couleur en dur, suit les jetons)
+# t_menu : routage des commandes
+# t_menu : compatibilite des anciens reglages
+# t_menu : textes fr / en
+# t_menu : export / import
+# t_menu : assistant de premiere installation
+# t_menu : au-dessus du mode deplacement (strate, niveau, ordre de capture)
+# t_menu : combat
+  1056 ok, 0 echec(s)
+== t_menu_pfui.lua ==
+# t_menu_pfui : modules en attente
+  23 ok, 0 echec(s)
+== t_messages.lua ==
+# t_messages : contrat et activation
+# t_messages : chuchotement, fenetre, historique, couleur de classe
+# t_messages : saisie et reponse
+# t_messages : liens d'objets
+# t_messages : pastilles, non-lus, file, clignotement
+# t_messages : onglets
+# t_messages : reduire, redimensionner
+# t_messages : combat
+# t_messages : historique persistant, limites, purge, recherche
+# t_messages : absence (reponse automatique)
+# t_messages : invitations, echanges, duels, mots surveilles
+# t_messages : /r et menu Chuchoter
+# t_messages : commandes
+# t_messages : echelle, onglets etroits, horodatage en direct
+# t_messages : deplacement libre a la souris
+# t_messages : engrenage
+# t_messages : desactivation
+  383 ok, 0 echec(s)
+== t_meter.lua ==
+# t_meter : motifs construits depuis les chaines du client
+# t_meter : contrat, coupe par defaut, construction hors combat
+# t_meter : groupe, familiers
+# t_meter : degats analyses
+# t_meter : soins analyses
+# t_meter : formats positionnels d'un autre client
+# t_meter : tous inconnus (option)
+# t_meter : segment total et activite
+# t_meter : fin de combat, historique, boss
+# t_meter : vues, tri, pourcentages, DPS
+# t_meter : fenetre, lignes, couleurs
+# t_meter : defilement, boutons, deuxieme et troisieme fenetre
+# t_meter : visibilite commune, engrenage, aspect
+# t_meter : infobulle par sort
+# t_meter : effet immediat des reglages, polices, infobulles des boutons
+# t_meter : rapport, resume, export
+# t_meter : interruptions et dispels (SuperWoW)
+# t_meter : remise a zero en rejoignant un raid
+# t_meter : modes Normal / Raid
+# t_meter : coexistence (pfUI, autres compteurs)
+# t_meter : langues
+# t_meter : cout (aucune creation de frame, une minuterie)
+# t_meter : desactivation
+  441 ok, 0 echec(s)
+== t_meter2.lua ==
+# t_meter2 : activation avec Nampower, CVar
+# t_meter2 : degats, melee, critiques, soins (Nampower)
+# t_meter2 : familiers et gardiens fondus dans leur proprietaire
+# t_meter2 : dispels et decurse (Nampower)
+# t_meter2 : soins effectifs et surplus
+# t_meter2 : morts (qui, de quoi, quand)
+# t_meter2 : segments h1..h8 et menu
+# t_meter2 : panneau de detail
+# t_meter2 : rapport dans le chat, canal
+# t_meter2 : poignee de redimensionnement, hauteur, police
+# t_meter2 : lignes supplementaires jamais creees en combat
+# t_meter2 : source journal texte (repli) et retour automatique
+# t_meter2 : CVar coupees par l'option
+# t_meter2 : desactivation
+# t_meter2 : alimentation de l'estimation de menace
+# t_meter2 : creation, deplacement et suppression de fenetres
+# t_meter2 : fermeture fenetre par fenetre
+  416 ok, 0 echec(s)
+== t_meter3.lua ==
+# t_meter3 : donnees par sort (maximum, moyenne, rates)
+# t_meter3 : clic sur un nom, niveaux de cadre perimes
+# t_meter3 : secours par la position (le cadre capte le clic)
+# t_meter3 : detail complet
+# t_meter3 : onglets degats / soins / subis
+# t_meter3 : defilement des sorts, rates du joueur
+# t_meter3 : detail coupe -> message, comptages gardent leurs sorts
+# t_meter3 : mode Raid garde le detail
+# t_meter3 : /sui meter diag
+# t_meter3 : derive de niveau sans evenement (minuterie et survol)
+  90 ok, 0 echec(s)
+== t_migrate.lua ==
+# t_migrate : pfUI fait tourner ses cadres -> ShikiUI attend
+# t_migrate : take / back
+# t_migrate : both / hold
+# t_migrate : donnees corrompues
+  51 ok, 0 echec(s)
+== t_migrate2.lua ==
+# t_migrate2 : l'equivalent pfUI est coupe au demarrage -> ShikiUI prend la main
+# t_migrate2 : retour de pfUI (config rechargee, session inchangee)
+# t_migrate2 : cas limites de la detection
+  38 ok, 0 echec(s)
+== t_minimap.lua ==
+# t_minimap : coexistence pfUI et construction hors combat
+# t_minimap : zoom
+# t_minimap : coordonnees, zone, heure
+# t_minimap : forme, taille, opacite
+# t_minimap : boutons d'addons regroupes
+# t_minimap : mode Raid
+# t_minimap : commandes
+# t_minimap : icones natives en direct
+# t_minimap : audit des icones - liste blanche, modes, surveillance
+# t_minimap : boutons ancres sur le bord de la minimap
+# t_minimap : lanceur ShikiUI - cadre, position, ouverture
+# t_minimap : lanceur ShikiUI - infobulle
+# t_minimap : lanceur ShikiUI - clics
+# t_minimap : menu rapide
+# t_minimap : lanceur ShikiUI - glisser
+# t_minimap : visibilite conditionnelle et police
+# t_minimap : desactivation et reactivation
+  412 ok, 0 echec(s)
+== t_mode.lua ==
+# t_mode : etat initial
+# t_mode : bascule manuelle
+# t_mode : ecarts de l'utilisateur propres au mode
+# t_mode : priorite des presets (ecart > role+classe > classe > role > generique > profil > defaut)
+# t_mode : presets invalides et modules 'raid = off'
+# t_mode : combat
+# t_mode : bascule automatique
+# t_mode : memoire entre les sessions
+# t_mode : addons externes (jamais sans confirmation)
+# t_mode : commande et bouton
+# t_mode : profils et sante
+  156 ok, 0 echec(s)
+== t_modules.lua ==
+# t_modules : SUI.AddStrings
+# t_modules : SUI.RegisterCommand
+# t_modules : SUI.RegisterModule (validation)
+# t_modules : contrat de chaque module present
+  8879 ok, 0 echec(s)
+== t_mover.lua ==
+# t_mover : inscription et noms
+# t_mover : entree, sortie, ui.locked
+# t_mover : combat
+# t_mover : glisser, aimantation, guides
+# t_mover : fleches, molette, clic droit
+# t_mover : clic droit = menu d'actions au-dessus de tout (strate, niveau, capture)
+# t_mover : panneau de position precise
+# t_mover : Joueur / Cible symetriques
+# t_mover : Montrer tout
+# t_mover : annuler, reinitialiser, positions par mode
+# t_mover : /sui move grid, show, sym, list
+# t_mover : plus de fond anonyme hors mode
+# t_mover : surcharge du menu et reouverture
+# t_mover : cadres caches, liste, reduction des panneaux
+# t_mover : poignees empilees (ordre par taille, faux cadres compacts, cycle, liste)
+  332 ok, 0 echec(s)
+== t_nameplates.lua ==
+# t_nameplates : contrat, coupe par defaut, construction hors combat
+# t_nameplates : detection des plaques
+# t_nameplates : menace
+# t_nameplates : menace du serveur (pourcentage, alerte, main tank, familier, demande)
+# t_nameplates : couleurs de menace (mode auto, jetons, provocation, sans cible)
+# t_nameplates : cible
+# t_nameplates : debuffs personnels (Nampower)
+# t_nameplates : incantations des ennemis
+# t_nameplates : marqueurs, distance, plaques amies
+# t_nameplates : reglages
+# t_nameplates : limite de plaques et mode Raid
+# t_nameplates : aucune creation en combat
+# t_nameplates : reglages en direct et plaques rendues au jeu
+# t_nameplates : aspect commun (texture, forme, police)
+# t_nameplates : desactivation
+  271 ok, 0 echec(s)
+== t_pallypower.lua ==
+# t_pallypower : enregistrement et contrat
+# t_pallypower : attributions et memoire
+# t_pallypower : liste du raid
+# t_pallypower : boutons de classe et tout le monde
+# t_pallypower : cycle (SuperWoW, lancement direct)
+  layout.links next=1017.9 every=0.3 dead=nil
+  perf.sample next=1018.6 every=1 dead=nil
+  units.flush next=1017.7 every=0.05 dead=nil
+  units.tot next=1017.8 every=0.2 dead=nil
+  units.range next=1017.9 every=0.25 dead=nil
+  bossmods.tick next=1017.9 every=0.25 dead=nil
+  marks.scan next=1018.1 every=0.5 dead=nil
+DBG casts=Benédiction supérieure des Rois->raid1|Benédiction supérieure des Rois->raid2|Benédiction supérieure des Rois->raid3
+# t_pallypower : progressif, mort, jugement
+DBGE on=false chat=[|cff4dc4e8ShikiUI|r Module coupe : /sui pp pour l'activer.]
+# t_pallypower : fenetre et grille
+# t_pallypower : commandes
+# t_pallypower : cout et coupure propre
+  76 ok, 0 echec(s)
+== t_perf.lua ==
+# t_perf : echantillonnage
+# t_perf : bandeau
+# t_perf : urgence automatique
+# t_perf : rapport
+# t_perf : module coupe
+  58 ok, 0 echec(s)
+== t_powerauras.lua ==
+# t_powerauras : contrat, coupe par defaut, rien tant qu'aucune alerte
+# t_powerauras : sauvegarde, validation, limites
+# t_powerauras : buff sur moi (icone, nom, piles, duree, absence)
+# t_powerauras : debuff sur la cible (duree estimee, auras deja posees)
+# t_powerauras : SuperWoW (nom sans infobulle)
+# t_powerauras : temps de recharge d'un sort
+# t_powerauras : temps de recharge d'un objet
+# t_powerauras : barres de ressource et conditions
+# t_powerauras : visibilite (combat, groupe, classe, specialisation)
+# t_powerauras : proc (son, banniere, eclair), declenchement unique
+# t_powerauras : zones, directions, mise en page, deplacement
+# t_powerauras : formes (icone, barre, texte), couleurs, bordure, lueur
+# t_powerauras : combat (aucune creation), pool, cycle de vie
+# t_powerauras : edition (modeles, copie, suppression, champs, packs)
+# t_powerauras : page du menu
+# t_powerauras : textes, commande
+  484 ok, 0 echec(s)
+== t_preview.lua ==
+# t_preview : moteur et enregistrement
+# t_preview : bouton Apercu (masquer / afficher, memorise)
+# t_preview : plan de la fenetre et tenue a l'ecran
+# t_preview : apercu du raid (5 / 10 / 20 / 40)
+# t_preview : clic sur un element -> option (surlignee)
+# t_preview : apercu du groupe
+# t_preview : mise en page (ecran miniature, liens)
+# t_preview : apercus minimaux (unites, barres, plaques, discussion)
+# t_preview : apercus des modules (incantation, buffs, infobulle, compteurs, menace, minimap, sacs)
+# t_preview : apercus des modules en combat, instances, anglais
+# t_preview : textes FR / EN et style
+# t_preview : combat (aucune creation), apercu non prepare
+# t_preview : niveaux de cadres (controles au-dessus et cliquables)
+# t_preview : instance independante (assistant)
+  845 ok, 0 echec(s)
+== t_raid.lua ==
+# t_raid : contrat et construction hors combat
+# t_raid : roster et tri par groupe
+# t_raid : etat, puissance coupee, evenements
+# t_raid : budget et tour lent
+# t_raid : debuffs, dissipation, alertes
+# t_raid : roles, chef, marques, aggro
+# t_raid : preset Raid et reglages
+# t_raid : reglages de mise en page et de texte en direct
+# t_raid : desactivation, reactivation
+  85 ok, 0 echec(s)
+== t_serial.lua ==
+# t_serial : aller-retour
+# t_serial : format et somme de controle
+# t_serial : entrees hostiles
+# t_serial : evaluation de code impossible
+  55 ok, 0 echec(s)
+== t_skin.lua ==
+# t_skin : enregistrement et contrat
+# t_skin : activation et habillage
+# t_skin : survol, onglets, scripts du jeu
+# t_skin : chargement paresseux (Blizzard_TalentUI)
+# t_skin : reglages a chaud
+# t_skin : changement de style a chaud
+# t_skin : une case par groupe
+# t_skin : coexistence avec pfUI
+# t_skin : combat, commande, registre extensible
+# t_skin : infobulle geree par le module Infobulles
+# t_skin : objets sans nom ni methodes de cadre
+# t_skin : desactivation
+  133 ok, 0 echec(s)
+== t_social.lua ==
+# t_social : securite par defaut
+# t_social : auto-invitation
+# t_social : mot-cle et commandes
+# t_social : remise a zero a la connexion
+# t_social : regles de marquage
+# t_social : marquage automatique
+# t_social : acceptation des invitations
+# t_social : duels, guilde, convocations, resurrections
+# t_social : reglages et cycle de vie
+# t_social : mots-cles multiples
+# t_social : filtres, listes blanche et noire
+# t_social : page du menu (listes editables)
+# t_social : API absentes du client et liste de guilde
+  304 ok, 0 echec(s)
+== t_specs.lua ==
+# t_specs : enregistrement et contrat
+# t_specs : detection de la specialisation
+# t_specs : jeux (capture, liaison, champs)
+# t_specs : application d'un jeu
+# t_specs : changement de spe automatique
+# t_specs : combat
+# t_specs : Simple Action Sets (coexistence)
+# t_specs : barres d'action (sans SAS)
+# t_specs : donnees stockees
+# t_specs : commande
+# t_specs : page du menu
+# t_specs : bouton Jeux ShikiUI sur la fenetre des talents
+# t_specs : menu des jeux de la fenetre des talents
+# t_specs : bouton et menu en combat
+# t_specs : bouton - cycle de vie
+# t_specs : desactivation
+# t_specs : curseur propre apres un changement de spe (plus de clic bloque)
+  296 ok, 0 echec(s)
+== t_style.lua ==
+# t_style : demarrage
+# t_style : couleurs hexadecimales
+# t_style : styles livres
+# t_style : registre et validation
+# t_style : changement de style a chaud
+# t_style : reglages individuels
+# t_style : combat
+# t_style : ressources personnalisees et repli
+# t_style : style x mode Raid
+# t_style : export et import
+# t_style : enregistrer, utiliser, supprimer
+# t_style : sauvegardes (compatibilite entre versions)
+# t_style : commande
+# t_style : panneau Styles (choix en un clic)
+  418 ok, 0 echec(s)
+== t_tanktools.lua ==
+# t_tanktools : contrat, coupe par defaut, construction hors combat
+# t_tanktools : motifs du journal de combat
+# t_tanktools : provocation ratee
+# t_tanktools : annonce au groupe
+# t_tanktools : perte d'aggro
+# t_tanktools : repere de provocation prete
+# t_tanktools : vie basse
+# t_tanktools : barre des temps de recharge
+# t_tanktools : effet immediat des reglages (sans attendre la minuterie)
+# t_tanktools : classes
+# t_tanktools : commandes
+# t_tanktools : modes Normal / Raid
+# t_tanktools : coexistence
+# t_tanktools : langues
+# t_tanktools : cout
+# t_tanktools : desactivation
+# t_tanktools : visibilite commune, police
+  193 ok, 0 echec(s)
+== t_target.lua ==
+# t_target : rien autour
+# t_target : plaques de nom
+# t_target : sans UnitXP
+# t_target : repli sur la cible
+# t_target : unite precise
+# t_target : acquisition de cible
+# t_target : cache et plaques illisibles
+# t_target : doublons
+# t_target : diagnostic et robustesse
+  68 ok, 0 echec(s)
+== t_theme_look.lua ==
+# t_theme_look : bouton engrenage
+# t_theme_look : engrenage - infobulle et clics
+# t_theme_look : engrenage - texture du style et combat
+# t_theme_look : options communes
+# t_theme_look : lecture des ressources
+# t_theme_look : formes de barre
+# t_theme_look : aucune creation en combat
+# t_theme_look : textes
+# t_theme_look : style et lecture sans configuration
+  122 ok, 0 echec(s)
+== t_threat.lua ==
+# t_threat : contrat, coupe par defaut, construction hors combat
+# t_threat : analyse des paquets
+# t_threat : mode tank (cibles)
+# t_threat : debit de menace
+# t_threat : demande au serveur
+# t_threat : reception
+# t_threat : ligne d'aggro et changement de tank
+# t_threat : alertes
+# t_threat : fenetre
+# t_threat : vue des cibles
+# t_threat : visibilite et remise a zero
+# t_threat : integration avec le compteur
+# t_threat : rapport
+# t_threat : commandes
+# t_threat : modes Normal / Raid
+# t_threat : coexistence
+# t_threat : langues
+# t_threat : cout
+# t_threat : desactivation
+# t_threat : poignee de redimensionnement, hauteur, police
+# t_threat : estimation locale (sans serveur)
+# t_threat : fermeture de la fenetre
+# t_threat : client du compteur (SetClient)
+# t_threat : provocation (lancement, ligne provisoire, rafraichissement immediat)
+# t_threat : visibilite commune, engrenage, aspect
+  515 ok, 0 echec(s)
+== t_tooltip.lua ==
+# t_tooltip : coexistence pfUI et construction hors combat
+# t_tooltip : unites
+# t_tooltip : objets
+# t_tooltip : position, echelle, combat
+# t_tooltip : prix marchand
+# t_tooltip : objets possedes
+# t_tooltip : textes des nouveaux reglages
+# t_tooltip : mode Raid
+# t_tooltip : style et barre reversibles a chaud
+# t_tooltip : desactivation et reactivation
+  154 ok, 0 echec(s)
+== t_totems.lua ==
+# t_totems : donnees relevees
+# t_totems : contrat, coupe par defaut, autre classe, construction hors combat
+# t_totems : grimoire et choix par defaut
+# t_totems : clics
+# t_totems : pose reperee
+# t_totems : mort, zone, reglages d'oubli
+# t_totems : jeux
+# t_totems : commandes
+# t_totems : reglages et modes
+# t_totems : aucune creation en combat
+# t_totems : desactivation
+# t_totems : visibilite commune, police
+# t_totems : grimoire FR (client frFR)
+  176 ok, 0 echec(s)
+== t_tracker.lua ==
+# t_tracker : contrat et construction
+# t_tracker : formats
+# t_tracker : sources de l'or
+# t_tracker : totaux, jour, compte, debit
+# t_tracker : passage de minuit et historique
+# t_tracker : objets de valeur
+# t_tracker : verrous d'instances
+# t_tracker : limite horaire de donjons
+# t_tracker : alertes
+# t_tracker : fenetre, mini-barre, graphe
+# t_tracker : export et remises a zero
+# t_tracker : combat, donnees sauvegardees
+# t_tracker : reglages
+# t_tracker : statut de la barre Perf
+# t_tracker : desactivation
+  229 ok, 0 echec(s)
+== t_units.lua ==
+# t_units : construction
+# t_units : cible hostile (pourcentage)
+# t_units : couleurs
+# t_units : formats de vie
+# t_units : etats mort / fantome / hors ligne
+# t_units : evenements groupes
+# t_units : joueur
+# t_units : pre-soins (soins entrants sur le joueur et la cible)
+# t_units : cible de la cible (sondage)
+# t_units : distance et ligne de vue
+# t_units : interactions
+# t_units : configuration
+# t_units : echelle et position
+# t_units : roles
+# t_units : urgence
+# t_units : desactivation / reactivation du module
+# t_units : cadres Blizzard
+  149 ok, 0 echec(s)
+== t_vendor.lua ==
+# t_vendor : contrat
+# t_vendor : vente automatique, un objet par tour
+# t_vendor : plafond de securite et listes
+# t_vendor : qualite inconnue (repli sur la couleur du lien)
+# t_vendor : fermeture, case changee, case verrouillee
+# t_vendor : liste modifiee, case remplacee, argent perdu pendant la vente
+# t_vendor : combat et module coupe
+# t_vendor : reparation
+# t_vendor : reparation de guilde
+# t_vendor : la vente attend la fin de la reparation
+# t_vendor : boutons sur MerchantFrame
+# t_vendor : commandes
+# t_vendor : langues et desactivation
+  163 ok, 0 echec(s)
+== t_visibility.lua ==
+# t_visibility : cout nul sans cadre
+# t_visibility : options (descripteurs)
+# t_visibility : matrice combat x groupe x instance x cible x choix
+# t_visibility : evenements
+# t_visibility : specialisation
+# t_visibility : fondu
+# t_visibility : opacite de base
+# t_visibility : mode show, rappel onChange, Allowed
+# t_visibility : cadre protege (jamais de Show/Hide en combat)
+# t_visibility : module coupe, mode deplacement
+# t_visibility : aucune creation en combat, aucune erreur
+# t_visibility : coupure propre
+# t_visibility : textes
+  136 ok, 0 echec(s)
+== t_windows.lua ==
+# t_windows : enregistrement et options
+# t_windows : textes du menu pour la touche
+# t_windows : glisser avec la touche
+# t_windows : reapplication a l'affichage (UIPanelWindows)
+# t_windows : touche choisie
+# t_windows : echelle propre a la fenetre
+# t_windows : case deplacable par fenetre, effet immediat
+# t_windows : fenetre a chargement a la demande
+# t_windows : reinitialisation
+# t_windows : combat et cadres proteges
+# t_windows : Bags gere la banque
+# t_windows : monde
+# t_windows : module coupe puis rallume
+  125 ok, 0 echec(s)
+== t_wizard_setup.lua ==
+# t_wizard_setup : parcours Rapide
+# t_wizard_setup : Installation + / modules
+# t_wizard_setup : Installation + / reglages essentiels
+# t_wizard_setup : Passer, Precedent, Par defaut conseille, changement de parcours
+# t_wizard_setup : /sui wizard et premier lancement
+# t_wizard_setup : journal de clics, erreurs, aucune trace de l'import pfUI
+  1455 ok, 0 echec(s)
+== t_wizard_ui.lua ==
+# t_wizard_ui : cibles de clic
+  2556 ok, 0 echec(s)
+== modele de module ==
+MODELE DE MODULE OK (Demo cree, teste, mute, puis supprime)
+TOUT EST VERT

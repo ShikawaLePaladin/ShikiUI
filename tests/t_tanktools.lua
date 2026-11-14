@@ -4,7 +4,7 @@ local C = SUI.Config
 TNK_SETUP()
 BOOT()
 TNK_CLASS("WARRIOR")
-SETTLE()
+SETTLE() ; C.Set("modules.bossmods", false)
 local M = SUI.TankTools
 local L = SUI.L
 

@@ -34,12 +34,12 @@ function SUI.LogError(source, msg)
 	local now = (time and time()) or 0
 	local line = tostring(now) .. "|" .. tostring(source) .. "|" .. string.sub(tostring(msg), 1, 600)
 	if log[getn(log)] == line then return end
-	-- dedoublonnage par source : la meme source a moins de 5 s d'ecart est un spam (diagnostics repetes),
+	-- dedoublonnage : meme source + meme message a moins de 5 s d'ecart = spam (diagnostic repete),
 	-- on remplace la derniere entree au lieu d'en empiler une nouvelle
 	local last = log[getn(log)]
 	if last then
-		local _, _, lt, lsrc = string.find(last, "^(%d+)|([^|]+)|")
-		if lt and lsrc == tostring(source) and now - tonumber(lt) < 5 then
+		local _, _, lt, lsrc, lmsg = string.find(last, "^(%d+)|([^|]+)|(.*)$")
+		if lt and lsrc == tostring(source) and lmsg == string.sub(tostring(msg), 1, 600) and now - tonumber(lt) < 5 then
 			log[getn(log)] = line
 			return
 		end
