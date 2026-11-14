@@ -50,6 +50,7 @@ M.MAXBARS = 8
 --   every : repetition (toutes les N secondes)
 --   dur   : duree de l'effet (longueur de barre apres le lancement)
 --   warn  : annonce RAID au moment de la mise en place
+--   react : evenement SANS horloge (t = 600 etait un emplacement fantome) : jamais arme tout seul, seulement par M.React(boss, nom)
 -- Valeurs = guides vanilla publies, NON VERIFIEES EN JEU (voir entete).
 M.BOSSES = {
 	["antnormi"] = {
@@ -63,39 +64,39 @@ M.BOSSES = {
 	["anubisath defender"] = {
 		label = "Anubisath Defender",
 		ev = {
-			{ t = 600, every = 600, name = "Fire & Arcane Reflect", dur = 3, icon = "Interface\\Icons\\spell_arcane_portaldarnassus", warn = true },
-			{ t = 600, every = 600, name = "Shadow & Frost Reflect", dur = 3, icon = "Interface\\Icons\\spell_arcane_portalundercity", warn = true },
+			{ t = 600, every = 600, react = true, name = "Fire & Arcane Reflect", dur = 3, icon = "Interface\\Icons\\spell_arcane_portaldarnassus", warn = true },
+			{ t = 600, every = 600, react = true, name = "Shadow & Frost Reflect", dur = 3, icon = "Interface\\Icons\\spell_arcane_portalundercity", warn = true },
 			{ t = 40, every = 40, name = "Plagued", dur = 3, icon = "Interface\\Icons\\Spell_Shadow_CurseOfTounges", warn = true },
-			{ t = 600, every = 600, name = "Thunder Clap", dur = 3, icon = "Interface\\Icons\\Ability_ThunderClap", warn = true },
-			{ t = 600, every = 600, name = "Shadow Storm", dur = 3, icon = "Interface\\Icons\\spell_shadow_shadowbolt", warn = true },
-			{ t = 600, every = 600, name = "Meteor", dur = 3, icon = "Interface\\Icons\\Spell_Fire_Fireball02", warn = true },
+			{ t = 600, every = 600, react = true, name = "Thunder Clap", dur = 3, icon = "Interface\\Icons\\Ability_ThunderClap", warn = true },
+			{ t = 600, every = 600, react = true, name = "Shadow Storm", dur = 3, icon = "Interface\\Icons\\spell_shadow_shadowbolt", warn = true },
+			{ t = 600, every = 600, react = true, name = "Meteor", dur = 3, icon = "Interface\\Icons\\Spell_Fire_Fireball02", warn = true },
 			{ t = 6, every = 6, name = "Exploding!", dur = 3, icon = "Interface\\Icons\\spell_fire_selfdestruct", warn = true },
 		},
 	},
 	["anubisath guardian"] = {
 		label = "Anubisath Guardian",
 		ev = {
-			{ t = 600, every = 600, name = "Fire & Arcane Reflect", dur = 3, icon = "Interface\\Icons\\spell_arcane_portaldarnassus", warn = true },
-			{ t = 600, every = 600, name = "Shadow & Frost Reflect", dur = 3, icon = "Interface\\Icons\\spell_arcane_portalundercity", warn = true },
+			{ t = 600, every = 600, react = true, name = "Fire & Arcane Reflect", dur = 3, icon = "Interface\\Icons\\spell_arcane_portaldarnassus", warn = true },
+			{ t = 600, every = 600, react = true, name = "Shadow & Frost Reflect", dur = 3, icon = "Interface\\Icons\\spell_arcane_portalundercity", warn = true },
 			{ t = 40, every = 40, name = "Plagued", dur = 3, icon = "Interface\\Icons\\Spell_Shadow_CurseOfTounges", warn = true },
-			{ t = 600, every = 600, name = "Thunder Clap CD", dur = 3, icon = "Interface\\Icons\\Ability_ThunderClap", warn = true },
-			{ t = 600, every = 600, name = "Shadow Storm CD", dur = 3, icon = "Interface\\Icons\\spell_shadow_shadowbolt", warn = true },
-			{ t = 600, every = 600, name = "Meteor CD", dur = 3, icon = "Interface\\Icons\\Spell_Fire_Fireball02", warn = true },
+			{ t = 600, every = 600, react = true, name = "Thunder Clap CD", dur = 3, icon = "Interface\\Icons\\Ability_ThunderClap", warn = true },
+			{ t = 600, every = 600, react = true, name = "Shadow Storm CD", dur = 3, icon = "Interface\\Icons\\spell_shadow_shadowbolt", warn = true },
+			{ t = 600, every = 600, react = true, name = "Meteor CD", dur = 3, icon = "Interface\\Icons\\Spell_Fire_Fireball02", warn = true },
 			{ t = 6, every = 6, name = "Exploding!", dur = 3, icon = "Interface\\Icons\\spell_fire_selfdestruct", warn = true },
 		},
 	},
 	["anubisath sentinel"] = {
 		label = "Anubisath Sentinel",
 		ev = {
-			{ t = 600, every = 600, name = "has Knockback", dur = 3, icon = "Interface\\Icons\\Inv_Gauntlets_05", warn = true },
-			{ t = 600, every = 600, name = "has Mana Burn", dur = 3, icon = "Interface\\Icons\\Spell_Shadow_Manaburn", warn = true },
-			{ t = 600, every = 600, name = "has Mending", dur = 3, icon = "Interface\\Icons\\spell_nature_resistnature", warn = true },
-			{ t = 600, every = 600, name = "has Mortal Strike", dur = 3, icon = "Interface\\Icons\\ability_warrior_savageblow", warn = true },
-			{ t = 600, every = 600, name = "has Shadow Storm", dur = 3, icon = "Interface\\Icons\\spell_shadow_shadowbolt", warn = true },
-			{ t = 600, every = 600, name = "has Thorns", dur = 3, icon = "Interface\\Icons\\Spell_Nature_Thorns", warn = true },
-			{ t = 600, every = 600, name = "has Thunderclap", dur = 3, icon = "Interface\\Icons\\Ability_ThunderClap", warn = true },
-			{ t = 600, every = 600, name = "reflect Fire & Arcane", dur = 3, icon = "Interface\\Icons\\spell_arcane_portaldarnassus", warn = true },
-			{ t = 600, every = 600, name = "reflect Shadow & Frost", dur = 3, icon = "Interface\\Icons\\spell_arcane_portalundercity", warn = true },
+			{ t = 600, every = 600, react = true, name = "has Knockback", dur = 3, icon = "Interface\\Icons\\Inv_Gauntlets_05", warn = true },
+			{ t = 600, every = 600, react = true, name = "has Mana Burn", dur = 3, icon = "Interface\\Icons\\Spell_Shadow_Manaburn", warn = true },
+			{ t = 600, every = 600, react = true, name = "has Mending", dur = 3, icon = "Interface\\Icons\\spell_nature_resistnature", warn = true },
+			{ t = 600, every = 600, react = true, name = "has Mortal Strike", dur = 3, icon = "Interface\\Icons\\ability_warrior_savageblow", warn = true },
+			{ t = 600, every = 600, react = true, name = "has Shadow Storm", dur = 3, icon = "Interface\\Icons\\spell_shadow_shadowbolt", warn = true },
+			{ t = 600, every = 600, react = true, name = "has Thorns", dur = 3, icon = "Interface\\Icons\\Spell_Nature_Thorns", warn = true },
+			{ t = 600, every = 600, react = true, name = "has Thunderclap", dur = 3, icon = "Interface\\Icons\\Ability_ThunderClap", warn = true },
+			{ t = 600, every = 600, react = true, name = "reflect Fire & Arcane", dur = 3, icon = "Interface\\Icons\\spell_arcane_portaldarnassus", warn = true },
+			{ t = 600, every = 600, react = true, name = "reflect Shadow & Frost", dur = 3, icon = "Interface\\Icons\\spell_arcane_portalundercity", warn = true },
 		},
 	},
 	["atiesh"] = {
@@ -420,7 +421,7 @@ M.BOSSES = {
 		ev = {
 			{ t = 11, every = 11, name = "MC CD", dur = 3, warn = true },
 			{ t = 8, every = 8, name = "Blood Siphon!", dur = 3, warn = true },
-			{ t = 600, every = 600, name = "Enrage", dur = 3, icon = "Interface\\Icons\\Spell_Shadow_UnholyFrenzy", warn = true },
+			{ t = 600, every = 600, react = true, name = "Enrage", dur = 3, icon = "Interface\\Icons\\Spell_Shadow_UnholyFrenzy", warn = true },
 		},
 	},
 	["hazzarah"] = {
@@ -817,7 +818,7 @@ M.BOSSES = {
 	["solnius"] = {
 		label = "Solnius",
 		ev = {
-			{ t = 600, every = 600, name = "Solnius is Immune", dur = 3, icon = "Interface\\Icons\\Inv_Misc_Pocketwatch_01", warn = true },
+			{ t = 600, every = 600, react = true, name = "Solnius is Immune", dur = 3, icon = "Interface\\Icons\\Inv_Misc_Pocketwatch_01", warn = true },
 			{ t = 45, every = 45, name = "Solnius is Sleeping", dur = 3, icon = "Interface\\Icons\\Inv_Misc_Pocketwatch_01", warn = true },
 			{ t = 6, every = 6, name = "Wail Casting", dur = 3, icon = "Interface\\Icons\\Spell_Shadow_ShadeTruesight", warn = true },
 			{ t = 3, every = 3, name = "Wail Afflicted", dur = 3, icon = "Interface\\Icons\\Spell_Shadow_ShadeTruesight", warn = true },
@@ -888,7 +889,7 @@ M.BOSSES = {
 			{ t = 8, every = 8, name = "MC CD", dur = 3, warn = true },
 			{ t = 20, every = 20, name = "Soul Corruption CD", dur = 3, warn = true },
 			{ t = 10, every = 10, name = "Soul Corruption Soon...", dur = 3, warn = true },
-			{ t = 600, every = 600, name = "AP Buff", dur = 3, icon = "Interface\\Icons\\spell_nature_strength", warn = true },
+			{ t = 600, every = 600, react = true, name = "AP Buff", dur = 3, icon = "Interface\\Icons\\spell_nature_strength", warn = true },
 		},
 	},
 	["twin golems"] = {
@@ -1001,7 +1002,8 @@ function M.Detect()
 		if M.cur ~= key then
 			M.cur = key
 			M.curLabel = M.BOSSES[key].label or nm
-			M.combatAt = nil
+			-- l'horloge est celle du COMBAT : changer de cible en combat ne la remet pas a zero
+			if not SUI.InCombat() then M.combatAt = nil end
 			M.armed = {}
 			M.narmed = 0
 			M.next = {}
@@ -1011,7 +1013,7 @@ function M.Detect()
 		if M.cur then
 			M.cur = nil
 			M.curLabel = EMPTY
-			M.combatAt = nil
+			if not SUI.InCombat() then M.combatAt = nil end
 			-- les barres de PULL survivent : elles ne dependent pas du boss vise
 			local keep, n = {}, 0
 			local k
@@ -1056,16 +1058,57 @@ function M.MsgStop()
 	if M.msg then M.msg:Hide() end
 end
 
+-- UNE SEULE personne annonce au raid : le chef tout de suite, un assistant apres un delai propre a son nom (annule si un autre a deja
+-- annonce, message addon "ann:<nom>"), tous les autres chez eux. Hors raid, au groupe : seul le chef du groupe parle.
+M.annSeen = {}          -- [nom d'evenement] = instant de la derniere annonce vue d'un autre joueur
+
+function M.AnnDelay()
+	local nm = UnitName("player") or EMPTY
+	local sum, i = 0, 1
+	while i <= string.len(nm) do
+		sum = sum + string.byte(nm, i)
+		i = i + 1
+	end
+	return 0.6 + SUI.Mod(sum, 8) * 0.2
+end
+
+function M.AnnClaim(key)
+	if type(SendAddonMessage) == "function" then
+		pcall(SendAddonMessage, M.PREFIX, "ann:" .. key, "RAID")
+	end
+end
+
+function M.RaidSay(text, key)
+	if not M.CanLead() then return false end
+	if IsRaidLeader() then
+		SendChatMessage(text, "RAID_WARNING")
+		M.AnnClaim(key)
+		return true
+	end
+	SUI.After(M.AnnDelay(), function()
+		if not M.on then return end
+		local seen = M.annSeen[key]
+		if seen and GetTime() - seen < 5 then return end
+		SendChatMessage(text, "RAID_WARNING")
+		M.AnnClaim(key)
+	end, "bossmods.ann")
+	return true
+end
+
 function M.Announce(name, secs)
 	local chan = C.Get("bossmods.channel") or "self"
-	if C.Get("bossmods.showmsg") and M.msg then M.ShowMsg(name, L("msg.bossmods.soon", name, secs)) end
+	local text = L("msg.bossmods.soon", name, secs)
+	if C.Get("bossmods.showmsg") and M.msg then M.ShowMsg(name, text) end
+	local said = false
 	if chan == "raid" and GetNumRaidMembers() > 0 then
-		SendChatMessage(L("msg.bossmods.soon", name, secs), "RAID_WARNING")
+		said = M.RaidSay(text, name)
 	elseif chan == "party" and GetNumPartyMembers() > 0 then
-		SendChatMessage(L("msg.bossmods.soon", name, secs), "PARTY")
-	else
-		SUI.Print(L("msg.bossmods.soon", name, secs))
+		if GetNumRaidMembers() > 0 or M.CanLead() then
+			SendChatMessage(text, "PARTY")
+			said = true
+		end
 	end
+	if not said then SUI.Print(text) end
 	if C.Get("bossmods.sound") then
 		PlaySoundFile("Sound\\Interface\\RaidWarning.wav")
 	end
@@ -1100,34 +1143,37 @@ function M.Tick()
 	local i, ev
 	for i = 1, getn(d.ev) do
 		ev = d.ev[i]
-		local nxt = M.next[ev] or (M.combatAt + (ev.t or 0))
+		-- react : pas d'horloge (jamais arme tout seul) ; NextOf rattrape aussi une horloge deja ecoulee (changement de boss en combat)
+		local nxt = (not ev.react) and M.NextOf(ev, now) or nil
 		local leadOn = C.Get("bossmods.incoming") ~= false
 		local activeOn = C.Get("bossmods.active") ~= false
-		-- phase lead
-		if leadOn and not M.armedHas(ev.name, "lead") and now >= nxt - lead and now < nxt and not M.warns[ev] then
-			M.warns[ev] = now
-			tinsert(M.armed, { name = ev.name, icon = ev.icon, endsAt = nxt, ev = ev, phase = "lead" })
-			M.narmed = M.narmed + 1
-			M.Announce(ev.name, floor(nxt - now + 0.5))
-			if M.win and M.win:IsShown() then M.Paint() end
-		end
-		-- l'evenement est arrive : barre active (si duree) puis repetition planifiee
-		if now >= nxt then
-			local k
-			for k = M.narmed, 1, -1 do
-				if M.armed[k].ev == ev and M.armed[k].phase == "lead" then
-					tremove(M.armed, k)
-					M.narmed = M.narmed - 1
-				end
-			end
-			M.next[ev] = nxt + (ev.every or 3600)
-			M.warns[ev] = nil
-			local dur = ev.dur or 0
-			if activeOn and dur > 0 then
-				tinsert(M.armed, { name = ev.name, icon = ev.icon, endsAt = now + dur, ev = ev, phase = "active" })
+		if nxt then
+			-- phase lead
+			if leadOn and not M.armedHas(ev.name, "lead") and now >= nxt - lead and now < nxt and not M.warns[ev] then
+				M.warns[ev] = now
+				tinsert(M.armed, { name = ev.name, icon = ev.icon, endsAt = nxt, ev = ev, phase = "lead" })
 				M.narmed = M.narmed + 1
+				M.Announce(ev.name, floor(nxt - now + 0.5))
+				if M.win and M.win:IsShown() then M.Paint() end
 			end
-			if M.win and M.win:IsShown() then M.Paint() end
+			-- l'evenement est arrive : barre active (si duree) puis repetition planifiee
+			if now >= nxt then
+				local k
+				for k = M.narmed, 1, -1 do
+					if M.armed[k].ev == ev and M.armed[k].phase == "lead" then
+						tremove(M.armed, k)
+						M.narmed = M.narmed - 1
+					end
+				end
+				M.next[ev] = nxt + (ev.every or 3600)
+				M.warns[ev] = nil
+				local dur = ev.dur or 0
+				if activeOn and dur > 0 then
+					tinsert(M.armed, { name = ev.name, icon = ev.icon, endsAt = now + dur, ev = ev, phase = "active" })
+					M.narmed = M.narmed + 1
+				end
+				if M.win and M.win:IsShown() then M.Paint() end
+			end
 		end
 	end
 	-- purge des barres arrivees a expiration (le pull est purge par PullTick, pas ici)
@@ -1139,6 +1185,38 @@ function M.Tick()
 		end
 	end
 	if M.win and M.win:IsShown() then M.Paint() end
+end
+
+-- Prochain declenchement d'un evenement. Horloge deja ecoulee (boss pris en cours de combat) : on saute au prochain passage a venir,
+-- sans rejouer le passe ; un evenement unique deja passe ne reviendra pas (nil).
+function M.NextOf(ev, now)
+	local nxt = M.next[ev]
+	if nxt then return nxt end
+	nxt = M.combatAt + (ev.t or 0)
+	if now > nxt + 3 then
+		local every = ev.every
+		if not every or every <= 0 then return nil end
+		nxt = nxt + every * math.ceil((now - nxt) / every)
+	end
+	return nxt
+end
+
+-- Evenement "react" du boss courant : arme sa barre d'effet (aucune horloge, aucune annonce au canal).
+function M.React(name)
+	local d = M.cur and M.BOSSES[M.cur]
+	if not M.on or M.eff == "bridge" or not d then return false end
+	local i
+	for i = 1, getn(d.ev) do
+		local ev = d.ev[i]
+		if ev.react and ev.name == name then
+			tinsert(M.armed, { name = ev.name, icon = ev.icon, endsAt = GetTime() + (ev.dur or 3), ev = ev, phase = "active" })
+			M.narmed = M.narmed + 1
+			if ev.warn then M.ShowMsg(ev.name, L("mod.bossmods.title")) end
+			if M.win and M.win:IsShown() then M.Paint() end
+			return true
+		end
+	end
+	return false
 end
 
 -- La barre est-elle deja armee pour ce nom ? (antidoublon pendant le lead)
@@ -1451,8 +1529,13 @@ end
 
 -- Reception du canal addon : pull d'un autre officier.
 function M.OnAddonComm(ev, a1, a2, a3, a4)
-	if not M.on or type(a2) ~= "string" then return end
-	local _, _, who, secs = sfind(a2, "^pull:(%d+):(.+)$")
+	if not M.on or type(a2) ~= "string" or a1 ~= M.PREFIX then return end
+	local _, _, seen = sfind(a2, "^ann:(.+)$")
+	if seen then
+		M.annSeen[seen] = GetTime()
+		return
+	end
+	local _, _, secs, who = sfind(a2, "^pull:(%d+):(.+)$")
 	if not who or who == UnitName("player") then return end
 	if M.pullIgnore and GetTime() < M.pullIgnore then return end
 	M.PullStart(tonumber(secs) or 10, who)

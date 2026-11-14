@@ -1522,7 +1522,7 @@ local function tipCell()
 	local code = s and s.name and s.code[c.slotn]
 	local _, _, id, suf = sfind(code or "", "^(%d+):(%-?%d+)")
 	if id then
-		GameTooltip:SetHyperlink("item:" .. id .. ":0:" .. suf .. ":0")
+		pcall(GameTooltip.SetHyperlink, GameTooltip, "item:" .. id .. ":0:" .. suf .. ":0")   -- pcall : un addon tiers (AtlasLoot) intercepte et peut lever
 		if c.lost then tipLine(L("mod.items.win.losttip"), T.c.bad) end
 	else
 		GameTooltip:AddLine(M.SlotName(c.slotn))

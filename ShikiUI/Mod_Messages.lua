@@ -585,7 +585,7 @@ local function linkEnter()
 	local tt = getglobal("GameTooltip")
 	if tt and type(arg1) == "string" and ssub(arg1, 1, 5) == "item:" then
 		tt:SetOwner(this, "ANCHOR_RIGHT")
-		tt:SetHyperlink(arg1)
+		pcall(tt.SetHyperlink, tt, arg1)   -- pcall : AtlasLoot intercepte les tooltips
 		tt:Show()
 	end
 end
