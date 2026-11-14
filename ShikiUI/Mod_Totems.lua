@@ -109,6 +109,45 @@ function M.ReadConfig()
 	cfg.alpha = C.Get("totems.alpha")
 	cfg.tick = C.Get("totems.tick")
 	cfg.announce = C.Get("totems.announce")
+	cfg.bg = C.Get("totems.bg")
+	cfg.color = C.Get("totems.color")
+	cfg.coloron = C.Get("totems.coloron")
+	cfg.colorwarn = C.Get("totems.colorwarn")
+end
+
+-- Design par jetons du style (aucune couleur en dur) : totems.bg = fond des boutons (style | panel | bg | inset | none), totems.color =
+-- couleur des temps (style = texte clair), totems.coloron = bordure d'un totem en place (style = accent), totems.colorwarn = bordure d'un
+-- totem bientot fini (style = orange d'avertissement).
+M.BGS = { "style", "panel", "bg", "inset", "none" }
+M.COLORS = { "style", "good", "warn", "bad", "dim", "text" }
+M.nobg = {}
+
+function M.TokenRGB(name, default)
+	local c = (name and name ~= "style") and T.c[name] or nil
+	if not c then c = T.c[default] end
+	return c[1], c[2], c[3]
+end
+
+-- Fond d'un bouton selon totems.bg ("none" = teinte du fond, opacite nulle) et couleur des temps / etiquettes.
+function M.StyleButton(b, force)
+	local tok = M.cfg.bg or "style"
+	if b.mbTok ~= tok or force then
+		b.mbTok = tok
+		if tok == "none" then
+			local c = T.c.bg
+			local z = M.nobg
+			z[1], z[2], z[3], z[4] = c[1], c[2], c[3], 0
+			T.Backdrop(b, z, T.c.border)
+		elseif tok ~= "style" and T.c[tok] then
+			T.Backdrop(b, T.c[tok], T.c.border)
+		else
+			T.Backdrop(b, T.c.bg, T.c.border)
+		end
+		b.lastState = nil          -- le fond repeint remet la bordure neutre : on la redessine
+	end
+	local r, g, bl = M.TokenRGB(M.cfg.color, "text")
+	b.timer:SetTextColor(r, g, bl, 1)
+	b.label:SetTextColor(r, g, bl, 1)
 end
 
 -- ---------------------------------------------------------------- grimoire
@@ -303,9 +342,12 @@ function M.PaintButton(el, now)
 	end
 	if state ~= b.lastState then
 		b.lastState = state
-		if state == 3 then setBorder(b, T.c.warn)
+		if state == 3 then
+			local r, g, bl = M.TokenRGB(M.cfg.colorwarn, "warn")
+			b:SetBackdropBorderColor(r, g, bl, 1)
 		elseif state == 2 then
-			local r, g, bl = T.Accent()
+			local r, g, bl
+			if M.cfg.coloron and M.cfg.coloron ~= "style" then r, g, bl = M.TokenRGB(M.cfg.coloron, "good") else r, g, bl = T.Accent() end
 			b:SetBackdropBorderColor(r, g, bl, 1)
 		else setBorder(b, T.c.border) end
 		b.icon:SetAlpha(state == 0 and 0.35 or (state == 1 and 0.6 or 1))
@@ -392,6 +434,7 @@ function M.BuildButton(parent, el)
 		SUI.Look.ApplyText(b.timer, "totems", 11, true)    -- police et taille des temps : totems.font / .fontsize
 		SUI.Look.ApplyText(b.label, "totems", 10, true)
 	end
+	M.StyleButton(b, true)
 	b:RegisterForClicks("LeftButtonUp", "RightButtonUp")
 	b:SetScript("OnClick", clickButton)
 	b:SetScript("OnEnter", enterButton)
@@ -414,6 +457,11 @@ function M.Build()
 	h.hint:SetTexture(T.tex.white)
 	h.hint:SetVertexColor(T.c.border[1], T.c.border[2], T.c.border[3], 0.3)
 	SUI.Layout.Register(h, "totems.bar", "CENTER", 0, -160)
+	if SUI.Mover and SUI.Mover.Register then
+		SUI.Mover.Register("totems.bar", h, { label = "mod.mover.n.totems.bar", scale = true, always = true })
+	end
+	T.GearButton(h, "totems", { size = 12, point = "BOTTOMRIGHT", relPoint = "TOPRIGHT", x = 0, y = 1, title = L("msg.totems.gear"),
+		onCreate = function(g) M.gear = g end })
 	T.OnAccent(M.OnStyle)
 	M.built = true
 	M.ApplyOptions()
@@ -425,6 +473,7 @@ function M.OnStyle()
 	for i = 1, 5 do
 		local b = M.btn[i <= 4 and M.ELEMENTS[i] or "all"]
 		b.lastState = nil
+		M.StyleButton(b, true)
 	end
 	M.Paint()
 end
@@ -465,6 +514,7 @@ function M.ApplyOptions()
 	for i = 1, 5 do
 		local b = M.btn[order[i]]
 		b.lastKey, b.lastState, b.lastTex = -1, nil, nil
+		M.StyleButton(b)
 		b.timer:SetText(EMPTY)
 	end
 	if M.active then
@@ -599,6 +649,10 @@ local function addAll(list)
 	for i = 1, getn(d) do table.insert(list, d[i]) end
 	d = SUI.Look.Options("totems", { font = true, cat = "totems", order = 820 })
 	for i = 1, getn(d) do table.insert(list, d[i]) end
+	table.insert(list, opt("bg", "choice", 830, "style", { choices = M.BGS, choiceText = function(o, v) return L("choice.totems.bg." .. v) end }))
+	table.insert(list, opt("color", "choice", 831, "style", { choices = M.COLORS, choiceText = function(o, v) return L("choice.totems.color." .. v) end }))
+	table.insert(list, opt("coloron", "choice", 832, "style", { choices = M.COLORS, choiceText = function(o, v) return L("choice.totems.coloron." .. v) end }))
+	table.insert(list, opt("colorwarn", "choice", 833, "style", { choices = M.COLORS, choiceText = function(o, v) return L("choice.totems.colorwarn." .. v) end }))
 	return list
 end
 

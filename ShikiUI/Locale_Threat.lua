@@ -4,6 +4,21 @@ ShikiUI = ShikiUI or {}
 local SUI = ShikiUI
 
 SUI.AddStrings("fr", {
+	["opt.threat.bg"] = "Fond de la fenetre",
+	["tip.threat.bg"] = "Fond de la fenetre de menace, pris dans les couleurs du style actif : panneau, fond sombre, creux ou transparent.",
+	["choice.threat.bg.style"] = "Defaut du style",
+	["choice.threat.bg.panel"] = "Panneau",
+	["choice.threat.bg.bg"] = "Fond sombre",
+	["choice.threat.bg.inset"] = "Creux (tres sombre)",
+	["choice.threat.bg.none"] = "Transparent",
+	["opt.threat.color"] = "Couleur des barres",
+	["tip.threat.color"] = "Couleur des barres ordinaires (ni aggro, ni danger, ni couleur de classe). Defaut du style = couleur d'accent.",
+	["choice.threat.color.style"] = "Defaut du style",
+	["choice.threat.color.good"] = "Vert",
+	["choice.threat.color.warn"] = "Orange",
+	["choice.threat.color.bad"] = "Rouge",
+	["choice.threat.color.dim"] = "Gris",
+	["choice.threat.color.text"] = "Clair",
 	["cat.threat"] = "Menace",
 	["opt.modules.threat"] = "Menace ShikiUI",
 	["tip.modules.threat"] = "Fenetre de menace du groupe ou du raid sur votre cible, alertes avant de prendre l'aggro. Demande les valeurs au serveur (protocole TWThreat) ; sans serveur compatible, estimation locale (module Compteur requis). Fenetre redimensionnable au coin bas droit.",
@@ -101,6 +116,21 @@ SUI.AddStrings("fr", {
 })
 
 SUI.AddStrings("en", {
+	["opt.threat.bg"] = "Window background",
+	["tip.threat.bg"] = "Background of the threat window, taken from the active style colors: panel, dark, inset or transparent.",
+	["choice.threat.bg.style"] = "Style default",
+	["choice.threat.bg.panel"] = "Panel",
+	["choice.threat.bg.bg"] = "Dark background",
+	["choice.threat.bg.inset"] = "Inset (very dark)",
+	["choice.threat.bg.none"] = "Transparent",
+	["opt.threat.color"] = "Bar color",
+	["tip.threat.color"] = "Color of ordinary bars (not aggro, not danger, not class color). Style default = accent color.",
+	["choice.threat.color.style"] = "Style default",
+	["choice.threat.color.good"] = "Green",
+	["choice.threat.color.warn"] = "Orange",
+	["choice.threat.color.bad"] = "Red",
+	["choice.threat.color.dim"] = "Gray",
+	["choice.threat.color.text"] = "Light",
 	["cat.threat"] = "Threat",
 	["opt.modules.threat"] = "ShikiUI threat",
 	["tip.modules.threat"] = "Threat window for your group or raid on your target, with alerts before you pull aggro. Asks the server for the values (TWThreat protocol); without a compatible server it falls back to a local estimate (Meter module required). Resizable from the bottom right corner.",

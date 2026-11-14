@@ -260,6 +260,46 @@ function M.ScanBook()
 	M.barDirty = true
 end
 
+-- Design par jetons du style (aucune couleur en dur) : tanktools.bg = fond des icones (style | panel | bg | inset | none), tanktools.color =
+-- couleur des temps (style = texte clair), tanktools.markcolor = couleur de la marque "!" (style = orange d'avertissement).
+M.BGS = { "style", "panel", "bg", "inset", "none" }
+M.COLORS = { "style", "good", "warn", "bad", "dim", "text" }
+M.nobg = {}
+
+function M.TokenRGB(name, default)
+	local c = (name and name ~= "style") and T.c[name] or nil
+	if not c then c = T.c[default] end
+	return c[1], c[2], c[3]
+end
+
+-- Fond d'une icone selon tanktools.bg ; "none" = teinte du fond, opacite nulle. Les couleurs des textes suivent le meme chemin.
+function M.StyleButton(b, force)
+	local tok = M.cfg.bg or "style"
+	if b.mbTok ~= tok or force then
+		b.mbTok = tok
+		if tok == "none" then
+			local c = T.c.bg
+			local z = M.nobg
+			z[1], z[2], z[3], z[4] = c[1], c[2], c[3], 0
+			T.Backdrop(b, z, T.c.border)
+		elseif tok ~= "style" and T.c[tok] then
+			T.Backdrop(b, T.c[tok], T.c.border)
+		else
+			T.Backdrop(b, T.c.bg, T.c.border)
+		end
+	end
+	local r, g, bl = M.TokenRGB(M.cfg.color, "text")
+	b.timer:SetTextColor(r, g, bl, 1)
+	r, g, bl = M.TokenRGB(M.cfg.markcolor, "warn")
+	b.mark:SetTextColor(r, g, bl, 1)
+end
+
+-- Changement de style / d'accent : le repeint du theme remet fonds et couleurs du style, on repose le choix de l'utilisateur.
+function M.OnStyle()
+	if not M.built then return end
+	for i = 1, M.MAXBTN do M.StyleButton(M.btn[i], true) end
+end
+
 function M.BuildButton(parent)
 	local b = CreateFrame("Frame", nil, parent)
 	T.Backdrop(b, T.c.bg, T.c.border)
@@ -272,6 +312,7 @@ function M.BuildButton(parent)
 	if SUI.Look then SUI.Look.ApplyText(b.timer, "tanktools", 12, true) end    -- police et taille des temps : tanktools.font / .fontsize
 	b.mark = T.Text(b, 14, T.c.warn, "CENTER", true)
 	b.mark:SetPoint("TOPRIGHT", b, "TOPRIGHT", -1, -1)
+	M.StyleButton(b, true)
 	b.key = -1
 	b:Hide()
 	return b
@@ -285,6 +326,12 @@ function M.Build()
 	M.holder = h
 	for i = 1, M.MAXBTN do M.btn[i] = M.BuildButton(h) end
 	SUI.Layout.Register(h, "tanktools.bar", "CENTER", 0, -220)
+	if SUI.Mover and SUI.Mover.Register then
+		SUI.Mover.Register("tanktools.bar", h, { label = "mod.mover.n.tanktools.bar", scale = true, always = true })
+	end
+	T.GearButton(h, "tanktools", { size = 12, point = "BOTTOMRIGHT", relPoint = "TOPRIGHT", x = 0, y = 1, title = L("msg.tanktools.gear"),
+		onCreate = function(g) M.gear = g end })
+	T.OnAccent(M.OnStyle)
 	M.built = true
 	M.barDirty = true
 	M.VisAdd()
@@ -325,6 +372,7 @@ function M.Layout()
 		end
 		b.key = -1
 		b.mk = nil
+		M.StyleButton(b)
 	end
 	local n = mmax(M.slotn, 1)
 	if c.vertical then
@@ -407,6 +455,9 @@ function M.ReadConfig()
 	c.spacing = C.Get("tanktools.spacing")
 	c.vertical = C.Get("tanktools.vertical")
 	c.timer = C.Get("tanktools.timer")
+	c.bg = C.Get("tanktools.bg")
+	c.color = C.Get("tanktools.color")
+	c.markcolor = C.Get("tanktools.markcolor")
 	c.alpha = C.Get("tanktools.alpha")
 	c.aggro = C.Get("tanktools.aggro")
 	c.taunt = C.Get("tanktools.taunt")
@@ -513,6 +564,9 @@ local function opt(key, typ, order, def, extra)
 end
 
 local function announceText(o, v) return L("choice.tanktools.announce." .. v) end
+local function bgText(o, v) return L("choice.tanktools.bg." .. v) end
+local function colText(o, v) return L("choice.tanktools.color." .. v) end
+local function markText(o, v) return L("choice.tanktools.markcolor." .. v) end
 
 -- Options communes du socle : visibilite conditionnelle (tanktools.vis / .fade) et police des temps (tanktools.font / .fontsize).
 local function addAll(list)
@@ -520,6 +574,9 @@ local function addAll(list)
 	for i = 1, getn(d) do tinsert(list, d[i]) end
 	d = SUI.Look.Options("tanktools", { font = true, cat = "tanktools", order = 820 })
 	for i = 1, getn(d) do tinsert(list, d[i]) end
+	tinsert(list, opt("bg", "choice", 830, "style", { choices = M.BGS, choiceText = bgText }))
+	tinsert(list, opt("color", "choice", 831, "style", { choices = M.COLORS, choiceText = colText }))
+	tinsert(list, opt("markcolor", "choice", 832, "style", { choices = M.COLORS, choiceText = markText }))
 	return list
 end
 
