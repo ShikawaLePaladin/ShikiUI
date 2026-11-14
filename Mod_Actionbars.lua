@@ -1152,14 +1152,27 @@ local XPTEX = { "MainMenuXPBarTexture0", "MainMenuXPBarTexture1", "MainMenuXPBar
 	"MainMenuBarMaxLevelBar", "ReputationWatchBarTexture0", "ReputationWatchBarTexture1", "ReputationWatchBarTexture2",
 	"ReputationWatchBarTexture3", "ReputationXPBarTexture0", "ReputationXPBarTexture1", "ReputationXPBarTexture2",
 	"ReputationXPBarTexture3" }
-local function pin(f, pt1, x, y, h)
+-- Ancrage des barres XP / reputation : via le moteur de mise en page ("bars.xp" / "bars.rep") pour qu'elles
+-- soient DEPLACABLES comme le reste (Mover, presets), et non plus collee en dur. Pleine largeur conservee :
+-- le second ancre (BOTTOMRIGHT) est repose apres chaque placement (hook apply du Mover). Les appels repetes
+-- (reglages a chaud) re-appliquent la position enregistree sans reenregistrer.
+local function pin(f, key, x, y, h)
 	f:SetParent(UIParent)
-	f:ClearAllPoints()
-	f:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", x, y)
-	f:SetPoint("BOTTOMRIGHT", UIParent, "BOTTOMRIGHT", -x, y)
 	f:SetHeight(h)
-	f.SetPoint = noop
-	f.ClearAllPoints = noop
+	if SUI.Mover and SUI.Mover.Register and SUI.Layout then
+		local function wide()
+			f:SetPoint("BOTTOMRIGHT", UIParent, "BOTTOMRIGHT", 0, 0)
+		end
+		if not (SUI.Layout.items and SUI.Layout.items[key]) then
+			SUI.Mover.Register(key, f, { point = "BOTTOMLEFT", x = 0, y = y, apply = wide })
+		end
+		SUI.Layout.Apply(key)
+		wide()
+	else
+		f:ClearAllPoints()
+		f:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", x, y)
+		f:SetPoint("BOTTOMRIGHT", UIParent, "BOTTOMRIGHT", -x, y)
+	end
 end
 
 -- toutes les textures decoratives d'une barre (le jeu les raffiche a chaque mise a jour) ; la texture de remplissage reste
@@ -1221,15 +1234,10 @@ function M.StyleXpBars()
 	end
 	if xp then pcall(stripArt, xp) end
 	if rep then pcall(stripArt, rep) end
-	-- Niveau maximum : l'experience n'existe plus, la barre vide ne laisse qu'un cadre sombre -> masquee
-	-- (la reputation suivie, si elle existe, reste a sa place).
-	local maxlv = true
-	local lvl = getglobal("UnitLevel")
-	if type(lvl) ~= "function" then maxlv = false else maxlv = (lvl("player") or 0) >= 60 end
-	if xp then
-		if maxlv then pcall(hideBar, xp) else pcall(pin, xp, "BOTTOMLEFT", 0, 0, 5) end
-	end
-	if rep then pcall(pin, rep, "BOTTOMLEFT", 0, 5, 5) end
+	-- Barre d'experience TOUJOURS visible en mode "fine" (meme au niveau maximum : elle est vide mais presente,
+	-- l'utilisateur qui ne la veut pas choisit "Masquee"). La reputation suivie reste juste au-dessus.
+	if xp then pcall(pin, xp, "bars.xp", 0, 0, 5) end
+	if rep then pcall(pin, rep, "bars.rep", 0, 5, 5) end
 end
 
 function M.HideBlizzard()
