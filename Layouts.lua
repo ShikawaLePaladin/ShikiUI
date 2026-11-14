@@ -704,7 +704,11 @@ end
 -- Cle des liens (profil, mode) ou option changee : tout est replace. Les changements de TAILLE d'un cadre (reglages des modules) sont vus par la
 -- minuterie ci-dessous (pas de minuterie par reglage : une seule, toujours la meme).
 C.Watch("", function(key, value)
-	if key == nil then Layout.InvalidateLinks() end
+	if key == nil then
+		-- reset de profil (v/pos/mm effaces) : tout est replace IMMEDIATEMENT, pas au prochain poll
+		Layout.InvalidateLinks()
+		Layout.ApplyAll()
+	end
 	if key == "layout.links" then Layout.ApplyAll() end
 end)
 

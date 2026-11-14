@@ -948,7 +948,7 @@ local function viewEnter()
 	if not e or not gt then return end
 	gt:SetOwner(b, "ANCHOR_RIGHT")
 	if GetItemInfo(e.id) then
-		gt:SetHyperlink("item:" .. e.ref)       -- seulement un objet deja connu du client (un lien inconnu peut deconnecter)
+		pcall(gt.SetHyperlink, gt, "item:" .. e.ref)   -- seulement un objet deja connu du client ; pcall (AtlasLoot)
 	else
 		local r, g, bl = GetItemQualityColor(e.q)
 		gt:AddLine(e.name, r, g, bl)

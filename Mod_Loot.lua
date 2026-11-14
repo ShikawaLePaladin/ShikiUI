@@ -976,7 +976,7 @@ local function itemTip(owner, str)
 	local gt = getglobal("GameTooltip")
 	if gt and str and str ~= "" then
 		gt:SetOwner(owner, "ANCHOR_RIGHT")
-		gt:SetHyperlink(str)
+		pcall(gt.SetHyperlink, gt, str)   -- pcall : AtlasLoot intercepte les tooltips
 	end
 end
 
