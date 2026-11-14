@@ -589,7 +589,24 @@ function M.HideBlizzard()
 end
 
 -- ---------------------------------------------------------------- cycle de vie
+-- Applique le choix dessus / dessous : (re)ecrit les liens conseilles explicites vers les cadres joueur et cible.
+-- Dessous = defaut du moteur (lien conseille, sans entree) ; dessus = lien explicite TOP. Detachable a tout moment
+-- via le Mover (Accroche a -> Detacher).
+local function relinkSide(side)
+	local L = SUI.Layout
+	if not (L and L.WriteLink and L.items and L.items["unit.player"] and L.items["unit.target"]) then return end
+	local s = (side == "over") and "TOP" or "BOTTOM"
+	if L.ResetLink then
+		L.ResetLink("castbar.player")
+		L.ResetLink("castbar.target")
+	end
+	local gx, gy = L.GapOffsets(s)
+	L.WriteLink("castbar.player", "unit.player", s, gx, gy)
+	L.WriteLink("castbar.target", "unit.target", s, gx, gy)
+end
+
 function M.OnKey(key, value)
+	if key == "castbar.side" then relinkSide(value) end
 	M.ReadConfig()
 	M.ApplyOptions()
 end
@@ -672,6 +689,7 @@ local CB_OPTIONS = {
 		opt("player", "bool", 10, true, { simple = true }),
 		opt("target", "bool", 20, true, { simple = true }),
 		opt("focus", "bool", 30, true, { simple = true }),
+		opt("side", "choice", 35, "under", { choices = { "under", "over" }, simple = true }),
 		opt("width", "number", 40, 220, { min = 100, max = 400, step = 10, simple = true }),
 		opt("owidth", "number", 50, 180, { min = 80, max = 300, step = 10 }),
 		opt("height", "number", 60, 16, { min = 8, max = 32, step = 1, simple = true }),
