@@ -765,8 +765,19 @@ function M.Pass()
 end
 
 -- Un tour complet : lit les reglages, calcule l'etat des groupes, habille ce qui manque, repeint.
+-- Anti-reentrance : un Run declenche des Show/Hide de cadres habilles, leurs OnShow rappellent M.Later,
+-- qui re-programmerait Run pendant qu'il tourne (stack overflow vu en jeu lors de la fermeture de l'assistant).
+M.running = false
 function M.Run()
+	if M.running then M.later = false ; SUI.After(0.2, M.Flush, "skin.flush") ; return end
+	M.running = true
 	M.later = false
+	local okRun, errRun = pcall(M.RunInner)
+	M.running = false
+	if not okRun then SUI.Report("skin run", errRun) end
+end
+
+function M.RunInner()
 	M.ReadConfig()
 	M.Resolve()
 	for i = 1, getn(M.order) do

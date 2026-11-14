@@ -1351,6 +1351,8 @@ end
 function M.ScaleLater()
 	M.scalePending = false
 	if M.frame and M.frame:IsShown() then M.ApplyScale() end
+	-- l'assistant est affine de la meme facon (il ne reagit pas tout seul a ui.scale)
+	if M.WizFit then M.WizFit() end
 end
 
 -- ---------------------------------------------------------------- export / import de profil
