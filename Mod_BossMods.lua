@@ -32,8 +32,11 @@ M.task = nil
 M.cur = nil            -- cle pliee du boss courant, ou nil
 M.curLabel = EMPTY
 M.combatAt = nil       -- instant d'entree en combat avec ce boss
-M.armed = {}           -- barres en cours : { name, endsAt, dur, ev }
+M.armed = {}           -- barres en cours : { name, endsAt, dur, ev, phase, pull }
 M.narmed = 0
+M.flash = nil          -- frame de flash d'ecran (creee hors combat)
+M.flashUntil = nil
+M.pullIgnore = nil     -- ignore les pulls recus juste apres avoir lance le notre
 M.next = {}             -- [evenement] = moment du prochain declenchement
 M.warns = {}            -- [evenement] = instant de l'annonce lead (antidoublon)
 
@@ -1009,8 +1012,17 @@ function M.Detect()
 			M.cur = nil
 			M.curLabel = EMPTY
 			M.combatAt = nil
-			M.armed = {}
-			M.narmed = 0
+			-- les barres de PULL survivent : elles ne dependent pas du boss vise
+			local keep, n = {}, 0
+			local k
+			for k = 1, M.narmed do
+				if M.armed[k].pull then
+					n = n + 1
+					keep[n] = M.armed[k]
+				end
+			end
+			M.armed = keep
+			M.narmed = n
 			M.next = {}
 			M.warns = {}
 		end
@@ -1070,6 +1082,9 @@ function M.Tick()
 		if M.win and M.win:IsShown() then M.Paint() end
 		return
 	end
+	local nowP = GetTime()
+	local p = M.armed[1]
+	if p and p.pull then M.PullTick(nowP) end
 	M.Detect()
 	local d = M.cur and M.BOSSES[M.cur]
 	if not d then return end
@@ -1115,7 +1130,7 @@ function M.Tick()
 			if M.win and M.win:IsShown() then M.Paint() end
 		end
 	end
-	-- purge des barres arrivees a expiration (actives surtout)
+	-- purge des barres arrivees a expiration (le pull est purge par PullTick, pas ici)
 	local i
 	for i = M.narmed, 1, -1 do
 		if now >= M.armed[i].endsAt then
@@ -1295,9 +1310,12 @@ function M.Paint()
 			if e.phase == "active" then
 				span = mmax(1, e.ev.dur or 3)
 				cr, cg, cb = T.c.bad[1], T.c.bad[2], T.c.bad[3]
-			else
+			elseif e.ev.warn then
 				span = mmax(1, C.Get("bossmods.lead") or 10)
 				cr, cg, cb = T.Accent()
+			else
+				span = mmax(1, C.Get("bossmods.lead") or 10)
+				cr, cg, cb = T.c.text[1], T.c.text[2], T.c.text[3]
 			end
 			row.bar:SetStatusBarColor(cr, cg, cb, 0.8)
 			row.bar:SetValue(mmin(1, left / span))
@@ -1309,6 +1327,153 @@ function M.Paint()
 	end
 end
 
+-- ---------------------------------------------------------------- flash d'ecran
+function M.DoFlash()
+	if M.flashUntil and GetTime() < M.flashUntil then return end
+	if not M.flash then
+		local f = CreateFrame("Frame", "ShikiUI_BossModsFlash", UIParent)
+		f:SetFrameStrata("FULLSCREEN")
+		f:SetAllPoints(f)
+		f:EnableMouse(false)
+		f.tex = f:CreateTexture(nil, "BACKGROUND")
+		f.tex:SetTexture(T.tex.white)
+		f.tex:SetAllPoints(f)
+		M.flash = f
+	end
+	M.flashUntil = GetTime() + 0.6
+	M.flash:Show()
+	M.flash.tex:SetVertexColor(T.c.bad[1], T.c.bad[2], T.c.bad[3], 0.18)
+	if not M.flashTask then
+		M.flashTask = SUI.Every(0.1, function()
+			local f2 = M.flash
+			if not f2 or not M.flashUntil then M.FlashStop() return end
+			local left = M.flashUntil - GetTime()
+			if left <= 0 then M.FlashStop() return end
+			f2.tex:SetAlpha((SUI.Mod(left, 0.2) < 0.1) and 0.18 or 0.05)
+		end, "bossmods.flash", true)
+	end
+end
+
+function M.FlashStop()
+	if M.flashTask then
+		SUI.Cancel(M.flashTask)
+		M.flashTask = nil
+	end
+	if M.flash then M.flash:Hide() end
+	M.flashUntil = nil
+end
+
+-- ---------------------------------------------------------------- pull timer synchronise
+M.PREFIX = "ShikiUIBW"
+
+-- /sui pull [secs] : lance le compte a rebours d'engage, diffuse au raid via le canal addon.
+-- Reserves au chef / assistant en raid (comme BigWigs), libre hors raid.
+function M.Pull(secs)
+	if not M.on then return end
+	secs = tonumber(secs) or 10
+	if secs < 3 then secs = 3 end
+	if secs > 60 then secs = 60 end
+	if GetNumRaidMembers() > 0 and not M.CanLead() then
+		SUI.Print(L("msg.bossmods.nolead"))
+		return
+	end
+	M.PullStart(secs, UnitName("player"))
+	local chan = "RAID"
+	if GetNumRaidMembers() == 0 and GetNumPartyMembers() > 0 then chan = "PARTY" end
+	if GetNumRaidMembers() > 0 or GetNumPartyMembers() > 0 then
+		SendChatMessage(L("msg.bossmods.pullchat", secs), chan)
+		if C.Get("bossmods.pull") and type(SendAddonMessage) == "function" then
+			SendAddonMessage(M.PREFIX, "pull:" .. secs .. ":" .. tostring(UnitName("player")), "RAID")
+		end
+	end
+end
+
+function M.CanLead()
+	if GetNumRaidMembers() > 0 then
+		local off = getglobal("IsRaidOfficer")
+		return IsRaidLeader() or (off and off()) or false
+	end
+	if GetNumPartyMembers() > 0 then return IsPartyLeader() or false end
+	return true
+end
+
+-- Demarre la barre de pull localement (lanceur ou reception).
+function M.PullStart(secs, from)
+	M.testing = false
+	M.cur = "pull"
+	M.curLabel = from and (L("mod.bossmods.title") .. " (" .. from .. ")") or L("mod.bossmods.title")
+	local now = GetTime()
+	-- purge des barres de boss : le pull les remplace
+	M.armed = {}
+	M.narmed = 0
+	M.combatAt = nil
+	M.pullAnnounced = {}
+	tinsert(M.armed, { name = "PULL", endsAt = now + secs, ev = { dur = secs, t = secs }, phase = "lead", pull = true })
+	M.narmed = 1
+	if M.win and M.win:IsShown() then M.Paint() end
+	if not M.pullAnnounced then
+		M.pullAnnounced = {}
+	end
+	M.EnsureTask()
+end
+
+-- Decompte (5..1 puis GO) et expiration du pull. PullTick gere tout lui-meme : le pull survit au changement
+-- de cible et Tick retourne tot sans boss vise, donc la purge generale ne verrait jamais la barre expiree.
+function M.PullTick(now)
+	local e = M.armed[1]
+	if not e or not e.pull then return end
+	if now >= e.endsAt then
+		if not e.goDone then
+			e.goDone = true
+			if C.Get("bossmods.pull") then
+				local chan = (GetNumRaidMembers() > 0) and "RAID_WARNING" or nil
+				if chan then SendChatMessage(L("msg.bossmods.pullgo"), chan) else SUI.Print(L("msg.bossmods.pullgo")) end
+				if C.Get("bossmods.sound") then PlaySoundFile("Sound\\Interface\\RaidWarning.wav") end
+			end
+		end
+		tremove(M.armed, 1)
+		M.narmed = M.narmed - 1
+		if M.win and M.win:IsShown() then M.Paint() end
+		return
+	end
+	local left = e.endsAt - now
+	local chan = (GetNumRaidMembers() > 0) and "RAID_WARNING" or nil
+	local n
+	for n = 1, 5 do
+		if left <= n and not M.pullAnnounced[n] then
+			M.pullAnnounced[n] = true
+			if C.Get("bossmods.pull") then
+				if chan then SendChatMessage(L("msg.bossmods.pullin", n), chan) else SUI.Print(L("msg.bossmods.pullin", n)) end
+			end
+		end
+	end
+end
+
+-- Reception du canal addon : pull d'un autre officier.
+function M.OnAddonComm(ev, a1, a2, a3, a4)
+	if not M.on or type(a2) ~= "string" then return end
+	local _, _, who, secs = sfind(a2, "^pull:(%d+):(.+)$")
+	if not who or who == UnitName("player") then return end
+	if M.pullIgnore and GetTime() < M.pullIgnore then return end
+	M.PullStart(tonumber(secs) or 10, who)
+end
+
+-- Fin de combat : les barres de boss disparaissent (les pulls continuent).
+function M.OnCombatEnd()
+	if M.combatAt then
+		M.combatAt = nil
+		local i
+		for i = M.narmed, 1, -1 do
+			if not M.armed[i].pull then
+				tremove(M.armed, i)
+				M.narmed = M.narmed - 1
+			end
+		end
+		if M.win and M.win:IsShown() then M.Paint() end
+	end
+end
+
+-- ---------------------------------------------------------------- cycle de vie
 -- ---------------------------------------------------------------- cycle de vie
 function M.Enable()
 	M.on = true
@@ -1316,6 +1481,8 @@ function M.Enable()
 		M.watching = true
 		C.Watch("bossmods.", M.OnKey)
 	end
+	SUI.On("CHAT_MSG_ADDON", M.OnAddonComm)
+	SUI.On("PLAYER_REGEN_ENABLED", M.OnCombatEnd)
 	M.EnsureTask()
 end
 
@@ -1326,6 +1493,9 @@ function M.Disable()
 		SUI.Cancel(M.task)
 		M.task = nil
 	end
+	SUI.Off("CHAT_MSG_ADDON", M.OnAddonComm)
+	SUI.Off("PLAYER_REGEN_ENABLED", M.OnCombatEnd)
+	M.FlashStop()
 	M.MsgStop()
 	M.armed = {}
 	M.narmed = 0
@@ -1365,6 +1535,9 @@ SUI.RegisterModule("bossmods", {
 		opt("icons", "bool", 70, true),
 		opt("incoming", "bool", 80, true),
 		opt("active", "bool", 90, true),
+		opt("pull", "bool", 100, true),
+		opt("flash", "bool", 110, false),
+		opt("pull", "bool", 120, true),
 	},
 	enable = function() M.Enable() end,
 	disable = function() M.Disable() end,
@@ -1424,6 +1597,9 @@ SUI.RegisterCommand("bossmods", function(rest)
 		M.Close()
 	elseif rest == "test" then
 		M.Test()
+	elseif strfind(rest, "pull", 1, true) then
+		local secs = tonumber(strsub(rest, 6)) or 10
+		M.Pull(secs)
 	else
 		M.ToggleWin()
 	end
