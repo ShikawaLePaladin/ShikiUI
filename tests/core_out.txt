@@ -1,9 +1,0 @@
-# t_core : demarrage
-# t_core : routeur
-# t_core : minuterie
-# t_core : echelle d'urgence
-# t_core : WhenSafe / sortie de combat
-# t_core : modules
-# t_core : deconnexion
-  58 ok, 0 echec(s)
-# t_core : journal d'erreurs persistant
