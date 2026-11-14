@@ -1767,12 +1767,16 @@ function M.WizApply()
 			if sel.mods[name] ~= nil and sel.mods[name] ~= (C.Get("modules." .. name) and true or false) then put("modules." .. name, sel.mods[name]) end
 		end
 	end)
-	-- 4. reglages essentiels (seulement les lignes dont le choix a change et dont le module est coche)
+	-- 4. reglages essentiels (seulement les lignes dont le choix a change et dont le module est coche).
+	-- EXCEPTION : les tailles (actionbars.size, units.width) s'appliquent MEME SI NON MODIFIEES : elles sont
+	-- appliquees APRES la mise en page, dont les presets embarquent leurs propres tailles (ex: minimal = 150) ;
+	-- le choix affiche dans l'assistant doit toujours gagner, sinon il semble ignore.
 	guard("essentials", function()
 		for i = 1, getn(ES) do
 			local r = ES[i]
 			local v = sel.es[r.id]
-			if v ~= nil and v ~= orig.es[r.id] and v ~= "keep" and M.WizEsOn(r) then
+			local force = (r.id == "size" or r.id == "uwidth") and v ~= nil and v ~= "keep"
+			if v ~= nil and (force or (v ~= orig.es[r.id] and v ~= "keep")) and M.WizEsOn(r) then
 				if r.special == "bars" then
 					for j = 1, getn(SUI.options) do
 						local _, _, bar = string.find(SUI.options[j].key or "", "^actionbars%.([a-z0-9]+)%.show$")
