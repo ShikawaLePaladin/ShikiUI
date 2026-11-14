@@ -364,7 +364,38 @@ function M.RowColor(r, view)
 		local cc = RAID_CLASS_COLORS[r.cls]
 		if cc then return cc.r, cc.g, cc.b end
 	end
+	local r, g, b = M.TokenRGB(c.color)
+	if r then return r, g, b end
 	return T.Accent()
+end
+
+-- Design par jetons du style (aucune couleur en dur) : threat.bg = fond de la fenetre (style | panel | bg | inset | none), threat.color =
+-- couleur des barres ordinaires (style = accent). Valeurs lues dans T.c.* a chaque application (le style peut changer).
+M.BGS = { "style", "panel", "bg", "inset", "none" }
+M.COLORS = { "style", "good", "warn", "bad", "dim", "text" }
+M.nobg = {}
+
+function M.TokenRGB(name)
+	local c = (name and name ~= "style") and T.c[name] or nil
+	if c then return c[1], c[2], c[3] end
+	return nil
+end
+
+-- Fond de la fenetre selon threat.bg ; "none" = meme teinte que le panneau, opacite nulle.
+function M.ApplyBack(f, force)
+	local tok = M.cfg.bg or "style"
+	if f.mbTok == tok and not force then return end     -- redimensionnement a la poignee : pas de nouveau SetBackdrop a chaque pas
+	f.mbTok = tok
+	if tok == "none" then
+		local c = T.c.panel
+		local z = M.nobg
+		z[1], z[2], z[3], z[4] = c[1], c[2], c[3], 0
+		T.Backdrop(f, z, T.c.border)
+	elseif tok ~= "style" and T.c[tok] then
+		T.Backdrop(f, T.c[tok], T.c.border)
+	else
+		T.Backdrop(f, T.c.panel, T.c.border)
+	end
 end
 
 -- Police : retrouve l'enregistrement de style d'un texte (Theme.lua : T.items) pour changer sa taille sans toucher au Theme.
@@ -564,12 +595,63 @@ function M.FitTitle(fs, text, avail)
 	return out
 end
 
+-- Niveaux des controles. Le client 1.12 peut changer le niveau du cadre de la fenetre apres sa construction (cadre releve, lien de
+-- position) : des boutons restes a un niveau perime passent SOUS le cadre (qui capte la souris) et ne recoivent plus aucun clic.
+-- On recale donc boutons (+4) et poignee (+5) sur le niveau reel : a l'affichage, au survol, a chaque passage de la minuterie.
+-- Retourne le nombre de cadres recales (aucune table creee : la liste des controles est faite a la construction).
+function M.SyncLevels(w)
+	local base = w.f:GetFrameLevel() or 0
+	local n = 0
+	local ctl = w.ctl
+	if ctl then
+		for i = 1, getn(ctl) do
+			if ctl[i]:GetFrameLevel() ~= base + 4 then
+				ctl[i]:SetFrameLevel(base + 4)
+				n = n + 1
+			end
+		end
+	end
+	if w.grip and w.grip:GetFrameLevel() ~= base + 5 then
+		w.grip:SetFrameLevel(base + 5)
+		n = n + 1
+	end
+	w.lvl = base
+	return n
+end
+
+function M.LevelsStale(w)
+	local base = w.f:GetFrameLevel() or 0
+	if w.lvl ~= base then return true end
+	local c1 = w.ctl and w.ctl[1]
+	if c1 and c1:GetFrameLevel() ~= base + 4 then return true end
+	if w.grip and w.grip:GetFrameLevel() ~= base + 5 then return true end
+	return false
+end
+
+function M.CheckLevels()
+	local w = M.win
+	if w and w.f:IsShown() and M.LevelsStale(w) then M.SyncLevels(w) end
+end
+
+local function winShow()
+	local w = this.win
+	if w then M.SyncLevels(w) end
+end
+
+local function winEnter()
+	local w = this.win
+	if w and M.LevelsStale(w) then M.SyncLevels(w) end
+end
+
 function M.BuildWindow()
 	if M.win then return M.win end
 	local f = T.Panel(UIParent, 190, 100)
 	f:SetFrameStrata("MEDIUM")
 	f:EnableMouse(true)
 	local w = { f = f, rows = {} }
+	f.win = w
+	f:SetScript("OnShow", winShow)
+	f:SetScript("OnEnter", winEnter)
 	w.title = T.Text(f, M.cfg.fontsize, T.c.text, "LEFT", false)
 	M.Track(w.title)
 	w.title:SetPoint("TOPLEFT", f, "TOPLEFT", 4, -4)
@@ -595,9 +677,14 @@ function M.BuildWindow()
 	w.grip:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -1, 1)
 	w.grip:SetScript("OnMouseDown", gripDown)
 	w.grip:SetScript("OnMouseUp", gripUp)
+	w.ctl = { w.bClose, w.bReport, w.bView }
 	for r = 1, M.PREROWS do w.rows[r] = M.BuildRow(w) end
 	M.win = w
+	M.SyncLevels(w)
 	SUI.Layout.Register(f, "threat.win", "BOTTOMRIGHT", -20, 330)
+	if SUI.Mover and SUI.Mover.Register then
+		SUI.Mover.Register("threat.win", f, { label = "mod.mover.n.threat.win", scale = true })
+	end
 	f:Hide()
 	-- Engrenage au coin bas gauche (la poignee de taille est au coin bas droit) : il ne prend aucune place au titre.
 	T.GearButton(f, "threat", { size = 14, point = "BOTTOMLEFT", x = -7, y = -7, title = L("msg.threat.gear"),
@@ -630,6 +717,7 @@ function M.ApplyWindow()
 	w.nrows = mmin(rows, getn(w.rows))
 	f:SetWidth(width)
 	f:SetHeight(height)
+	M.ApplyBack(f)
 	local V = SUI.Visibility
 	if V and w.vp and V.byFrame[w.vp] then V.SetBase(w.vp, c.alpha) else f:SetAlpha(c.alpha) end
 	w.empty:SetWidth(width - 12)   -- largeur fixe : le texte d'attente passe a la ligne au lieu de depasser du cadre
@@ -1108,6 +1196,7 @@ function M.Tick()
 		end
 	end
 	M.UpdateVisibility()
+	M.CheckLevels()
 	if M.flashUntil and now >= M.flashUntil then
 		M.flashUntil = nil
 		M.ver = M.ver + 1
@@ -1127,6 +1216,8 @@ function M.ReadConfig()
 	c.spacing = C.Get("threat.spacing")
 	c.alpha = C.Get("threat.alpha")
 	c.classcolor = C.Get("threat.classcolor")
+	c.bg = C.Get("threat.bg")
+	c.color = C.Get("threat.color")
 	c.rate = C.Get("threat.rate")
 	c.warn = C.Get("threat.warn")
 	c.sound = C.Get("threat.sound")
@@ -1187,6 +1278,7 @@ end
 
 function M.OnAccent()
 	M.ver = M.ver + 1
+	if M.win then M.ApplyBack(M.win.f, true) end     -- le repeint du style remet le fond du panneau : on repose le choix de l'utilisateur
 end
 
 function M.EnsureWindow()
@@ -1303,6 +1395,8 @@ end
 
 local function viewText(o, v) return L("choice.threat.view." .. v) end
 local function modeText(o, v) return L("choice.threat.tankmode." .. v) end
+local function bgText(o, v) return L("choice.threat.bg." .. v) end
+local function colText(o, v) return L("choice.threat.color." .. v) end
 
 local SW, SA, SD, SR = "mod.threat.sec.window", "mod.threat.sec.alerts", "mod.threat.sec.data", "mod.threat.sec.report"
 local SLK = "mod.threat.sec.look"
@@ -1322,6 +1416,8 @@ local function addCommon(list)
 			tinsert(list, d[i])
 		end
 	end
+	tinsert(list, opt("bg", "choice", 830, "style", { choices = M.BGS, choiceText = bgText, section = SLK }))
+	tinsert(list, opt("color", "choice", 831, "style", { choices = M.COLORS, choiceText = colText, section = SLK }))
 	return list
 end
 

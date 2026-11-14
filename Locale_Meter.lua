@@ -4,6 +4,21 @@ ShikiUI = ShikiUI or {}
 local SUI = ShikiUI
 
 SUI.AddStrings("fr", {
+	["opt.meter.bg"] = "Fond des fenetres",
+	["tip.meter.bg"] = "Fond de chaque fenetre du compteur, pris dans les couleurs du style actif : panneau, fond sombre, creux ou transparent.",
+	["choice.meter.bg.style"] = "Defaut du style",
+	["choice.meter.bg.panel"] = "Panneau",
+	["choice.meter.bg.bg"] = "Fond sombre",
+	["choice.meter.bg.inset"] = "Creux (tres sombre)",
+	["choice.meter.bg.none"] = "Transparent",
+	["opt.meter.color"] = "Couleur des barres",
+	["tip.meter.color"] = "Couleur des barres qui ne prennent pas la couleur de classe. Defaut du style = couleur d'accent.",
+	["choice.meter.color.style"] = "Defaut du style",
+	["choice.meter.color.good"] = "Vert",
+	["choice.meter.color.warn"] = "Orange",
+	["choice.meter.color.bad"] = "Rouge",
+	["choice.meter.color.dim"] = "Gris",
+	["choice.meter.color.text"] = "Clair",
 	["cat.meter"] = "Compteurs",
 	["opt.modules.meter"] = "Compteurs de degats ShikiUI",
 	["tip.modules.meter"] = "Remplace OctoMeter / DPSMate : degats, DPS, soins, surplus, dissipation, interruptions, morts, degats subis, detail par sort (clic sur une ligne), segments (combat actuel, total, precedents, boss) et rapport au chat. Utilise Nampower s'il est la (sinon le journal de combat). Fenetres redimensionnables a la souris (poignee du coin).",
@@ -202,6 +217,21 @@ SUI.AddStrings("fr", {
 })
 
 SUI.AddStrings("en", {
+	["opt.meter.bg"] = "Window background",
+	["tip.meter.bg"] = "Background of each meter window, taken from the active style colors: panel, dark, inset or transparent.",
+	["choice.meter.bg.style"] = "Style default",
+	["choice.meter.bg.panel"] = "Panel",
+	["choice.meter.bg.bg"] = "Dark background",
+	["choice.meter.bg.inset"] = "Inset (very dark)",
+	["choice.meter.bg.none"] = "Transparent",
+	["opt.meter.color"] = "Bar color",
+	["tip.meter.color"] = "Color of the bars that do not use the class color. Style default = accent color.",
+	["choice.meter.color.style"] = "Style default",
+	["choice.meter.color.good"] = "Green",
+	["choice.meter.color.warn"] = "Orange",
+	["choice.meter.color.bad"] = "Red",
+	["choice.meter.color.dim"] = "Gray",
+	["choice.meter.color.text"] = "Light",
 	["cat.meter"] = "Meters",
 	["opt.modules.meter"] = "ShikiUI damage meters",
 	["tip.modules.meter"] = "Replaces OctoMeter / DPSMate: damage, DPS, healing, overheal, dispels, interrupts, deaths, damage taken, per-spell detail (click a row), segments (current fight, total, previous, boss) and chat report. Uses Nampower when present (otherwise the combat log). Windows resize with the mouse (corner grip).",

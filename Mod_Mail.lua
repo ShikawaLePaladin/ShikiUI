@@ -17,7 +17,10 @@
 --  6 COD, 8 objet, 11 texte, 13 MJ), GetInboxItem, TakeInboxMoney / TakeInboxItem / DeleteInboxItem(index), CheckInbox, ClickSendMailItemButton,
 --  GetSendMailItem, SendMail(destinataire, sujet, texte), SendMailNameEditBox, MAIL_SHOW / MAIL_CLOSED / MAIL_INBOX_UPDATE / MAIL_SEND_SUCCESS,
 --  hotels des ventes reconnus par "Auction House" dans le nom de l'expediteur (liste de TurtleMail).
--- NON VERIFIE EN JEU : tout ; la position du panneau a cote de MailFrame ; le texte exact de l'erreur d'inventaire plein ; le 2e retour de
+-- ENVOI MULTIPLE (panneau, grille des sacs, Maj-clic / clic droit, file avec progression et annulation) : voir le bloc du meme nom plus bas.
+--  NON VERIFIE EN JEU en plus : texte exact des erreurs du courrier (M.MailErr), noms des addons / cadres de courrier tiers (M.OTHERADDONS,
+--  M.OTHERFRAMES), SetSendMailMoney, retour de la piece jointe par ClickSendMailItemButton, ContainerFrameItemButton_OnClick (Maj-clic).
+-- NON VERIFIE EN JEU : tout ;la position du panneau a cote de MailFrame ; le texte exact de l'erreur d'inventaire plein ; le 2e retour de
 --  GetContainerNumFreeSlots ; le delai reel du serveur entre un geste et MAIL_INBOX_UPDATE ; ClearCursor avant le depot d'une piece jointe.
 ShikiUI = ShikiUI or {}
 local SUI = ShikiUI
@@ -230,6 +233,7 @@ end
 
 function M.OnError(ev, msg)
 	if not msg then return end
+	if M.MultiOnError(msg) then return end
 	if M.sending then
 		M.StopSend(msg)
 	elseif M.active and (sfind(slower(msg), "inventory is full", 1, true) or (getglobal("ERR_INV_FULL") and msg == getglobal("ERR_INV_FULL"))) then
@@ -401,6 +405,7 @@ function M.SendStep()
 end
 
 function M.OnSendSuccess()
+	if M.MultiOnSuccess() then return end
 	if M.sending and M.waitSend then
 		M.waitSend = false
 		M.sent = M.sent + 1
@@ -795,6 +800,8 @@ function M.Tick()
 	end
 	if M.active then M.Step() end
 	if M.sending then M.SendStep() end
+	M.Sync()
+	if M.mrun then M.MultiStep() end
 	if M.dirty or M.active or M.sending then M.Refresh() end
 end
 
@@ -846,7 +853,7 @@ end
 
 function M.Build()
 	if M.frame then return end
-	local f = T.Panel(UIParent, 250, 114)
+	local f = T.Panel(UIParent, 250, 136)
 	f:SetFrameStrata("MEDIUM")
 	f:EnableMouse(true)
 	f:Hide()
@@ -872,6 +879,11 @@ function M.Build()
 	f.fix = T.Button(f, L("msg.mail.btn.fix"), 234, 18, function() M.OnRepair() end)
 	f.fix:SetPoint("TOPLEFT", f, "TOPLEFT", 8, -90)
 	M.Tip(f.fix, "tip.mail.btn.fix")
+	f.multi = T.Button(f, L("msg.mail.m.title"), 234, 18, function()
+		M.mhide = not M.mhide
+		M.Sync()
+	end)
+	f.multi:SetPoint("TOPLEFT", f, "TOPLEFT", 8, -110)
 	f.recent = {}
 	for i = 1, 8 do
 		local b = T.Button(f, "", 56, 16, function(btn)
@@ -893,6 +905,752 @@ function M.Build()
 	M.ApplyOptions()
 end
 
+-- ---------------------------------------------------------------- ENVOI MULTIPLE (panneau, grille des sacs, file d'attente)
+-- Un panneau a cote du panneau du module (ou de MailFrame) sur la page Envoyer : liste visuelle des objets a envoyer (icone, quantite ; un clic
+-- retire), destinataire (champ du jeu SendMailNameEditBox + liste deroulante des 8 derniers), or optionnel par courrier, sujet par defaut
+-- (mail.subject, sinon nom de l'objet), bouton Envoyer tout (un courrier par pile : on attend MAIL_SEND_SUCCESS ou l'erreur avant le suivant,
+-- delai mail.multidelay), barre de progression, Annuler, confirmation avec recapitulatif. Un objet refuse (lie, destinataire inconnu, boite
+-- pleine...) est saute et liste a la fin ; 3 erreurs de destinataire de suite arretent tout. Le panneau ne cree aucun champ de saisie.
+-- AJOUT depuis les sacs : Maj-clic ou clic droit (enveloppe de ContainerFrameItemButton_OnClick, posee a l'ouverture du courrier et rendue a la
+-- fermeture ; coupee si un autre addon de courrier est charge) et grille cliquable (bouton Sacs). Une seule piece jointe par courrier en 1.12.
+-- Couts : rien tant que la boite est fermee (panneau cache, pas d'enveloppe, pas de minuterie propre : M.Tick l'appelle).
+M.ml = {}              -- objets a envoyer : { bag, slot, id, name, tex, count, done }
+M.nml = 0
+M.mrun, M.mstop = false, false
+M.mi, M.mtotal, M.mdone, M.msent = 1, 0, 0, 0
+M.mwait, M.msince, M.mnext, M.mcons = false, 0, 0, 0
+M.mto = nil
+M.mskip = {}           -- lignes "nom : raison"
+M.nskip = 0
+M.mpage = 0
+M.mdirty = true
+M.mhide = false        -- ferme a la main (/sui mail multi) pour cette ouverture
+M.marmTo, M.marmUntil = nil, 0
+M.mreport = ""
+M.hooked, M.chain = false, false
+M.MAXML = 100
+M.PAGE = 24
+M.GOLDS = { 0, 1, 5, 10, 50, 100, 500 }
+M.OTHERADDONS = { "TurtleMail", "MailManager", "SendMailPlus" }
+M.OTHERFRAMES = { "TurtleMailFrame", "TurtleMailSendFrame", "TurtleMail_Frame" }
+
+-- Objet d'une case : id, nom, icone, quantite (nil si case vide).
+function M.ItemAt(bag, slot)
+	local link = GetContainerItemLink(bag, slot)
+	if not link then return nil end
+	local id = idOf(link)
+	if not id then return nil end
+	local _, _, name = sfind(link, "%[(.-)%]")
+	local tex, count = GetContainerItemInfo(bag, slot)
+	return id, name or "?", tex, count or 1
+end
+
+function M.OtherMail()
+	if M.forceHook then return false end
+	local ial = getglobal("IsAddOnLoaded")
+	if type(ial) == "function" then
+		for i = 1, getn(M.OTHERADDONS) do
+			if ial(M.OTHERADDONS[i]) then return true end
+		end
+	end
+	return false
+end
+
+function M.MultiFind(bag, slot)
+	for i = 1, M.nml do
+		local e = M.ml[i]
+		if e.bag == bag and e.slot == slot then return i end
+	end
+	return nil
+end
+
+function M.MultiAdd(bag, slot)
+	if M.mrun then SUI.Print(L("msg.mail.m.busy")) return false end
+	if M.MultiFind(bag, slot) then return false end
+	local id, name, tex, count = M.ItemAt(bag, slot)
+	if not id then return false end
+	if M.nml >= M.MAXML then SUI.Print(L("msg.mail.m.full", M.MAXML)) return false end
+	M.nml = M.nml + 1
+	M.ml[M.nml] = { bag = bag, slot = slot, id = id, name = name, tex = tex, count = count }
+	M.marmTo = nil
+	M.mdirty = true
+	return true
+end
+
+function M.MultiRemove(i)
+	if M.mrun then SUI.Print(L("msg.mail.m.busy")) return false end
+	if i < 1 or i > M.nml then return false end
+	table.remove(M.ml, i)
+	M.nml = M.nml - 1
+	M.marmTo = nil
+	local last = math.floor((M.nml - 1) / M.PAGE)
+	if last < 0 then last = 0 end
+	if M.mpage > last then M.mpage = last end
+	M.mdirty = true
+	return true
+end
+
+function M.MultiToggle(bag, slot)
+	local i = M.MultiFind(bag, slot)
+	if i then return M.MultiRemove(i) end
+	return M.MultiAdd(bag, slot)
+end
+
+function M.MultiClear()
+	if M.mrun then SUI.Print(L("msg.mail.m.busy")) return false end
+	for i = M.nml, 1, -1 do M.ml[i] = nil end
+	M.nml = 0
+	M.mpage = 0
+	M.marmTo = nil
+	M.mdirty = true
+	return true
+end
+
+-- Ajoute (ou, si tout y est deja, retire) tous les objets d'un sac.
+function M.MultiBag(bag)
+	if M.mrun then SUI.Print(L("msg.mail.m.busy")) return end
+	local size = GetContainerNumSlots(bag) or 0
+	local all, any = true, false
+	for s = 1, size do
+		if M.ItemAt(bag, s) then
+			any = true
+			if not M.MultiFind(bag, s) then all = false end
+		end
+	end
+	if not any then return end
+	for s = 1, size do
+		if M.ItemAt(bag, s) then
+			local i = M.MultiFind(bag, s)
+			if all then
+				if i then M.MultiRemove(i) end
+			elseif not i then
+				M.MultiAdd(bag, s)
+			end
+		end
+	end
+end
+
+function M.MultiGold()
+	local g = C.Get("mail.multigold") or 0
+	if g < 0 then g = 0 end
+	return g
+end
+
+function M.MultiTo()
+	local box = getglobal("SendMailNameEditBox")
+	local t = (box and box.GetText and box:GetText()) or ""
+	t = string.gsub(t, "^%s+", "")
+	t = string.gsub(t, "%s+$", "")
+	return t
+end
+
+function M.MultiSubject()
+	local s = C.Get("mail.subject") or ""
+	if s == "" then return nil end
+	return s
+end
+
+-- Classe un message d'erreur du serveur : "player" (destinataire), "full" (boite pleine), "bound" (objet lie), "other", ou nil (sans rapport).
+function M.MailErr(msg)
+	if type(msg) ~= "string" then return nil end
+	local m = slower(msg)
+	if sfind(m, "not found", 1, true) or sfind(m, "no such", 1, true) or sfind(m, "cannot find", 1, true) or sfind(m, "unknown", 1, true)
+		or sfind(m, "introuvable", 1, true) or sfind(m, "inconnu", 1, true) or sfind(m, "doesn't exist", 1, true) then
+		return "player"
+	end
+	if sfind(m, "full", 1, true) or sfind(m, "plein", 1, true) then return "full" end
+	if sfind(m, "bound", 1, true) or sfind(m, "cannot mail", 1, true) or sfind(m, "can't mail", 1, true) or sfind(m, "li\195\169", 1, true) then
+		return "bound"
+	end
+	if sfind(m, "mail", 1, true) or sfind(m, "courrier", 1, true) then return "other" end
+	return nil
+end
+
+-- Retrouve l'objet d'une entree : meme case, sinon une autre case portant le meme objet et la meme quantite (les sacs ont pu bouger).
+function M.MultiResolve(e)
+	local id, _, _, count = M.ItemAt(e.bag, e.slot)
+	if id == e.id and count == e.count then return true end
+	for bag = 0, 4 do
+		local size = GetContainerNumSlots(bag) or 0
+		for s = 1, size do
+			local id2, _, _, c2 = M.ItemAt(bag, s)
+			if id2 == e.id and c2 == e.count then
+				local taken = false
+				for j = 1, M.nml do
+					local o = M.ml[j]
+					if o ~= e and not o.done and o.bag == bag and o.slot == s then taken = true end
+				end
+				if not taken then
+					e.bag, e.slot = bag, s
+					return true
+				end
+			end
+		end
+	end
+	return false
+end
+
+-- Reprend la piece jointe restee dans le courrier (apres une erreur) et la rend au sac.
+function M.MultiRelease()
+	ClearCursor()
+	if GetSendMailItem and GetSendMailItem() then
+		ClickSendMailItemButton()
+		ClearCursor()
+	end
+end
+
+function M.MultiSkip(e, why)
+	M.nskip = M.nskip + 1
+	M.mskip[M.nskip] = L("msg.mail.m.skipline", e.name or "?", L("msg.mail.m.why." .. why))
+	e.res = why
+	M.mdone = M.mdone + 1
+	M.mdirty = true
+end
+
+function M.MultiRecap(to)
+	local names = ""
+	local n = M.nml
+	for i = 1, n do
+		if i > 4 then
+			names = names .. ", ..."
+			break
+		end
+		local e = M.ml[i]
+		names = names .. (i > 1 and ", " or "") .. (e.name or "?") .. (e.count > 1 and ("x" .. e.count) or "")
+	end
+	local g = M.MultiGold()
+	return L("msg.mail.m.recap", n, to, g > 0 and L("msg.mail.m.recap.gold", g) or "", names)
+end
+
+-- Demande d'envoi : arme (recapitulatif) ou execute. Retourne true quand la file demarre.
+function M.MultiStart(to, confirmed)
+	if not M.open then SUI.Print(L("msg.mail.closed")) return false end
+	if M.mrun then SUI.Print(L("msg.mail.m.busy")) return false end
+	if type(to) ~= "string" or to == "" then to = M.MultiTo() end
+	if to == "" then to = M.Recent()[1] or "" end
+	if to == "" then SUI.Print(L("msg.mail.noto")) return false end
+	if slower(to) == slower(UnitName("player") or "") then SUI.Print(L("msg.mail.self")) return false end
+	if M.nml == 0 then SUI.Print(L("msg.mail.nothing")) return false end
+	if C.Get("mail.confirmsend") and not (confirmed and M.marmTo == to and GetTime() < M.marmUntil) then
+		M.marmTo = to
+		M.marmUntil = GetTime() + 10
+		M.mreport = M.MultiRecap(to)
+		SUI.Print(M.mreport)
+		M.mdirty = true
+		return false
+	end
+	M.marmTo = nil
+	M.mrun, M.mstop = true, false
+	M.mto = to
+	M.mi, M.mdone, M.msent, M.mcons = 1, 0, 0, 0
+	M.mtotal = M.nml
+	M.mwait = false
+	M.mnext = 0
+	for i = M.nskip, 1, -1 do M.mskip[i] = nil end
+	M.nskip = 0
+	for i = 1, M.nml do
+		M.ml[i].done, M.ml[i].res = nil, nil
+	end
+	M.mreport = ""
+	M.mdirty = true
+	return true
+end
+
+-- Fin de file : retire les objets envoyes de la liste, resume dans le chat (objets sautes en dernier).
+function M.MultiFinish(why)
+	if not M.mrun then return end
+	M.mrun, M.mwait = false, false
+	M.MultiRelease()
+	for i = M.nml, 1, -1 do
+		if M.ml[i].done then
+			table.remove(M.ml, i)
+			M.nml = M.nml - 1
+		end
+	end
+	local last = math.floor((M.nml - 1) / M.PAGE)
+	if last < 0 then last = 0 end
+	if M.mpage > last then M.mpage = last end
+	if why == "cancel" then
+		M.mreport = L("msg.mail.m.cancelled", M.msent, M.mtotal)
+	elseif why then
+		M.mreport = L("msg.mail.m.aborted", L("msg.mail.m.why." .. why))
+	else
+		M.mreport = L("msg.mail.m.done", M.msent, M.mto or "?")
+	end
+	SUI.Print(M.mreport)
+	if M.nskip > 0 then
+		SUI.Print(L("msg.mail.m.skipped", M.nskip))
+		for i = 1, M.nskip do SUI.Print(M.mskip[i]) end
+	end
+	M.mdirty = true
+end
+
+-- Annuler : le courrier deja parti est attendu (sa reponse arrive), puis la file s'arrete.
+function M.MultiCancel()
+	if not M.mrun then return end
+	M.mstop = true
+	if not M.mwait then M.MultiFinish("cancel") end
+	M.mdirty = true
+end
+
+function M.MultiFail(e, why)
+	M.mwait = false
+	M.MultiRelease()
+	M.MultiSkip(e, why)
+	M.mi = M.mi + 1
+	M.mnext = GetTime() + (C.Get("mail.multidelay") or 1)
+	if why == "player" or why == "full" then M.mcons = M.mcons + 1 else M.mcons = 0 end
+end
+
+function M.MultiStep()
+	if M.mwait then
+		if GetTime() - M.msince < 8 then return end
+		M.MultiFail(M.ml[M.mi], "timeout")
+	end
+	if M.mstop then M.MultiFinish("cancel") return end
+	if M.mcons >= 3 then M.MultiFinish("errors") return end
+	if GetTime() < M.mnext then return end
+	while M.mi <= M.nml and M.ml[M.mi].done do M.mi = M.mi + 1 end
+	if M.mi > M.nml then M.MultiFinish(nil) return end
+	local e = M.ml[M.mi]
+	if not M.MultiResolve(e) then
+		M.MultiSkip(e, "missing")
+		M.mi = M.mi + 1
+		return
+	end
+	ClearCursor()
+	PickupContainerItem(e.bag, e.slot)
+	ClickSendMailItemButton()
+	local name = GetSendMailItem()
+	if not name then
+		ClearCursor()
+		M.MultiSkip(e, "locked")
+		M.mi = M.mi + 1
+		return
+	end
+	local g = M.MultiGold()
+	local setm = getglobal("SetSendMailMoney")
+	if g > 0 and type(setm) == "function" then setm(g * 10000) end
+	M.mwait = true             -- avant SendMail : une erreur peut arriver pendant l'appel
+	M.msince = GetTime()
+	SendMail(M.mto, M.MultiSubject() or name, "")
+end
+
+function M.MultiOnSuccess()
+	if not (M.mrun and M.mwait) then return false end
+	local e = M.ml[M.mi]
+	M.mwait = false
+	if e then e.done = true end
+	M.msent = M.msent + 1
+	M.mdone = M.mdone + 1
+	M.mi = M.mi + 1
+	M.mcons = 0
+	M.mnext = GetTime() + (C.Get("mail.multidelay") or 1)
+	M.Remember(M.mto)
+	M.mdirty = true
+	return true
+end
+
+function M.MultiOnError(msg)
+	if not (M.mrun and M.mwait) then return false end
+	local kind = M.MailErr(msg)
+	if not kind then return false end
+	M.MultiFail(M.ml[M.mi], kind)
+	return true
+end
+
+-- ---------------------------------------------------------------- ajout depuis les sacs (Maj-clic / clic droit)
+function M.CaptureOK()
+	if not (M.open and M.mp and M.mp:IsShown() and not M.mrun) then return false end
+	if not C.Get("mail.multihook") or M.OtherMail() then return false end
+	return not (CursorHasItem and CursorHasItem())
+end
+
+function M.BagClick(button, ignoreShift)
+	if M.hooked and M.CaptureOK() and not ignoreShift then
+		local b = this
+		local shift = type(IsShiftKeyDown) == "function" and IsShiftKeyDown()
+		if b and b.GetParent and b:GetParent() and (button == "RightButton" or (button == "LeftButton" and shift)) then
+			M.MultiToggle(b:GetParent():GetID(), b:GetID())
+			M.MultiPickRefresh()
+			M.MultiRefresh()
+			return
+		end
+	end
+	return M.origClick(button, ignoreShift)
+end
+
+function M.HookOn()
+	if M.hooked then return end
+	M.hooked = true
+	if M.chain or type(getglobal("ContainerFrameItemButton_OnClick")) ~= "function" then return end
+	M.origClick = getglobal("ContainerFrameItemButton_OnClick")
+	setglobal("ContainerFrameItemButton_OnClick", M.BagClick)
+	M.chain = true
+end
+
+-- Rend la fonction du jeu si personne ne l'a enveloppee depuis ; sinon l'enveloppe reste en place mais ne fait que transmettre.
+function M.HookOff()
+	if not M.hooked then return end
+	M.hooked = false
+	if M.chain and getglobal("ContainerFrameItemButton_OnClick") == M.BagClick then
+		setglobal("ContainerFrameItemButton_OnClick", M.origClick)
+		M.chain = false
+	end
+end
+
+-- ---------------------------------------------------------------- panneau et grille
+function M.SendTabVisible()
+	local sf = getglobal("SendMailFrame")
+	if sf and sf.IsVisible then return sf:IsVisible() and true or false end
+	return true
+end
+
+function M.MultiAnchorTarget()
+	for i = 1, getn(M.OTHERFRAMES) do
+		local o = getglobal(M.OTHERFRAMES[i])
+		if type(o) == "table" and o.IsVisible and o:IsVisible() then return o, "right" end
+	end
+	if M.frame and M.frame:IsShown() then return M.frame, "below" end
+	local mf = getglobal("MailFrame")
+	if mf then return mf, "right" end
+	return UIParent, "center"
+end
+
+function M.MultiPlace()
+	local f = M.mp
+	if not f then return end
+	local ref, how = M.MultiAnchorTarget()
+	if M.manchor == ref and M.mhow == how then return end
+	M.manchor, M.mhow = ref, how
+	f:ClearAllPoints()
+	if how == "below" then
+		f:SetPoint("TOPLEFT", ref, "BOTTOMLEFT", 0, -4)
+	elseif how == "right" then
+		f:SetPoint("TOPLEFT", ref, "TOPRIGHT", 4, 0)
+	else
+		f:SetPoint("CENTER", ref, "CENTER", 0, 0)
+	end
+end
+
+local function cellTip(b)
+	local g = getglobal("GameTooltip")
+	if g and b.tipText then
+		g:SetOwner(b, "ANCHOR_RIGHT")
+		g:SetText(b.tipText, nil, nil, nil, nil, 1)
+		g:Show()
+	end
+end
+
+local function cellOut()
+	local g = getglobal("GameTooltip")
+	if g then g:Hide() end
+end
+
+local function makeCell(parent, size)
+	local b = T.Button(parent, "", size, size, nil)
+	b.icon = b:CreateTexture(nil, "ARTWORK")
+	b.icon:SetPoint("TOPLEFT", b, "TOPLEFT", 2, -2)
+	b.icon:SetPoint("BOTTOMRIGHT", b, "BOTTOMRIGHT", -2, 2)
+	if b.icon.SetTexCoord then b.icon:SetTexCoord(0.07, 0.93, 0.07, 0.93) end
+	b.cnt = T.Text(b, 9, T.c.text, "RIGHT", true)
+	b.cnt:SetPoint("BOTTOMRIGHT", b, "BOTTOMRIGHT", -2, 2)
+	b:SetScript("OnEnter", function() cellTip(this) end)
+	b:SetScript("OnLeave", function() cellOut() end)
+	return b
+end
+
+function M.MultiPickRefresh()
+	local f = M.pk
+	if not f or not f:IsShown() then return end
+	local n = 0
+	for bag = 0, 4 do
+		local size = GetContainerNumSlots(bag) or 0
+		for s = 1, size do
+			local id, name, tex, count = M.ItemAt(bag, s)
+			if id and n < getn(f.cells) then
+				n = n + 1
+				local b = f.cells[n]
+				b.bag, b.slot = bag, s
+				b.icon:SetTexture(tex)
+				setText(b.cnt, count > 1 and tostring(count) or "")
+				b.tipText = name
+				T.SetSelected(b, M.MultiFind(bag, s) ~= nil)
+				b:Show()
+			end
+		end
+	end
+	for i = n + 1, getn(f.cells) do f.cells[i]:Hide() end
+end
+
+function M.BuildPicker()
+	if M.pk then return M.pk end
+	local COLS, ROWS, CS = 10, 14, 24
+	local f = T.Panel(M.mp, COLS * (CS + 2) + 14, ROWS * (CS + 2) + 34)
+	f:SetFrameStrata("HIGH")
+	f:EnableMouse(true)
+	f:SetPoint("TOPLEFT", M.mp, "TOPRIGHT", 4, 0)
+	f:Hide()
+	f.cells = {}
+	f.bags = {}
+	for i = 0, 4 do
+		local b = T.Button(f, "B" .. i, 36, 18, function(btn)
+			M.MultiBag(btn.bagIdx)
+			M.MultiPickRefresh()
+		end)
+		b.bagIdx = i
+		b:SetPoint("TOPLEFT", f, "TOPLEFT", 6 + i * 38, -6)
+		f.bags[i + 1] = b
+	end
+	for i = 1, COLS * ROWS do
+		local r = math.floor((i - 1) / COLS)
+		local c = i - 1 - r * COLS
+		local b = makeCell(f, CS)
+		b.onclick = function(btn)
+			if btn.bag then
+				M.MultiToggle(btn.bag, btn.slot)
+				M.MultiPickRefresh()
+			end
+		end
+		b:SetPoint("TOPLEFT", f, "TOPLEFT", 6 + c * (CS + 2), -28 - r * (CS + 2))
+		b:Hide()
+		f.cells[i] = b
+	end
+	M.pk = f
+	return f
+end
+
+function M.MultiPick()
+	if not M.mp then return end
+	local f = M.BuildPicker()
+	if f:IsShown() then
+		f:Hide()
+	else
+		f:Show()
+		M.MultiPickRefresh()
+	end
+end
+
+function M.MultiDrop()
+	local d = M.mp and M.mp.drop
+	if not d then return end
+	if d:IsShown() then d:Hide() return end
+	local list = M.Recent()
+	local n = 0
+	for i = 1, 8 do
+		local b = d.items[i]
+		if list[i] then
+			n = n + 1
+			setText(b.label, list[i])
+			b.name = list[i]
+			b:Show()
+		else
+			b:Hide()
+		end
+	end
+	if n == 0 then return end
+	d:SetHeight(n * 18 + 6)
+	d:Show()
+end
+
+function M.MultiPickName(name)
+	local box = getglobal("SendMailNameEditBox")
+	if box and box.SetText and name then box:SetText(name) end
+	if M.mp and M.mp.drop then M.mp.drop:Hide() end
+	M.mdirty = true
+end
+
+function M.MultiCycleGold()
+	local cur = M.MultiGold()
+	local nxt = M.GOLDS[1]
+	for i = 1, getn(M.GOLDS) do
+		if M.GOLDS[i] > cur then
+			nxt = M.GOLDS[i]
+			break
+		end
+	end
+	C.Set("mail.multigold", nxt)
+	M.marmTo = nil
+	M.mdirty = true
+end
+
+function M.MultiSendClick()
+	local to = M.MultiTo()
+	M.MultiStart(to, true)
+	M.MultiRefresh()
+end
+
+function M.BuildMulti()
+	if M.mp then return M.mp end
+	local W0, CS = 250, 26
+	local f = T.Panel(UIParent, W0, 232)
+	f:SetFrameStrata("MEDIUM")
+	f:EnableMouse(true)
+	f:Hide()
+	f.title = T.Text(f, 11, T.c.text, "LEFT")
+	f.title:SetPoint("TOPLEFT", f, "TOPLEFT", 8, -8)
+	f.title:SetWidth(170)
+	f.prev = T.Button(f, "<", 20, 16, function() if M.mpage > 0 then M.mpage = M.mpage - 1 M.mdirty = true end end)
+	f.prev:SetPoint("TOPRIGHT", f, "TOPRIGHT", -32, -6)
+	f.next = T.Button(f, ">", 20, 16, function()
+		if (M.mpage + 1) * M.PAGE < M.nml then M.mpage = M.mpage + 1 M.mdirty = true end
+	end)
+	f.next:SetPoint("TOPRIGHT", f, "TOPRIGHT", -8, -6)
+	f.cells = {}
+	for i = 1, M.PAGE do
+		local r = math.floor((i - 1) / 8)
+		local c = i - 1 - r * 8
+		local b = makeCell(f, CS)
+		b.idx = i
+		b.onclick = function(btn)
+			local ix = M.mpage * M.PAGE + btn.idx
+			if ix <= M.nml then M.MultiRemove(ix) M.MultiRefresh() M.MultiPickRefresh() end
+		end
+		b:SetPoint("TOPLEFT", f, "TOPLEFT", 8 + c * (CS + 2), -26 - r * (CS + 2))
+		f.cells[i] = b
+	end
+	f.empty = T.Text(f, 10, T.c.dim or T.c.text, "CENTER")
+	f.empty:SetPoint("TOP", f, "TOP", 0, -50)
+	f.empty:SetWidth(220)
+	-- destinataire : le champ du jeu reste la source ; ce bouton lui donne le focus, la fleche ouvre les derniers destinataires
+	f.to = T.Button(f, "", 202, 18, function()
+		local box = getglobal("SendMailNameEditBox")
+		if box and box.SetFocus then box:SetFocus() end
+	end)
+	f.to.label:SetWidth(196)
+	f.to:SetPoint("TOPLEFT", f, "TOPLEFT", 8, -112)
+	f.dropb = T.Button(f, "v", 28, 18, function() M.MultiDrop() end)
+	f.dropb:SetPoint("TOPRIGHT", f, "TOPRIGHT", -8, -112)
+	f.drop = T.Panel(f, 130, 150)
+	f.drop:SetFrameStrata("HIGH")
+	f.drop:SetPoint("TOPLEFT", f.dropb, "BOTTOMRIGHT", -130, -2)
+	f.drop:Hide()
+	f.drop.items = {}
+	for i = 1, 8 do
+		local b = T.Button(f.drop, "", 122, 16, function(btn) M.MultiPickName(btn.name) end)
+		b.label:SetWidth(116)
+		b:SetPoint("TOPLEFT", f.drop, "TOPLEFT", 4, -3 - (i - 1) * 18)
+		f.drop.items[i] = b
+	end
+	f.gold = T.Button(f, "", 112, 20, function() M.MultiCycleGold() M.MultiRefresh() end)
+	f.gold:SetPoint("TOPLEFT", f, "TOPLEFT", 8, -134)
+	f.pick = T.Button(f, L("msg.mail.m.pick"), 112, 20, function() M.MultiPick() end)
+	f.pick:SetPoint("TOPRIGHT", f, "TOPRIGHT", -8, -134)
+	f.clear = T.Button(f, L("msg.mail.m.clear"), 70, 20, function() M.MultiClear() M.MultiRefresh() M.MultiPickRefresh() end)
+	f.clear:SetPoint("TOPLEFT", f, "TOPLEFT", 8, -158)
+	f.cancel = T.Button(f, L("msg.mail.m.cancel"), 70, 20, function() M.MultiCancel() M.MultiRefresh() end)
+	f.cancel:SetPoint("TOPLEFT", f, "TOPLEFT", 8, -158)
+	f.all = T.Button(f, L("msg.mail.m.sendall"), 156, 20, function() M.MultiSendClick() end)
+	f.all:SetPoint("TOPRIGHT", f, "TOPRIGHT", -8, -158)
+	f.bar = T.Bar(f)
+	f.bar:SetWidth(234)
+	f.bar:SetHeight(12)
+	f.bar:SetPoint("TOPLEFT", f, "TOPLEFT", 8, -184)
+	f.bar:SetMinMaxValues(0, 1)
+	f.bar:SetValue(0)
+	f.prog = T.Text(f.bar, 10, T.c.text, "CENTER")
+	f.prog:SetPoint("CENTER", f.bar, "CENTER", 0, 0)
+	f.report = T.Text(f, 10, T.c.text, "LEFT")
+	f.report:SetPoint("TOPLEFT", f, "TOPLEFT", 8, -200)
+	f.report:SetWidth(234)
+	M.Tip(f.pick, "tip.mail.m.pick")
+	M.Tip(f.dropb, "tip.mail.m.drop")
+	M.Tip(f.gold, "tip.mail.m.gold")
+	M.Tip(f.all, "tip.mail.m.sendall")
+	M.Tip(f.cancel, "tip.mail.m.cancel")
+	f:SetScript("OnHide", function()
+		if M.pk then M.pk:Hide() end
+		f.drop:Hide()
+	end)
+	M.mp = f
+	M.manchor = nil
+	return f
+end
+
+function M.MultiRefresh()
+	local f = M.mp
+	if not f or not f:IsShown() then return end
+	local n = M.nml
+	setText(f.title, L("msg.mail.m.title") .. "  " .. L("msg.mail.m.count", n))
+	local base = M.mpage * M.PAGE
+	for i = 1, M.PAGE do
+		local b = f.cells[i]
+		local e = M.ml[base + i]
+		if e then
+			b.icon:SetTexture(e.tex)
+			setText(b.cnt, e.count > 1 and tostring(e.count) or "")
+			b.tipText = e.name
+			b:SetAlpha(e.done and 0.4 or 1)
+			b:Show()
+		else
+			b:Hide()
+		end
+	end
+	if n > M.PAGE then
+		f.prev:Show()
+		f.next:Show()
+	else
+		f.prev:Hide()
+		f.next:Hide()
+	end
+	if n == 0 then
+		setText(f.empty, M.OtherMail() and L("msg.mail.m.nohook") or L("msg.mail.m.empty"))
+		f.empty:Show()
+	else
+		f.empty:Hide()
+	end
+	local to = M.MultiTo()
+	setText(f.to.label, to ~= "" and L("msg.mail.m.to", to) or L("msg.mail.m.to.none"))
+	local g = M.MultiGold()
+	setText(f.gold.label, g > 0 and L("msg.mail.m.gold", g) or L("msg.mail.m.gold.off"))
+	local arming = M.marmTo and GetTime() < M.marmUntil
+	setText(f.all.label, arming and L("msg.mail.m.confirm") or L("msg.mail.m.sendall"))
+	f.all.disabled = M.mrun and true or false
+	if M.mrun then
+		f.clear:Hide()
+		f.cancel:Show()
+		setText(f.cancel.label, M.mstop and L("msg.mail.m.canceling") or L("msg.mail.m.cancel"))
+		f.bar:SetValue(M.mtotal > 0 and (M.mdone / M.mtotal) or 0)
+		setText(f.prog, L("msg.mail.m.progress", M.mdone, M.mtotal))
+	else
+		f.clear:Show()
+		f.cancel:Hide()
+		f.bar:SetValue(0)
+		setText(f.prog, "")
+	end
+	local rep = M.mreport
+	if not M.mrun and M.nskip > 0 and not arming then rep = rep .. " " .. L("msg.mail.m.skipped", M.nskip) end
+	setText(f.report, rep)
+	M.mdirty = false
+end
+
+-- Appelee par M.Tick (boite ouverte seulement) : montre / cache le panneau, le remet a cote, rafraichit.
+function M.Sync()
+	local want = M.open and C.Get("mail.multi") and not M.mhide and (M.mrun or M.SendTabVisible())
+	local f = M.mp
+	if want and not f and not SUI.InCombat() then f = M.BuildMulti() end
+	if not f then return end
+	if want then
+		M.MultiPlace()
+		if not f:IsShown() then
+			f:Show()
+			M.mdirty = true
+		end
+		if not M.mfilled then
+			M.mfilled = true
+			local box = getglobal("SendMailNameEditBox")
+			if box and box.GetText and box:GetText() == "" and M.Recent()[1] then box:SetText(M.Recent()[1]) end
+		end
+		if M.marmTo and GetTime() >= M.marmUntil then
+			M.marmTo = nil
+			M.mdirty = true
+		end
+		if M.mdirty or M.mrun then M.MultiRefresh() end
+	elseif f:IsShown() then
+		f:Hide()
+	end
+end
+
 -- ---------------------------------------------------------------- evenements et cycle de vie
 function M.OnShow()
 	M.open = true
@@ -905,6 +1663,9 @@ function M.OnShow()
 	if M.task then SUI.Cancel(M.task) end
 	M.task = SUI.Every(TICK, M.Tick, "mail.tick")
 	M.sendVis, M.fieldTick = nil, 10
+	M.mhide, M.mfilled, M.marmTo = false, false, nil
+	M.mpage = 0
+	M.HookOn()
 	M.ApplyOptions()
 	M.Refresh()
 	if C.Get("mail.fixfields") then
@@ -928,6 +1689,13 @@ end
 
 -- Rend minuterie et evenements ecoutes boite ouverte ; arrete tout travail en cours.
 function M.Release()
+	if M.mrun then
+		M.mstop, M.mwait = true, false
+		M.MultiFinish("cancel")
+	end
+	M.HookOff()
+	M.marmTo = nil
+	if M.mp then M.mp:Hide() end
 	M.active = false
 	M.sending = false
 	M.waitSend = false
@@ -977,6 +1745,36 @@ function M.Disable()
 	if M.frame then M.frame:Hide() end
 end
 
+-- /sui mail multi [clear|send <nom> [ok]|ok|cancel|hook] : ouvre / ferme le panneau ; clear vide la liste ; send arme (puis ok confirme) l'envoi.
+function M.MultiCommand(arg)
+	local w, rest = arg, ""
+	local sp = sfind(arg, " ", 1, true)
+	if sp then
+		w = ssub(arg, 1, sp - 1)
+		rest = ssub(arg, sp + 1)
+	end
+	w = slower(w)
+	if w == "clear" then
+		M.MultiClear()
+	elseif w == "send" then
+		local to, confirmed = rest, false
+		local _, _, a, b = sfind(rest, "^(%S+)%s+(%S+)$")
+		if a and slower(b) == "ok" then to, confirmed = a, true end
+		M.MultiStart(to, confirmed)
+	elseif w == "ok" then
+		M.MultiStart(M.marmTo or "", true)
+	elseif w == "cancel" then
+		M.MultiCancel()
+	elseif w == "hook" then
+		M.forceHook = not M.forceHook
+	else
+		if not M.open then SUI.Print(L("msg.mail.closed")) return end
+		M.mhide = not M.mhide
+		SUI.Print(L("msg.mail.m.shown", M.mhide and L("msg.mail.m.off") or L("msg.mail.m.on")))
+		M.Sync()
+	end
+end
+
 -- ---------------------------------------------------------------- commandes
 function M.Command(rest)
 	local word, arg = rest, ""
@@ -993,6 +1791,15 @@ function M.Command(rest)
 	elseif word == "stop" then
 		M.StopCollect(false)
 		M.StopSend(nil)
+		M.MultiCancel()
+	elseif word == "multi" then
+		M.MultiCommand(arg)
+	elseif word == "subject" then
+		local t = string.gsub(arg, "^%s+", "")
+		t = string.gsub(t, "%s+$", "")
+		if string.len(t) > 64 then t = ssub(t, 1, 64) end
+		C.SetBase("mail.subject", t)
+		SUI.Print(L("msg.mail.m.subject", t ~= "" and t or L("msg.mail.m.subject.none")))
 	elseif word == "add" then
 		if M.ListAdd(arg) then SUI.Print(L("msg.mail.added", M.nlist)) else SUI.Print(L("msg.mail.badref")) end
 	elseif word == "remove" then
@@ -1050,6 +1857,10 @@ SUI.RegisterModule("mail", {
 		opt("confirmsend", "bool", 80, true, { simple = true }),
 		opt("remember", "bool", 90, true),
 		opt("maxrecent", "number", 100, 4, { min = 1, max = 8, step = 1 }),
+		opt("multi", "bool", 105, true, { simple = true }),
+		opt("multihook", "bool", 106, true),
+		opt("multigold", "number", 107, 0, { min = 0, max = 1000, step = 1 }),
+		opt("multidelay", "number", 108, 1, { min = 1, max = 5, step = 1 }),
 		opt("logsize", "number", 110, 30, { min = 10, max = 50, step = 10 }),
 	},
 	enable = function() M.Enable() end,
@@ -1057,7 +1868,7 @@ SUI.RegisterModule("mail", {
 })
 
 -- Donnees (pas des reglages de menu) : liste d'envoi "id,id" et derniers destinataires "Nom,Nom".
-SUI.Config.Register({ ["mail.sendlist"] = "", ["mail.recent"] = "" })
+SUI.Config.Register({ ["mail.sendlist"] = "", ["mail.recent"] = "", ["mail.subject"] = "" })
 
 -- Equivalent pfUI : aucun module de courrier releve dans pfUI\modules (pas de ligne Migrate.MAP).
 

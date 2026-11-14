@@ -706,10 +706,10 @@ local function newPanel(parent)
 end
 
 -- Cadre w x h : liseret (jeton edgeTok) puis fond (jeton bgTok, opacite bgA).
-local function paintPanel(f, w, h, bgTok, bgA, edgeTok)
+local function paintPanel(f, w, h, bgTok, bgA, edgeTok, edgeA)
 	f:SetWidth(w)
 	f:SetHeight(h)
-	P.Fill(f.edge, edgeTok or T.c.border, 1)
+	P.Fill(f.edge, edgeTok or T.c.border, edgeA or 1)
 	P.Box(f.edge, f, 0, 0, w, h)
 	P.Fill(f.bg, bgTok or T.c.bg, bgA or 1)
 	P.Box(f.bg, f, 1, 1, w - 2, h - 2)
@@ -1315,8 +1315,8 @@ end
 local function paintWin(f, w, o)
 	local hh = o.rowh + 2
 	local total = hh + o.n * (o.rowh + o.spc) + 3
-	paintPanel(f, w, total, T.c.bg, o.alpha)
-	P.Fill(f.head, T.c.panel, 1)
+	paintPanel(f, w, total, o.bgTok or T.c.bg, o.bgA or o.alpha, nil, o.edgeA)
+	P.Fill(f.head, T.c.panel, o.headA or 1)
 	P.Box(f.head, f, 1, 1, w - 2, hh - 1)
 	local fs = o.fs
 	putText(f.title, f, 5, 1 + (hh - 1 - fs) / 2, fs, o.title)
@@ -1356,7 +1356,7 @@ local WHO = {
 
 -- ================================================================ compteurs
 local MAXW = 4
-local MZ = { "win", "title", "wins", "bar1", "name2", "cls", "val", "pct", "rowh", "font" }
+local MZ = { "win", "title", "wins", "bar1", "name2", "cls", "val", "pct", "rowh", "font", "bgz", "colz" }
 
 local function meterBuild(parent, w, h)
 	local root = CreateFrame("Frame", nil, parent)
@@ -1368,11 +1368,25 @@ local function meterBuild(parent, w, h)
 	return root
 end
 
+-- Fond de fenetre (reglage bg) -> (jeton, opacite du fond, opacite de la bordure) ; couleur des barres hors classe (reglage color) -> r, g, b.
+local function winBack(choice, alpha)
+	if choice == "none" then return T.c.bg, 0, 0.25, 0 end
+	local tok = T.c[choice]
+	if choice == "style" or not tok then tok = T.c.bg end
+	return tok, alpha, 1, 1
+end
+
+local function barRGB(choice)
+	local tok = (choice and choice ~= "style") and T.c[choice] or nil
+	if tok then return tok[1], tok[2], tok[3] end
+	return T.Accent()
+end
+
 local function meterRows(o)
 	local rows = {}
 	local total = 0
 	for i = 1, getn(WHO) do total = total + WHO[i][3] end
-	local ar, ag, ab = T.Accent()
+	local ar, ag, ab = barRGB(o.col)
 	for i = 1, getn(WHO) do
 		local d = WHO[i]
 		local r, g, b = ar, ag, ab
@@ -1399,7 +1413,8 @@ local function meterUpdate(root, w, h, key, value)
 	local nwin = floor(num("meter.windows", 1))
 	if nwin > MAXW then nwin = MAXW elseif nwin < 1 then nwin = 1 end
 	local o = { cls = flag("meter.classcolor", true), rank = flag("meter.showrank", true), pct = flag("meter.showpct", true),
-		short = flag("meter.shortnum", true) }
+		short = flag("meter.shortnum", true), col = C.Get("meter.color") }
+	local bgTok, bgA, edgeA, headA = winBack(C.Get("meter.bg") or "style", alpha)
 	st.on.cls, st.on.rank, st.on.pct, st.on.short = o.cls, o.rank, o.pct, o.short
 	st.nwin, st.n = nwin, n
 	local s = (w - 8) / (width > 300 and width or 300)
@@ -1417,7 +1432,8 @@ local function meterUpdate(root, w, h, key, value)
 	for i = 1, MAXW do
 		local f = st.wins[i]
 		if i <= nwin then
-			local po = { fs = fs, rowh = rs, spc = floor(spc * s + 0.5), n = n, alpha = alpha, rows = rows }
+			local po = { fs = fs, rowh = rs, spc = floor(spc * s + 0.5), n = n, alpha = alpha, rows = rows, bgTok = bgTok, bgA = bgA, edgeA = edgeA,
+				headA = headA }
 			local vw = C.Get("meter.view" .. i) or ((i == 2) and "heal" or ((i == 3) and "taken" or "interrupts"))
 			local sg = C.Get("meter.seg" .. i) or "current"
 			if i == 1 then vw, sg = view1, seg1 end
@@ -1453,11 +1469,13 @@ local function meterUpdate(root, w, h, key, value)
 	if n >= 5 then zp(st, root, "pct", 4 + floor(pw * 0.6), rowY(5), floor(pw * 0.38), rs) else zh(st, "pct") end
 	if n >= 6 then zp(st, root, "rowh", 4 + floor(pw * 0.4), rowY(6), floor(pw * 0.15), rs) else zh(st, "rowh") end
 	if n >= 7 then zp(st, root, "font", 4 + floor(pw * 0.1), rowY(7), floor(pw * 0.2), rs) else zh(st, "font") end
+	zp(st, root, "bgz", 4 + pw - 8, 4, 8, th1)
+	if n >= 2 then zp(st, root, "colz", 4 + floor(pw * 0.55), rowY(2), floor(pw * 0.3), rs) else zh(st, "colz") end
 	hintAt(st, root, y, w, "mod.preview.meter.hint")
 end
 
 local MK = { win = "meter.width", title = "meter.view1", wins = "meter.windows", bar1 = "meter.rowh", name2 = "meter.showrank", cls = "meter.classcolor",
-	val = "meter.shortnum", pct = "meter.showpct", rowh = "meter.spacing", font = "meter.fontsize" }
+	val = "meter.shortnum", pct = "meter.showpct", rowh = "meter.spacing", font = "meter.fontsize", bgz = "meter.bg", colz = "meter.color" }
 P.Register("meter", { watch = { "meter." }, build = meterBuild, update = meterUpdate, click = function(zone) return MK[zone] end })
 
 -- ================================================================ menace
@@ -1465,7 +1483,7 @@ local TH = {       -- pourcentage de menace, menace brute, menace par seconde
 	{ 100, 9400, 410 }, { 92, 8650, 380 }, { 78, 7330, 300 }, { 55, 5170, 210 }, { 40, 3760, 150 }, { 22, 2070, 90 },
 }
 local MOBS = { "Gnoll", "Kobold", "Ogre", "Murloc", "Defias", "Harpie" }
-local HZ = { "win", "title", "sub", "row1", "row2", "tag", "row4", "row5" }
+local HZ = { "win", "title", "sub", "row1", "row2", "tag", "row4", "row5", "bgz", "colz" }
 
 local function threatBuild(parent, w, h)
 	local root = CreateFrame("Frame", nil, parent)
@@ -1503,7 +1521,8 @@ local function threatUpdate(root, w, h, key, value)
 	local fs = fsz * s
 	if fs < 7 then fs = 7 end
 	if fs > rs - 1 then fs = rs - 1 end
-	local ar, ag, ab = T.Accent()
+	local ar, ag, ab = barRGB(C.Get("threat.color"))
+	local bgTok, bgA, edgeA, headA = winBack(C.Get("threat.bg") or "style", alpha)
 	local rows = {}
 	for i = 1, getn(TH) do
 		local d, t = WHO[i], TH[i]
@@ -1517,7 +1536,8 @@ local function threatUpdate(root, w, h, key, value)
 		if tps then val = val .. " " .. short(t[3], shortn) .. "/s" end
 		rows[i] = { name = nm, r = r, g = g, b = b, frac = t[1] / 100, val = val }
 	end
-	local po = { fs = fs, rowh = rs, spc = floor(spc * s + 0.5), n = n, alpha = alpha, rows = rows, title = L("choice.threat.view." .. view) }
+	local po = { fs = fs, rowh = rs, spc = floor(spc * s + 0.5), n = n, alpha = alpha, rows = rows, title = L("choice.threat.view." .. view),
+		bgTok = bgTok, bgA = bgA, edgeA = edgeA, headA = headA }
 	if agro then po.sub = L("mod.preview.threat.agro", (view == "players") and WHO[1][1] or MOBS[1]) end
 	local f = st.win
 	local total, head = paintWin(f, pw, po)
@@ -1539,12 +1559,214 @@ local function threatUpdate(root, w, h, key, value)
 	if n >= 3 then zp(st, root, "tag", 4 + floor(pw * 0.42), rowY(3), floor(pw * 0.3), rs) else zh(st, "tag") end
 	if n >= 4 then zp(st, root, "row4", 4 + floor(pw * 0.55), rowY(4), floor(pw * 0.43), rs) else zh(st, "row4") end
 	if n >= 5 then zp(st, root, "row5", 4 + 1, rowY(5), floor(pw * 0.4), rs) else zh(st, "row5") end
+	zp(st, root, "bgz", 4 + pw - 8, 4, 8, total)
+	if n >= 6 then zp(st, root, "colz", 4 + floor(pw * 0.5), rowY(6), floor(pw * 0.25), rs) else zh(st, "colz") end
 	hintAt(st, root, total + 8, w, "mod.preview.threat.hint")
 end
 
 local HK = { win = "threat.width", title = "threat.view", sub = "threat.showagro", row1 = "threat.markholder", row2 = "threat.warn", tag = "threat.taunt",
-	row4 = "threat.showtps", row5 = "threat.classcolor" }
+	row4 = "threat.showtps", row5 = "threat.classcolor", bgz = "threat.bg", colz = "threat.color" }
 P.Register("threat", { watch = { "threat." }, build = threatBuild, update = threatUpdate, click = function(zone) return HK[zone] end })
+
+-- ================================================================ barres d'icones : defensifs tank, totems
+-- Cellules : un cadre par icone (bordure, fond, fausse icone, temps, marque). Fonds et couleurs viennent des reglages bg / color de
+-- chaque module (jetons du style) ; "transparent" = fond sans opacite et bordure estompee. Reglettes (traits fins sous / a droite de la
+-- barre) = taille et sens.
+local function stripBuild(parent, zones)
+	local root = CreateFrame("Frame", nil, parent)
+	local st = { cells = {} }
+	root.st = st
+	for i = 1, 5 do
+		local c = CreateFrame("Frame", nil, root)
+		c:SetFrameLevel(P.Lv(1))
+		c.edge, c.bg, c.icon = box(c, "BACKGROUND"), box(c, "BACKGROUND"), box(c, "ARTWORK")
+		c.tm = txt(c, 11, T.c.text, "CENTER")
+		c.mk = txt(c, 12, T.c.warn, "RIGHT")
+		st.cells[i] = c
+	end
+	st.ruleH, st.ruleV = box(root, "ARTWORK"), box(root, "ARTWORK")
+	st.accentTok = {}
+	zoneSet(root, st, zones)
+	st.hint = txt(root, 10, T.c.dim, "LEFT")
+	return root
+end
+
+-- bgChoice : valeur du reglage bg ; retourne (jeton de fond, opacite du fond, opacite de la bordure).
+local function stripBack(bgChoice)
+	if bgChoice == "none" then return T.c.bg, 0, 0.25 end
+	local tok = T.c[bgChoice]
+	if bgChoice == "style" or not tok then tok = T.c.bg end
+	return tok, 1, 1
+end
+
+local function stripColor(choice, default)
+	local tok = (choice ~= "style") and T.c[choice] or nil
+	return tok or default
+end
+
+-- o = { s, sp, vert, back (choix bg), alpha, timer, cells = { { fill, al, tm, tmTok, edge, mk, mkTok } } } ; retourne (largeur, hauteur) du dessin.
+local function stripPaint(root, o)
+	local st = root.st
+	local n = getn(o.cells)
+	local total = n * o.s + (n - 1) * o.sp
+	local W, H = total, o.s
+	if o.vert then W, H = o.s, total end
+	local fs = floor(o.s * 0.36)
+	if fs < 7 then fs = 7 end
+	if fs > 16 then fs = 16 end
+	local bgTok, bgA, edgeA = stripBack(o.back)
+	for i = 1, getn(st.cells) do
+		local c = st.cells[i]
+		local d = o.cells[i]
+		if d then
+			local step = o.s + o.sp
+			P.Place(c, root, 4 + (o.vert and 0 or (i - 1) * step), 4 + (o.vert and (i - 1) * step or 0), o.s, o.s)
+			P.Fill(c.edge, d.edge or T.c.border, edgeA)
+			P.Box(c.edge, c, 0, 0, o.s, o.s)
+			P.Fill(c.bg, bgTok, bgA)
+			P.Box(c.bg, c, 1, 1, o.s - 2, o.s - 2)
+			P.Fill(c.icon, T.c[d.fill], 0.8 * (d.al or 1))
+			P.Box(c.icon, c, 2, 2, o.s - 4, o.s - 4)
+			if d.tm and o.timer then
+				putText(c.tm, c, 0, (o.s - fs) / 2, fs, d.tm)
+				c.tm:SetWidth(o.s)
+				tcol(c.tm, d.tmTok or T.c.text, 1)
+			else
+				c.tm:Hide()
+			end
+			if d.mk then
+				putText(c.mk, c, o.s * 0.5 - 1, 1, fs, d.mk)
+				c.mk:SetWidth(o.s * 0.5)
+				tcol(c.mk, d.mkTok or T.c.warn, 1)
+			else
+				c.mk:Hide()
+			end
+			c:SetAlpha(o.alpha)
+			c:Show()
+		else
+			c:Hide()
+		end
+	end
+	P.Fill(st.ruleH, T.c.dim, 0.6)
+	P.Box(st.ruleH, root, 4, 4 + H + 3, W, 2)
+	P.Fill(st.ruleV, T.c.dim, 0.6)
+	P.Box(st.ruleV, root, 4 + W + 3, 4, 2, H)
+	return W, H
+end
+
+-- Echelle : le dessin tient dans la largeur du volet (au plus x1.6).
+local function stripScale(w, size, spacing, n, vert)
+	local len = vert and size or (n * size + (n - 1) * spacing)
+	local s = (w - 20) / len
+	if s > 1.6 then s = 1.6 end
+	if s < 0.3 then s = 0.3 end
+	return s
+end
+
+-- Zone de l'espace entre deux icones (largeur nulle : masquee).
+local function stripGap(st, root, vert, csp, cs, x1, y1)
+	if csp >= 1 then
+		zp(st, root, "gap", vert and x1 or (x1 + cs), vert and (y1 + cs) or y1, vert and cs or csp, vert and csp or cs)
+	else
+		zh(st, "gap")
+	end
+end
+
+-- ---- defensifs tank
+local TZ = { "icon1", "gap", "timer", "tcol", "bgz", "dirz", "mark", "sizez" }
+
+local function tankBuild(parent, w, h)
+	return stripBuild(parent, TZ)
+end
+
+local function tankUpdate(root, w, h, key, value)
+	local st = root.st
+	local size, spc = num("tanktools.size", 32), num("tanktools.spacing", 3)
+	local vert, timer = flag("tanktools.vertical", false), flag("tanktools.timer", true)
+	local alpha = num("tanktools.alpha", 1)
+	local s = stripScale(w, size, spc, 5, vert)
+	local cs, csp = floor(size * s + 0.5), floor(spc * s + 0.5)
+	local tTok = stripColor(C.Get("tanktools.color") or "style", T.c.text)
+	local mTok = stripColor(C.Get("tanktools.markcolor") or "style", T.c.warn)
+	local cells = {
+		{ fill = "good", mk = "!", mkTok = mTok },
+		{ fill = "warn", al = 0.45, tm = "45", tmTok = tTok },
+		{ fill = "bad" },
+		{ fill = "dim", al = 0.45, tm = "2m", tmTok = tTok },
+		{ fill = "border" },
+	}
+	local o = { s = cs, sp = csp, vert = vert, back = C.Get("tanktools.bg") or "style", alpha = alpha, timer = timer, cells = cells }
+	local W, H = stripPaint(root, o)
+	local function cx(i) return 4 + (vert and 0 or (i - 1) * (cs + csp)) end
+	local function cy(i) return 4 + (vert and (i - 1) * (cs + csp) or 0) end
+	zp(st, root, "icon1", cx(1), cy(1), cs, cs)
+	stripGap(st, root, vert, csp, cs, cx(1), cy(1))
+	zp(st, root, "timer", cx(2), cy(2), cs, cs)
+	zp(st, root, "bgz", cx(3), cy(3), cs, cs)
+	zp(st, root, "tcol", cx(4), cy(4), cs, cs)
+	zp(st, root, "dirz", cx(5), cy(5), cs, cs)
+	zp(st, root, "mark", cx(1) + cs * 0.5, cy(1), cs * 0.5, cs * 0.5)
+	zp(st, root, "sizez", 4, 4 + H + 1, W, 6)
+	hintAt(st, root, H + 14, w, "mod.preview.tanktools.hint")
+end
+
+local TKK = { icon1 = "tanktools.size", gap = "tanktools.spacing", timer = "tanktools.timer", tcol = "tanktools.color", bgz = "tanktools.bg",
+	dirz = "tanktools.vertical", mark = "tanktools.markcolor", sizez = "tanktools.size" }
+P.Register("tanktools", { watch = { "tanktools." }, build = tankBuild, update = tankUpdate, click = function(zone) return TKK[zone] end })
+
+-- ---- totems
+local OZ = { "on", "gap", "warnz", "bgz", "tcol", "allz", "sizez", "dirz" }
+
+local function totemBuild(parent, w, h)
+	return stripBuild(parent, OZ)
+end
+
+local function totemUpdate(root, w, h, key, value)
+	local st = root.st
+	local size, spc = num("totems.size", 34), num("totems.spacing", 3)
+	local vert, timer = flag("totems.vertical", false), flag("totems.timer", true)
+	local alpha = num("totems.alpha", 1)
+	local all = flag("totems.allbutton", true)
+	local s = stripScale(w, size, spc, 5, vert)
+	local cs, csp = floor(size * s + 0.5), floor(spc * s + 0.5)
+	local tTok = stripColor(C.Get("totems.color") or "style", T.c.text)
+	local onEdge = stripColor(C.Get("totems.coloron") or "style", nil)
+	if not onEdge then
+		local ar, ag, ab = T.Accent()
+		onEdge = st.accentTok
+		onEdge[1], onEdge[2], onEdge[3] = ar, ag, ab
+	end
+	local warnEdge = stripColor(C.Get("totems.colorwarn") or "style", T.c.warn)
+	local cells = {
+		{ fill = "good", tm = "47", tmTok = tTok, edge = onEdge },
+		{ fill = "warn", tm = "8", tmTok = tTok, edge = warnEdge },
+		{ fill = "dim", al = 0.6 },
+		{ fill = "bad", tm = "3:20", tmTok = tTok },
+		{ fill = "border", al = all and 1 or 0.3 },
+	}
+	local o = { s = cs, sp = csp, vert = vert, back = C.Get("totems.bg") or "style", alpha = alpha, timer = timer, cells = cells }
+	local W, H = stripPaint(root, o)
+	if all then
+		putText(st.cells[5].tm, st.cells[5], 0, (cs - 10) / 2, 10, L("msg.totems.alllabel"))
+		st.cells[5].tm:SetWidth(cs)
+		tcol(st.cells[5].tm, T.c.text, 1)
+	end
+	local function cx(i) return 4 + (vert and 0 or (i - 1) * (cs + csp)) end
+	local function cy(i) return 4 + (vert and (i - 1) * (cs + csp) or 0) end
+	zp(st, root, "on", cx(1), cy(1), cs, cs)
+	stripGap(st, root, vert, csp, cs, cx(1), cy(1))
+	zp(st, root, "warnz", cx(2), cy(2), cs, cs)
+	zp(st, root, "bgz", cx(3), cy(3), cs, cs)
+	zp(st, root, "tcol", cx(4), cy(4), cs, cs)
+	zp(st, root, "allz", cx(5), cy(5), cs, cs)
+	zp(st, root, "sizez", 4, 4 + H + 1, W, 6)
+	zp(st, root, "dirz", 4 + W + 1, 4, 6, H)
+	hintAt(st, root, H + 14, w, "mod.preview.totems.hint")
+end
+
+local TOK = { on = "totems.coloron", gap = "totems.spacing", warnz = "totems.colorwarn", bgz = "totems.bg", tcol = "totems.color",
+	allz = "totems.allbutton", sizez = "totems.size", dirz = "totems.vertical" }
+P.Register("totems", { watch = { "totems." }, build = totemBuild, update = totemUpdate, click = function(zone) return TOK[zone] end })
 
 -- ================================================================ minimap
 -- Rond ou carre dessine par bandes horizontales de textures unies (aucune ressource du jeu) : la bande du haut est plus etroite en rond.

@@ -33,7 +33,7 @@ M.dirtyP = true
 M.dirtyT = true
 M.blizzHidden = false
 M.cfg = { player = true, target = true, buffs = true, debuffs = true, weapon = true, targetbuffs = true, targetdebuffs = true,
-	size = 28, perrow = 8, spacing = 3, grow = "left", timer = true, stacks = true, warn = 10, dispel = true, tsize = 22, tperrow = 8,
+	size = 28, perrow = 8, spacing = 3, grow = "left", timer = true, stacks = true, warn = 10, dispel = true, tsize = 22, tperrow = 8, dsize = 0, tdsize = 0,
 	tick = 0.25, maxbuffs = 32, alpha = 1 }
 
 function M.ReadConfig()
@@ -54,6 +54,8 @@ function M.ReadConfig()
 	cfg.warn = C.Get("auras.warn")
 	cfg.dispel = C.Get("auras.dispel")
 	cfg.tsize = C.Get("auras.tsize")
+	cfg.dsize = C.Get("auras.dsize")
+	cfg.tdsize = C.Get("auras.tdsize")
 	cfg.tperrow = C.Get("auras.tperrow")
 	cfg.tick = C.Get("auras.tick")
 	cfg.maxbuffs = C.Get("auras.maxbuffs")
@@ -265,6 +267,7 @@ function M.RefreshGroup(key)
 	hideFrom(g, n)
 	g.shown = n
 	g.timed = (key == "pb" or key == "pd" or key == "pw")
+	if M.built then M.ResizeGroup(key) end
 end
 
 -- Seules les durees bougent entre deux evenements : relecture legere des boutons du joueur.
@@ -364,6 +367,7 @@ function M.Build()
 		for n = 1, d[4] do g.btns[n] = M.BuildButton(holder, key, n) end
 		M.groups[key] = g
 		SUI.Layout.Register(holder, "auras." .. key, d[1], d[2], d[3])
+		if SUI.Mover then SUI.Mover.Register("auras." .. key, holder, { sync = function() M.ResizeGroup(key) end }) end
 	end
 	M.built = true
 	T.OnAccent(M.MarkAll)
@@ -371,11 +375,14 @@ function M.Build()
 end
 
 -- Place les boutons d'un groupe selon taille, colonnes, espacement et sens.
-local function layoutGroup(g, size, perrow, spacing, growLeft)
+-- count (facultatif) = boutons REELLEMENT visibles : le conteneur (et donc la poignee du Mover) epouse le bloc
+-- affiche au lieu de la grille maximale, sinon la case de deplacement ne correspond jamais aux buffs visibles.
+local function layoutGroup(g, size, perrow, spacing, growLeft, count)
 	local step = size + spacing
-	local rows = floor((g.max - 1) / perrow) + 1
+	local cnt = (count and count > 0) and count or g.max
+	local rows = floor((cnt - 1) / perrow) + 1
 	local cols = perrow
-	if g.max < perrow then cols = g.max end
+	if cnt < perrow then cols = cnt end
 	g.holder:SetWidth(cols * step)
 	g.holder:SetHeight(rows * (step + 10))
 	local anchor = growLeft and "TOPRIGHT" or "TOPLEFT"
@@ -390,15 +397,32 @@ local function layoutGroup(g, size, perrow, spacing, growLeft)
 	end
 end
 
+-- Taille du groupe selon ses reglages : debuffs joueur / cible ont leur propre taille (0 = comme les buffs).
+local function groupSize(key, c)
+	if key == "pd" and (c.dsize or 0) > 0 then return c.dsize end
+	if key == "td" and (c.tdsize or 0) > 0 then return c.tdsize end
+	if key == "tb" or key == "td" then return c.tsize end
+	return c.size
+end
+local function groupPer(key, c)
+	if key == "tb" or key == "td" then return c.tperrow end
+	return c.perrow
+end
+function M.ResizeGroup(key)
+	local g = M.groups[key]
+	if not g then return end
+	local c = M.cfg
+	layoutGroup(g, groupSize(key, c), groupPer(key, c), c.spacing, c.grow == "left" and key ~= "tb" and key ~= "td", g.shown > 0 and g.shown or nil)
+end
 function M.ApplyOptions()
 	if not M.built then return end
 	local c = M.cfg
 	local gl = (c.grow == "left")
-	layoutGroup(M.groups.pb, c.size, c.perrow, c.spacing, gl)
-	layoutGroup(M.groups.pw, c.size, c.perrow, c.spacing, gl)
-	layoutGroup(M.groups.pd, c.size, c.perrow, c.spacing, gl)
-	layoutGroup(M.groups.tb, c.tsize, c.tperrow, c.spacing, false)
-	layoutGroup(M.groups.td, c.tsize, c.tperrow, c.spacing, false)
+	layoutGroup(M.groups.pb, c.size, c.perrow, c.spacing, gl, M.groups.pb.shown > 0 and M.groups.pb.shown or nil)
+	layoutGroup(M.groups.pw, c.size, c.perrow, c.spacing, gl, M.groups.pw.shown > 0 and M.groups.pw.shown or nil)
+	layoutGroup(M.groups.pd, groupSize("pd", c), c.perrow, c.spacing, gl, M.groups.pd.shown > 0 and M.groups.pd.shown or nil)
+	layoutGroup(M.groups.tb, c.tsize, c.tperrow, c.spacing, false, M.groups.tb.shown > 0 and M.groups.tb.shown or nil)
+	layoutGroup(M.groups.td, groupSize("td", c), c.tperrow, c.spacing, false, M.groups.td.shown > 0 and M.groups.td.shown or nil)
 	for i = 1, getn(M.order) do
 		local g = M.groups[M.order[i]]
 		if SUI.Visibility and SUI.Visibility.byFrame[g.holder] then
@@ -550,6 +574,7 @@ local AU_OPTIONS = {
 		opt("player", "bool", 10, true, { simple = true }),
 		opt("target", "bool", 20, true, { simple = true }),
 		opt("size", "number", 30, 28, { min = 16, max = 40, step = 2, simple = true }),
+		opt("dsize", "number", 32, 0, { min = 0, max = 40, step = 2 }),
 		opt("timer", "bool", 40, true, { simple = true }),
 		opt("buffs", "bool", 50, true),
 		opt("debuffs", "bool", 60, true),
@@ -564,6 +589,7 @@ local AU_OPTIONS = {
 		opt("targetbuffs", "bool", 150, true),
 		opt("targetdebuffs", "bool", 160, true),
 		opt("tsize", "number", 170, 22, { min = 14, max = 36, step = 2 }),
+		opt("tdsize", "number", 175, 0, { min = 0, max = 36, step = 2 }),
 		opt("tperrow", "number", 180, 8, { min = 4, max = 16, step = 1 }),
 		opt("alpha", "number", 190, 1, { min = 0.3, max = 1, step = 0.1 }),
 		opt("tick", "number", 200, 0.25, { min = 0.1, max = 1, step = 0.05 }),

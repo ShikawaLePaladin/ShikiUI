@@ -1258,7 +1258,38 @@ function M.RowColor(e)
 		local c = RAID_CLASS_COLORS and RAID_CLASS_COLORS[e.cls]    -- style:ok couleur de classe (donnee du jeu)
 		if c then return c.r, c.g, c.b end
 	end
+	local r, g, b = M.TokenRGB(M.cfg.color)
+	if r then return r, g, b end
 	return T.Accent()
+end
+
+-- Design par jetons du style (aucune couleur en dur) : meter.bg = fond des fenetres (style | panel | bg | inset | none), meter.color =
+-- couleur des barres qui ne viennent pas de la classe (style = accent). Valeurs lues dans T.c.* a chaque application (le style peut changer).
+M.BGS = { "style", "panel", "bg", "inset", "none" }
+M.COLORS = { "style", "good", "warn", "bad", "dim", "text" }
+M.nobg = {}
+
+function M.TokenRGB(name)
+	local c = (name and name ~= "style") and T.c[name] or nil
+	if c then return c[1], c[2], c[3] end
+	return nil
+end
+
+-- Fond de la fenetre (cadre complet) selon meter.bg ; "none" = meme teinte que le panneau, opacite nulle.
+function M.ApplyBack(f, force)
+	local tok = M.cfg.bg or "style"
+	if f.mbTok == tok and not force then return end     -- redimensionnement a la poignee : pas de nouveau SetBackdrop a chaque pas
+	f.mbTok = tok
+	if tok == "none" then
+		local c = T.c.panel
+		local z = M.nobg
+		z[1], z[2], z[3], z[4] = c[1], c[2], c[3], 0
+		T.Backdrop(f, z, T.c.border)
+	elseif tok and tok ~= "style" and T.c[tok] then
+		T.Backdrop(f, T.c[tok], T.c.border)
+	else
+		T.Backdrop(f, T.c.panel, T.c.border)
+	end
 end
 
 M.tipNames = {}
@@ -1544,6 +1575,32 @@ local function winClick()
 	if b and b.entry then M.OpenDetail(w, b.entry) end
 end
 
+-- Panneaux annexes (detail, menus de segment et de vue) : meme defaut que les fenetres, un panneau qui capte la souris dont les boutons
+-- sont restes a un niveau perime ne laisse plus passer aucun clic. La liste des enfants est lue UNE fois (a la construction, hors combat) ;
+-- le recalage ne cree rien et se fait a chaque affichage (OnShow) et a chaque ouverture.
+function M.WatchPanel(f)
+	f.mkids = { f:GetChildren() }
+	f:SetScript("OnShow", M.PanelShow)
+end
+
+function M.SyncPanel(f)
+	if not f or not f.mkids then return 0 end
+	local base = f:GetFrameLevel() or 0
+	local n = 0
+	for i = 1, getn(f.mkids) do
+		local k = f.mkids[i]
+		if k:GetFrameLevel() <= base then
+			k:SetFrameLevel(base + 2)
+			n = n + 1
+		end
+	end
+	return n
+end
+
+function M.PanelShow()
+	M.SyncPanel(this)
+end
+
 local function winShow()
 	local w = this.win
 	if w then M.SyncLevels(w) end
@@ -1725,6 +1782,7 @@ function M.ApplyWindow(w)
 	w.nrows = mmin(rows, getn(w.rows))
 	f:SetWidth(width)
 	f:SetHeight(height)
+	M.ApplyBack(f)
 	local V = SUI.Visibility
 	if V and w.vp and V.byFrame[w.vp] then V.SetBase(w.vp, c.alpha) else f:SetAlpha(c.alpha) end
 	w.tbtn:SetWidth(mmax(width - 146, 20))
@@ -2034,6 +2092,7 @@ function M.BuildDetail()
 	d.foot = T.Text(f, 9, T.c.dim, "LEFT", false)
 	d.foot:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", 6, 4)
 	d.foot:SetWidth(M.DETWIDTH - 12)
+	M.WatchPanel(f)
 	f:Hide()
 	M.det = d
 	return d
@@ -2079,6 +2138,7 @@ function M.OpenDetail(w, e)
 	end
 	d.f:SetScale(w.f:GetScale() or 1)
 	d.f:Show()
+	M.SyncPanel(d.f)
 	M.RefreshDetail()
 end
 
@@ -2255,6 +2315,7 @@ function M.BuildSegMenu()
 		b:Hide()
 		m.btn[i] = b
 	end
+	M.WatchPanel(f)
 	f:Hide()
 	M.menu = m
 	return m
@@ -2297,6 +2358,7 @@ function M.OpenSegMenu(w)
 	end
 	m.f:SetScale(w.f:GetScale() or 1)
 	m.f:Show()
+	M.SyncPanel(m.f)
 end
 
 -- Menu des vues d'une fenetre : une vue par ligne, la vue courante cochee.
@@ -2318,6 +2380,7 @@ function M.BuildViewMenu()
 		b:Hide()
 		m.btn[i] = b
 	end
+	M.WatchPanel(f)
 	f:Hide()
 	M.vmenu = m
 	return m
@@ -2353,6 +2416,7 @@ function M.OpenViewMenu(w)
 	end
 	m.f:SetScale(w.f:GetScale() or 1)
 	m.f:Show()
+	M.SyncPanel(m.f)
 end
 
 -- ---------------------------------------------------------------- creation / suppression de fenetres
@@ -2449,6 +2513,8 @@ function M.ReadConfig()
 	c.spacing = C.Get("meter.spacing")
 	c.alpha = C.Get("meter.alpha")
 	c.classcolor = C.Get("meter.classcolor")
+	c.bg = C.Get("meter.bg")
+	c.color = C.Get("meter.color")
 	c.showrank = C.Get("meter.showrank")
 	c.showpct = C.Get("meter.showpct")
 	c.shortnum = C.Get("meter.shortnum")
@@ -2528,6 +2594,7 @@ function M.OnKey(key, value)
 	if key == "meter.rows" and M.cfg.height > 0 then
 		C.Set("meter.height", 0)
 	end
+	if key == nil or key == "meter.color" or key == "meter.classcolor" then M.recolor = true end
 	if not M.on then return end
 	if not M.AnyOpen() then
 		M.Sleep()
@@ -2574,6 +2641,9 @@ end
 function M.OnAccent()
 	M.recolor = true
 	M.forcePaint = true
+	for i = 1, M.MAXWIN do
+		if M.win[i] then M.ApplyBack(M.win[i].f, true) end     -- le repeint du style remet le fond du panneau : on repose le choix de l'utilisateur
+	end
 end
 
 -- ---------------------------------------------------------------- cycle de vie
@@ -2675,6 +2745,8 @@ end
 local function viewText(o, v) return L("choice.meter.view." .. v) end
 local function segText(o, v) return L("choice.meter.seg." .. v) end
 local function srcText(o, v) return L("choice.meter.source." .. v) end
+local function bgText(o, v) return L("choice.meter.bg." .. v) end
+local function colText(o, v) return L("choice.meter.color." .. v) end
 
 local SW, SD, SDA, SX, SR = "mod.meter.sec.window", "mod.meter.sec.display", "mod.meter.sec.data", "mod.meter.sec.extra", "mod.meter.sec.report"
 local SLK = "mod.meter.sec.look"
@@ -2694,6 +2766,8 @@ local function addCommon(list)
 			tinsert(list, d[i])
 		end
 	end
+	tinsert(list, opt("bg", "choice", 830, "style", { choices = M.BGS, choiceText = bgText, section = SLK }))
+	tinsert(list, opt("color", "choice", 831, "style", { choices = M.COLORS, choiceText = colText, section = SLK }))
 	return list
 end
 

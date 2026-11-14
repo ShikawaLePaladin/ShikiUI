@@ -129,7 +129,7 @@ local INST = {
 	{ "sv", "Caveau de Hurlevent", "Stormwind Vault", "SV", "d", 60, 60, 5, "sv|stormwind vault|caveau de hurlevent|caveau|vault" },
 	{ "kc", "Crypte de Karazhan", "Karazhan Crypt", "KC", "d", 60, 60, 5, "kc|crypt|crypte|karazhan crypt|crypte de karazhan" },
 	{ "lkh", "Salles basses de Karazhan", "Lower Karazhan Halls", "Kara10", "r", 60, 60, 10,
-		"lkh|lower karazhan halls|lower karazhan|lower kara|salles basses de karazhan|kara10|kara 10|kz10" },
+		"lkh|lower karazhan halls|lower karazhan|lower kara|salles basses de karazhan|kara10|kara 10|kz10|kz 10|karazhan10|karazhan 10|karazhan 10 man|karazhan 10man" },
 	{ "bm", "Marais Noir", "Black Morass", "BM", "d", 60, 60, 5, "bm|black morass|morass|marais noir" },
 	{ "ony", "Onyxia", "Onyxia's Lair", "Ony", "r", 60, 60, 40, "ony|onyxia|onyxia s lair|onyxia lair|repaire d onyxia" },
 	{ "mc", "Coeur du Magma", "Molten Core", "MC", "r", 60, 60, 40, "mc|molten core|coeur du magma" },
