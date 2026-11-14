@@ -54,6 +54,12 @@ local DEFS = {
 	{ id = "tabard", frame = "TabardFrame" },
 	{ id = "help", frame = "HelpFrame" },
 	{ id = "keybind", frame = "KeyBindingFrame" },
+	-- sacs du jeu (si l'utilisateur ne remplace pas les sacs par ceux de ShikiUI/pfUI)
+	{ id = "bag1", frame = "ContainerFrame1" },
+	{ id = "bag2", frame = "ContainerFrame2" },
+	{ id = "bag3", frame = "ContainerFrame3" },
+	{ id = "bag4", frame = "ContainerFrame4" },
+	{ id = "bag5", frame = "ContainerFrame5" },
 }
 M.DEFS = DEFS
 
@@ -295,8 +301,37 @@ function M.OnAddon()
 	M.Scan()
 end
 
+-- Un autre addon (pfUI...) peut reposer SES scripts OnMouseDown/OnMouseUp APRES nous (chargement tardif) :
+-- notre chainage est alors perdu et le glisser ne marche plus. On reverifie a chaque ENTREE dans le monde
+-- (tous les addons sont charges a ce moment) et on se rechaine au-dessus si besoin.
+function M.Verify()
+	for i = 1, getn(DEFS) do
+		local f = getglobal(DEFS[i].frame)
+		if f and f.suiWinHooked then
+			if f:GetScript("OnMouseDown") ~= onDown then
+				f.suiWinOD = f:GetScript("OnMouseDown")
+				f:SetScript("OnMouseDown", onDown)
+			end
+			if f:GetScript("OnMouseUp") ~= onUp then
+				f.suiWinOU = f:GetScript("OnMouseUp")
+				f:SetScript("OnMouseUp", onUp)
+			end
+			if f:GetScript("OnShow") ~= onShow then
+				f.suiWinOS = f:GetScript("OnShow")
+				f:SetScript("OnShow", onShow)
+			end
+			if f:GetScript("OnHide") ~= onHide then
+				f.suiWinOH = f:GetScript("OnHide")
+				f:SetScript("OnHide", onHide)
+			end
+			if f.IsMouseEnabled and not f:IsMouseEnabled() then f:EnableMouse(true) end
+		end
+	end
+end
+
 function M.OnWorld()
 	M.Scan()
+	M.Verify()
 end
 
 function M.OnRegen()
