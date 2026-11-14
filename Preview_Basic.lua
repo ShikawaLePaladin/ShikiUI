@@ -1957,6 +1957,19 @@ local SCREEN_FRAMES = {
 	{ key = "bossmods.win", label = "alarmes", cat = "bossmods" },
 	{ key = "pp.win", label = "benes", cat = "pallypower" },
 	{ key = "minimap", label = "minimap", cat = "minimap" },
+	-- modules ajoutes aux presets (tout est maintenant place par les mises en page)
+	{ key = "bags.window", label = "sacs", cat = "bags" },
+	{ key = "bags.bank", label = "banque", cat = "bags" },
+	{ key = "finder.win", label = "chercheur", cat = "finder" },
+	{ key = "tracker.win", label = "suivi", cat = "tracker" },
+	{ key = "esport.win", label = "pvp", cat = "esport" },
+	{ key = "totems.bar", label = "totems", cat = "totems" },
+	{ key = "tanktools.bar", label = "tank", cat = "tanktools" },
+	{ key = "powerauras.banner", label = "auras", cat = "powerauras" },
+	{ key = "messages.win", label = "messages", cat = "messages" },
+	{ key = "items", label = "bijoux", cat = "items" },
+	{ key = "hud", label = "hud", cat = "raid" },
+	{ key = "bossmods.msg", label = "annonce", cat = "bossmods" },
 }
 
 local function screenBuild(parent, w, h)
@@ -2013,6 +2026,6 @@ local function screenClick(zone)
 	return nil
 end
 
-P.Register("screen", { title = "mod.preview.screen.title", watch = { "layout.", "units.", "group.", "raid.", "meter.", "threat.", "marks.", "bossmods." },
+P.Register("screen", { title = "mod.preview.screen.title", watch = { "layout.", "units.", "group.", "raid.", "meter.", "threat.", "marks.", "bossmods.", "bags.", "messages.", "powerauras.", "tracker.", "finder.", "items.", "totems.", "tanktools.", "esport." },
 	build = screenBuild, update = screenUpdate, click = screenClick })
 

@@ -920,7 +920,7 @@ function WB.layout(pg)
 		pv.bg:SetPoint("TOPLEFT", pv, "TOPLEFT", 1, -1)
 		pv.bg:SetPoint("BOTTOMRIGHT", pv, "BOTTOMRIGHT", -1, 1)
 		pv.rects = {}
-		for j = 1, 8 do
+		for j = 1, 12 do
 			local r = tex(pv, "OVERLAY")
 			r:SetWidth(14)
 			r:SetHeight(6)
@@ -1307,9 +1307,20 @@ end
 function WR.layout(pg)
 	local sel = M.ws.sel
 	local sw, sh = UIParent:GetWidth(), UIParent:GetHeight()
+	-- ordre d'affichage : d'abord les mises en page completes (reset), puis les autres ; 8 boutons seulement
+	local order, np = {}, 0
+	local i2
+	for i2 = 1, table.getn(SUI.layoutOrder) do
+		local d = SUI.layouts[SUI.layoutOrder[i2]]
+		if d and d.reset then np = np + 1 ; order[np] = SUI.layoutOrder[i2] end
+	end
+	for i2 = 1, table.getn(SUI.layoutOrder) do
+		local d = SUI.layouts[SUI.layoutOrder[i2]]
+		if not (d and d.reset) then np = np + 1 ; order[np] = SUI.layoutOrder[i2] end
+	end
 	for i = 1, 8 do
 		local b = pg.lc[i]
-		local id = SUI.layoutOrder[i]
+		local id = order[i]
 		b.id = id
 		if id then
 			local def = SUI.layouts[id]
@@ -1318,8 +1329,19 @@ function WR.layout(pg)
 			paint(pv.bg, T.c.inset)
 			local n = 0
 			if type(def.pos) == "table" then
-				for key, e in pairs(def.pos) do
-					if n < 8 and type(e) == "table" and type(e[1]) == "number" and type(e[2]) == "number" then
+				-- ordre deterministe : unit.player d'abord (accent), puis cles triees (pairs = ordre aleatoire)
+				local keys, nk = {}, 0
+				local k2
+				for k2 in pairs(def.pos) do nk = nk + 1 ; keys[nk] = k2 end
+				table.sort(keys)
+				local qn = {}
+				if def.pos["unit.player"] then qn[table.getn(qn) + 1] = "unit.player" end
+				for _, k2 in ipairs(keys) do
+					if k2 ~= "unit.player" then qn[table.getn(qn) + 1] = k2 end
+				end
+				for _, key in ipairs(qn) do
+					local e = def.pos[key]
+					if n < 12 and type(e) == "table" and type(e[1]) == "number" and type(e[2]) == "number" then
 						n = n + 1
 						local x = (e[1] * sw + (e[3] or 0)) / sw * 144
 						local y = (e[2] * sh + (e[4] or 0)) / sh * 46
@@ -1340,7 +1362,7 @@ function WR.layout(pg)
 					end
 				end
 			end
-			for j = n + 1, 8 do pv.rects[j]:Hide() end
+			for j = n + 1, 12 do pv.rects[j]:Hide() end
 			b.name:SetText(SUI.Layout.Label(id))
 			T.SetSelected(b, sel.layout == id)
 			b:Show()
