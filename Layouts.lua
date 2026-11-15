@@ -758,6 +758,8 @@ D("castbar.target", "unit.target", "BOTTOM")
 D("auras.td", "unit.target", "TOP")
 D("auras.tb", "auras.td", "TOP")
 D("unit.targettarget", "unit.target", "RIGHT")
+-- familier : a gauche du joueur (suit son deplacement)
+D("unit.pet", "unit.player", "LEFT")
 -- barres d'action : empilees au-dessus de la principale ; formes / familier de part et d'autre ; barre 5 a gauche de la barre 4
 D("bars.bar2", "bars.main", "TOP", 0, 6)
 D("bars.bar3", "bars.bar2", "TOP", 0, 6)

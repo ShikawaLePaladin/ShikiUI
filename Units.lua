@@ -12,8 +12,8 @@ local getn = table.getn
 local floor = math.floor
 
 U.frames = {}
-U.order = { "player", "target", "targettarget" }
-U.cfgName = { player = "player", target = "target", targettarget = "tot" }
+U.order = { "player", "target", "targettarget", "pet" }
+U.cfgName = { player = "player", target = "target", targettarget = "tot", pet = "pet" }
 U.built = false
 U.active = false
 U.dirty = false
@@ -21,10 +21,11 @@ U.animating = false
 U.blizzHidden = false
 
 local TOT_RATIO = 0.6
+local PET_RATIO = 0.8
 local FLUSH = 0.05
 local POLL_TOT = 0.2
 local POLL_RANGE = 0.25
-local BLIZZ = { "PlayerFrame", "TargetFrame", "TargetofTargetFrame" }
+local BLIZZ = { "PlayerFrame", "TargetFrame", "TargetofTargetFrame", "PetFrame" }
 
 -- couleurs d'interface (choix de style, pas des donnees de jeu)
 local COL_GRAY = { 0.55, 0.55, 0.55 }
@@ -251,6 +252,11 @@ local PW_EV = { UNIT_MANA = true, UNIT_MAXMANA = true, UNIT_RAGE = true, UNIT_MA
 local ALL_EV = { UNIT_DISPLAYPOWER = true, UNIT_NAME_UPDATE = true, UNIT_LEVEL = true, UNIT_FLAGS = true, UNIT_FACTION = true }
 
 local function onUnitEvent(ev, a1)
+	if ev == "UNIT_PET" and a1 == "player" then
+		local pf = U.frames.pet
+		if pf then pf.dAll = true ; U.dirty = true end
+		return
+	end
 	local f = U.frames[a1]
 	if not f or not f.vis then return end
 	if HP_EV[ev] then f.dHp = true
@@ -279,7 +285,7 @@ local function onWorld()
 	U.dirty = true
 end
 
-local UNIT_EVENTS = { "UNIT_HEALTH", "UNIT_MAXHEALTH", "UNIT_MANA", "UNIT_MAXMANA", "UNIT_RAGE", "UNIT_MAXRAGE",
+local UNIT_EVENTS = { "UNIT_PET", "UNIT_HEALTH", "UNIT_MAXHEALTH", "UNIT_MANA", "UNIT_MAXMANA", "UNIT_RAGE", "UNIT_MAXRAGE",
 	"UNIT_ENERGY", "UNIT_MAXENERGY", "UNIT_DISPLAYPOWER", "UNIT_NAME_UPDATE", "UNIT_LEVEL", "UNIT_FLAGS", "UNIT_FACTION" }
 
 -- ---------------------------------------------------------------- sondages (cible de la cible, distance)
@@ -379,7 +385,7 @@ function U.Create(unit)
 	f:EnableMouse(true)
 	f:RegisterForClicks("LeftButtonUp", "RightButtonUp")
 	T.Backdrop(f, T.c.bg, T.c.border)
-	-- Barre de pre-soin (soins entrants) SOUS la barre de vie : joueur et cible seulement
+	-- Barre de pre-soin (soins entrants) SOUS la barre de vie : tout sauf la cible de la cible
 	if unit ~= "targettarget" then
 		f.heal = T.Bar(f)
 		f.heal:SetFrameLevel(f:GetFrameLevel() + 1)
@@ -413,8 +419,11 @@ function U.ApplyLayout()
 		local f = U.frames[unit]
 		if f then
 			local isTot = (unit == "targettarget")
-			local fw = isTot and floor(w * TOT_RATIO) or w
-			local fh = isTot and math.max(14, floor(h * 0.7)) or h
+			local isPet = (unit == "pet")
+			local rw = isTot and TOT_RATIO or (isPet and PET_RATIO or 1)
+			local rh = isTot and 0.7 or (isPet and PET_RATIO or 1)
+			local fw = floor(w * rw)
+			local fh = math.max(14, floor(h * rh))
 			f:SetWidth(fw)
 			f:SetHeight(fh)
 			local withPower = cfg.showpower and not isTot
@@ -449,7 +458,7 @@ end
 function U.Build()
 	if U.built then return end
 	U.built = true
-	local defaults = { player = { -230, -150 }, target = { 230, -150 }, targettarget = { 230, -196 } }
+	local defaults = { player = { -230, -150 }, target = { 230, -150 }, targettarget = { 230, -196 }, pet = { -160, -196 } }
 	for i = 1, getn(U.order) do
 		local unit = U.order[i]
 		local f = U.Create(unit)
@@ -560,6 +569,7 @@ SUI.RegisterModule("units", {
 		{ key = "units.player.enabled", type = "bool", cat = "units", label = "opt.units.player.enabled", tip = "tip.units.player.enabled", default = true, order = 10 },
 		{ key = "units.target.enabled", type = "bool", cat = "units", label = "opt.units.target.enabled", tip = "tip.units.target.enabled", default = true, order = 20 },
 		{ key = "units.tot.enabled", type = "bool", cat = "units", label = "opt.units.tot.enabled", tip = "tip.units.tot.enabled", default = true, order = 30 },
+		{ key = "units.pet.enabled", type = "bool", cat = "units", label = "opt.units.pet.enabled", tip = "tip.units.pet.enabled", default = true, order = 35 },
 		{ key = "units.width", type = "number", cat = "units", label = "opt.units.width", tip = "tip.units.width", min = 100, max = 320, step = 5, default = 180, order = 40 },
 		{ key = "units.height", type = "number", cat = "units", label = "opt.units.height", tip = "tip.units.height", min = 16, max = 60, step = 1, default = 28, order = 50 },
 		{ key = "units.powerheight", type = "number", cat = "units", label = "opt.units.powerheight", tip = "tip.units.powerheight", min = 2, max = 12, step = 1, default = 4, order = 60 },
