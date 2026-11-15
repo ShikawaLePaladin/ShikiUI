@@ -1,5 +1,8 @@
 -- ShikiUI BossMods : alarmes de raid (module "bossmods"), moteur maison inspire des PRINCIPES de BigWigs (aucun code copie) :
 -- des barres de compte a rebours et des annonces quand un evenement de boss arrive.
+-- DEUX MODES (reglage bossmods.mode : auto / bigwigs / own) : si BigWigs est installe, le PONT (M.BW, en bas de fichier) le laisse
+-- chronometrer et annoncer et se contente de l'habiller (barres CandyBar, messages), de rendre ses ancres deplacables (Mover) et de
+-- prendre son pull ; le moteur ci-dessous est alors COUPE. Sans BigWigs (ou mode own), le moteur ci-dessous sert de secours.
 --
 -- Fonctionnement :
 --   1. la cible du joueur (ou la souris) est reconnue comme un boss connu : nom plie (accents FR ignores) ;
@@ -20,6 +23,8 @@ local T = SUI.Theme
 
 local M = {}
 SUI.BossMods = M
+local B = {}              -- pont BigWigs (voir plus bas, "PONT BIGWIGS")
+M.BW = B
 
 local getn, tinsert, tremove = table.getn, table.insert, table.remove
 local floor, mmin, mmax = math.floor, math.min, math.max
@@ -1128,6 +1133,7 @@ function M.Tick()
 	local nowP = GetTime()
 	local p = M.armed[1]
 	if p and p.pull then M.PullTick(nowP) end
+	if M.eff == "bridge" then return end       -- BigWigs chronometre : notre moteur de boss ne tourne pas (seul le pull local reste)
 	M.Detect()
 	local d = M.cur and M.BOSSES[M.cur]
 	if not d then return end
@@ -1301,6 +1307,11 @@ end
 
 function M.Open()
 	if not M.on then return end
+	if M.eff == "bridge" then
+		-- BigWigs affiche les barres : notre fenetre n'a rien a montrer, on ouvre ses options
+		B.OpenOptions()
+		return
+	end
 	SUI.WhenSafe(function()
 		if not M.on then return end
 		M.Build()
@@ -1451,6 +1462,8 @@ function M.Pull(secs)
 	secs = tonumber(secs) or 10
 	if secs < 3 then secs = 3 end
 	if secs > 60 then secs = 60 end
+	-- pont BigWigs : son pull (barre, annonces, synchro) remplace le notre ; sinon (BigWigs inactif, hors raid) on garde le notre
+	if M.eff == "bridge" and B.PullBW(secs) then return end
 	if GetNumRaidMembers() > 0 and not M.CanLead() then
 		SUI.Print(L("msg.bossmods.nolead"))
 		return
@@ -1493,6 +1506,16 @@ function M.PullStart(secs, from)
 		M.pullAnnounced = {}
 	end
 	M.EnsureTask()
+	-- pont BigWigs, pull local (hors raid) : BigWigs ne montre rien, notre fenetre porte la barre le temps du decompte
+	if M.eff == "bridge" then
+		SUI.WhenSafe(function()
+			if not M.on or M.eff ~= "bridge" or M.narmed == 0 then return end
+			M.Build()
+			M.win:Show()
+			M.ApplySize()
+			M.Paint()
+		end)
+	end
 end
 
 -- Decompte (5..1 puis GO) et expiration du pull. PullTick gere tout lui-meme : le pull survit au changement
@@ -1512,6 +1535,14 @@ function M.PullTick(now)
 		tremove(M.armed, 1)
 		M.narmed = M.narmed - 1
 		if M.win and M.win:IsShown() then M.Paint() end
+		-- pont BigWigs : la minuterie et la fenetre n'existaient que pour ce pull local, on les rend
+		if M.eff == "bridge" and M.narmed == 0 then
+			if M.task then
+				SUI.Cancel(M.task)
+				M.task = nil
+			end
+			M.Close()
+		end
 		return
 	end
 	local left = e.endsAt - now
@@ -1557,20 +1588,32 @@ function M.OnCombatEnd()
 end
 
 -- ---------------------------------------------------------------- cycle de vie
--- ---------------------------------------------------------------- cycle de vie
-function M.Enable()
-	M.on = true
-	if not M.watching then
-		M.watching = true
-		C.Watch("bossmods.", M.OnKey)
-	end
+-- DEUX moteurs, UN SEUL actif a la fois (M.eff) :
+--   "own"    : le moteur de chronos ci-dessus (secours : BigWigs absent, ou reglage bossmods.mode = own) ;
+--   "bridge" : BigWigs est la ; c'est LUI qui chronometre et annonce, ShikiUI l'habille et l'integre (pont B, plus bas). Le moteur de
+--              secours est alors COUPE : ni barre en double, ni RAID_WARNING en double, ni minuterie, ni evenement ;
+--   "none"   : reglage bossmods.mode = bigwigs sans BigWigs : rien ne tourne (l'etat est signale dans le menu).
+M.eff = nil
+
+function M.Effective()
+	local mode = C.Get("bossmods.mode") or "auto"
+	if mode == "own" then return "own" end
+	if B.Present() then return "bridge" end
+	if mode == "bigwigs" then return "none" end
+	return "own"
+end
+
+function M.OwnStart()
+	if M.ownOn then return end
+	M.ownOn = true
 	SUI.On("CHAT_MSG_ADDON", M.OnAddonComm)
 	SUI.On("PLAYER_REGEN_ENABLED", M.OnCombatEnd)
+	SUI.On("PLAYER_REGEN_DISABLED", M.OnCombatStart)
 	M.EnsureTask()
 end
 
-function M.Disable()
-	M.on = false
+function M.OwnStop()
+	M.ownOn = false
 	M.testing = false
 	if M.task then
 		SUI.Cancel(M.task)
@@ -1578,17 +1621,762 @@ function M.Disable()
 	end
 	SUI.Off("CHAT_MSG_ADDON", M.OnAddonComm)
 	SUI.Off("PLAYER_REGEN_ENABLED", M.OnCombatEnd)
+	SUI.Off("PLAYER_REGEN_DISABLED", M.OnCombatStart)
 	M.FlashStop()
 	M.MsgStop()
 	M.armed = {}
 	M.narmed = 0
+	M.cur = nil
+	M.curLabel = EMPTY
+	M.combatAt = nil
+	M.next = {}
+	M.warns = {}
 	M.Close()
 end
 
+-- Choisit le moteur (a l'activation, apres ADDON_LOADED / PLAYER_ENTERING_WORLD, au changement du reglage) et bascule proprement.
+function M.Apply()
+	if not M.on then return end
+	local eff = M.Effective()
+	if eff == M.eff then return end
+	M.eff = eff
+	if eff == "bridge" then
+		M.OwnStop()
+		B.Start()
+	elseif eff == "own" then
+		B.Stop()
+		M.OwnStart()
+	else
+		B.Stop()
+		M.OwnStop()
+	end
+end
+
+-- Detection tardive : un BigWigs charge apres nous.
+function M.OnAddon(ev, name)
+	if name == "BigWigs" then
+		M.Apply()
+		M.Listen()
+	end
+end
+
+-- Tous les addons sont charges a ce stade : dernier tour de detection, puis plus rien a attendre.
+function M.OnWorld()
+	M.Apply()
+	SUI.Off("PLAYER_ENTERING_WORLD", M.OnWorld)
+end
+
+-- Entree en combat : l'horloge des evenements est celle du COMBAT (pas celle de la cible).
+function M.OnCombatStart()
+	if not M.combatAt then M.combatAt = GetTime() end
+end
+
+function M.Enable()
+	M.on = true
+	if not M.watching then
+		M.watching = true
+		C.Watch("bossmods.", M.OnKey)
+	end
+	M.eff = nil
+	M.Apply()
+	M.Listen()
+end
+
+-- Attente d'un BigWigs charge apres nous (ordre alphabetique des addons, ou chargement a la demande) : seulement hors mode own, tant
+-- que le pont n'est pas en place. Rappelee au changement de mode (own -> auto doit reprendre l'attente).
+function M.Listen()
+	if not M.on then return end
+	if (C.Get("bossmods.mode") or "auto") ~= "own" and M.eff ~= "bridge" then
+		SUI.On("ADDON_LOADED", M.OnAddon)
+		SUI.On("PLAYER_ENTERING_WORLD", M.OnWorld)
+	else
+		SUI.Off("ADDON_LOADED", M.OnAddon)
+		SUI.Off("PLAYER_ENTERING_WORLD", M.OnWorld)
+	end
+end
+
+function M.Disable()
+	M.on = false
+	SUI.Off("ADDON_LOADED", M.OnAddon)
+	SUI.Off("PLAYER_ENTERING_WORLD", M.OnWorld)
+	B.Stop()
+	M.OwnStop()
+	M.eff = nil
+end
+
 function M.OnKey(key)
-	if key == nil or string.find(key or EMPTY, "^bossmods%.") then
+	if key == nil or key == "bossmods.mode" then
+		M.Apply()
+		M.Listen()
+	end
+	if not M.on then return end
+	if key ~= nil and not sfind(key, "^bossmods%.") then return end
+	if M.eff == "bridge" then
+		B.OnKey(key)
+	elseif M.eff == "own" then
 		if key == "bossmods.width" or key == "bossmods.rows" or key == nil then M.ApplySize() end
 		if M.win and M.win:IsShown() then M.Paint() end
+	end
+end
+
+-- ================================================================ PONT BIGWIGS
+-- BigWigs (2.0.0 Turtle, Ace2 + CandyBar-2.2) fait deja le travail : chronos par boss, annonces, pull. Le pont ne le remplace pas, il
+-- l'HABILLE et l'INTEGRE, sans jamais modifier un seul fichier de BigWigs : uniquement des enveloppes manuelles non destructives (on
+-- appelle d'abord la fonction d'origine, puis la notre, sous pcall ; une enveloppe qu'un autre addon a recouverte devient transparente),
+-- des lectures de tables publiques (AceLibrary("CandyBar-2.2").var.handlers : une table par barre, avec son cadre) et le Mover de ShikiUI.
+-- NOMS DE BIGWIGS UTILISES (releves dans l'installation, jamais copies) :
+--   globales BigWigs, BigWigsBars (frames.anchor / frames.emphasizeAnchor, StartCandyBar, SetupFrames, ResetAnchor, RestorePosition),
+--   BigWigsMessages (frames.anchor, msgframe, ResetAnchor, RestorePosition), BigWigsPulltimer (BigWigs_PullCommand), BigWigsOptions
+--   (OpenMenu) ; evenement Ace "BigWigs_Test" (BigWigsBars:TriggerEvent) ; bibliotheque CandyBar : handlers[nom] = { frame, time, endtime,
+--   starttime, running, paused, gradient, color, width, height, texture, fontsize }, cadre = { statusbar, statusbarbg, icon, text,
+--   timertext, spark } ; framepool (cadres liberes).
+-- HABILLAGE d'une barre : texture et police du style (bossmods.bartex / .font / .fontsize), fond et lisere (T.c.inset / T.c.border),
+--   icone rognee, etincelle facultative, hauteur / largeur facultatives, couleur : BigWigs / accent / accent puis alerte (T.Accent,
+--   T.c.warn, T.c.bad). Applique a CHAQUE demarrage de barre (CandyBar reinitialise tout) par l'enveloppe de StartCandyBar, et filet de
+--   securite : un balayage toutes les 0,5 s. Couper l'habillage (ou le pont) RESTAURE ce qui avait ete change (taille, texture, couleur,
+--   degrade, polices, icone, etincelle).
+-- ANCRES : BigWigsBarAnchor, BigWigsEmphasizedBarAnchor et BigWigsMessageAnchor sont enregistrees au Mover (poignees nommees, "Montrer tout",
+--   remise a zero) ; le glisser de BigWigs est coupe pour qu'il n'y ait QU'UNE source de position ; son bouton de remise a zero declenche
+--   la remise a zero du Mover.
+-- COUT : nul si BigWigs est absent ou si le mode est "own" (B.Start n'est jamais appele : aucune enveloppe, aucune minuterie).
+-- NON VERIFIE EN JEU : tout. Notamment que StartCandyBar est un champ propre du module (sinon l'enveloppe le cree), le rendu des liseres
+--   (textures du cadre de barre sous ses sous-cadres), GetNormalTexture sur l'icone, MessageFrame:SetFont, RegisterForDrag() sans argument.
+B.on = false
+B.hooks = {}            -- enveloppes posees : { obj, field, orig, fn, own, live }
+B.anchors = {}          -- [cle du Mover] = cadre BigWigs enregistre
+B.gen = 1               -- generation de style : toute repeinture l'incremente (les barres se re-habillent)
+B.task = nil
+B.lib = nil             -- bibliotheque CandyBar
+B.late = false          -- des liseres n'ont pu etre crees (combat) : a refaire hors combat
+B.msgStyled = false
+B.styled = 0            -- compteur de diagnostic : barres habillees
+B.defs = {
+	{ key = "bossmods.bwbars", mod = "BigWigsBars", pick = "anchor", label = "mod.bossmods.bw.anchor.bars", point = "TOP", x = 0, y = -120 },
+	{ key = "bossmods.bwemph", mod = "BigWigsBars", pick = "emphasizeAnchor", label = "mod.bossmods.bw.anchor.emph", point = "TOP", x = 0, y = -260 },
+	{ key = "bossmods.bwmsg", mod = "BigWigsMessages", pick = "anchor", label = "mod.bossmods.bw.anchor.msg", point = "CENTER", x = 0, y = 100 },
+}
+
+local function gt(name)
+	local v = getglobal(name)
+	if type(v) == "table" then return v end
+	return nil
+end
+
+function B.Opt(k)
+	return C.Get("bossmods.bw." .. k)
+end
+
+-- ---------------------------------------------------------------- detection
+function B.Present()
+	if gt("BigWigs") then return true end
+	local f = getglobal("IsAddOnLoaded")
+	if type(f) == "function" then
+		local ok, r = pcall(f, "BigWigs")
+		return (ok and r) and true or false
+	end
+	return false
+end
+
+-- La bibliotheque CandyBar de BigWigs (ou nil).
+function B.Lib()
+	local al = getglobal("AceLibrary")
+	if al == nil then return nil end
+	local ok, lib = pcall(al, "CandyBar-2.2")
+	if ok and type(lib) == "table" and type(lib.var) == "table" and type(lib.var.handlers) == "table" then return lib end
+	return nil
+end
+
+-- Version, modules de boss charges / actifs, zone (lecture seule, sous pcall : l'API de BigWigs peut changer).
+function B.Info()
+	local bw = gt("BigWigs")
+	local ver, nmods, nact = "?", 0, 0
+	if bw then
+		if type(bw.version) == "string" then
+			local v = sgsub(bw.version, "|c%x%x%x%x%x%x%x%x", EMPTY)
+			v = sgsub(v, "|r", EMPTY)
+			ver = v
+		end
+		if type(bw.IterateModules) == "function" then
+			pcall(function()
+				local name, mod
+				for name, mod in bw:IterateModules() do
+					if type(mod) == "table" and type(mod.IsBossModule) == "function" and mod:IsBossModule() then
+						nmods = nmods + 1
+						if type(bw.IsModuleActive) == "function" and bw:IsModuleActive(mod) then nact = nact + 1 end
+					end
+				end
+			end)
+		end
+	end
+	local zone = EMPTY
+	local zf = getglobal("GetRealZoneText")
+	if type(zf) == "function" then
+		local ok, z = pcall(zf)
+		if ok and type(z) == "string" then zone = z end
+	end
+	return ver, nmods, nact, zone
+end
+
+-- ---------------------------------------------------------------- enveloppes non destructives
+-- post(a, b, c, d, resultat) est appelee APRES la fonction d'origine (sous pcall). Retourne vrai si l'enveloppe est en place.
+function B.Wrap(obj, field, post)
+	if type(obj) ~= "table" or type(post) ~= "function" then return false end
+	local orig = obj[field]
+	if type(orig) ~= "function" then return false end
+	local i
+	for i = 1, getn(B.hooks) do
+		local h = B.hooks[i]
+		if h.obj == obj and h.field == field and h.live and obj[field] == h.fn then return true end
+	end
+	local rec = { obj = obj, field = field, orig = orig, own = (rawget(obj, field) ~= nil), live = true }
+	rec.fn = function(p1, p2, p3, p4, p5, p6, p7, p8, p9, p10)
+		local r1, r2, r3 = orig(p1, p2, p3, p4, p5, p6, p7, p8, p9, p10)
+		if rec.live and B.on then
+			local ok, err = pcall(post, p1, p2, p3, p4, r1)
+			if not ok then SUI.Report("bossmods bw " .. field, err) end
+		end
+		return r1, r2, r3
+	end
+	obj[field] = rec.fn
+	tinsert(B.hooks, rec)
+	return true
+end
+
+-- Retire nos enveloppes. Si un autre addon est passe par-dessus, la notre reste dans la chaine mais ne fait plus rien.
+function B.UnhookAll()
+	local i
+	for i = getn(B.hooks), 1, -1 do
+		local rec = B.hooks[i]
+		rec.live = false
+		if rec.obj[rec.field] == rec.fn then
+			if rec.own then rec.obj[rec.field] = rec.orig else rec.obj[rec.field] = nil end
+		end
+		tremove(B.hooks, i)
+	end
+end
+
+function B.HookAll()
+	local bars, msgs = gt("BigWigsBars"), gt("BigWigsMessages")
+	B.Wrap(bars, "StartCandyBar", B.PostStart)
+	B.Wrap(bars, "SetupFrames", B.PostSetup)
+	B.Wrap(bars, "ResetAnchor", B.PostReset)
+	B.Wrap(bars, "RestorePosition", B.PostRestore)
+	B.Wrap(msgs, "ResetAnchor", B.PostReset)
+	B.Wrap(msgs, "RestorePosition", B.PostRestore)
+end
+
+function B.PostStart(self, name)
+	if type(name) == "string" then B.StyleName(name) end
+end
+
+function B.PostSetup()
+	B.allAttached = false
+	B.AttachAll()
+end
+
+-- Bouton "Reset position" de BigWigs : remise a zero du Mover pour les ancres de ce module.
+function B.PostReset(self, which)
+	-- BigWigs appelle aussi ResetAnchor("normal" / "emphasize") DE L'INTERIEUR de SetupFrames quand il n'a pas de position
+	-- enregistree (toujours le cas, le glisser etant coupe) : ce n'est pas le bouton, la position du Mover doit survivre.
+	if which == "normal" or which == "emphasize" then return end
+	local i
+	for i = 1, getn(B.defs) do
+		local def = B.defs[i]
+		if B.anchors[def.key] and gt(def.mod) == self and SUI.Mover and SUI.Mover.Reset then SUI.Mover.Reset(def.key) end
+	end
+end
+
+-- BigWigs repose sa position (a la creation, au chargement) : la position de ShikiUI reprend la main.
+function B.PostRestore(self)
+	local i
+	for i = 1, getn(B.defs) do
+		local def = B.defs[i]
+		if B.anchors[def.key] and gt(def.mod) == self then SUI.Layout.Apply(def.key) end
+	end
+end
+
+-- ---------------------------------------------------------------- ancres (Mover)
+function B.AnchorOf(def)
+	local m = gt(def.mod)
+	if not m or type(m.frames) ~= "table" then return nil end
+	local f = m.frames[def.pick]
+	if type(f) == "table" and type(f.GetPoint) == "function" and type(f.SetPoint) == "function" then return f end
+	return nil
+end
+
+-- Position actuelle de BigWigs, reprise comme position par defaut (premiere fois) : point, x, y relatifs a UIParent.
+function B.DefaultPoint(f, def)
+	local ok, p, rel, rp, x, y = pcall(f.GetPoint, f, 1)
+	if ok and p and type(x) == "number" and type(y) == "number" and (rel == nil or rel == UIParent) then
+		if rp == nil or rp == p then return p, x, y end
+		if p == "TOPLEFT" and rp == "BOTTOMLEFT" then return p, x, y - (UIParent:GetHeight() or 0) end
+	end
+	return def.point, def.x, def.y
+end
+
+function B.Attach(def)
+	local f = B.AnchorOf(def)
+	if not f then return false end
+	if B.anchors[def.key] == f then return true end
+	if B.anchors[def.key] then B.Forget(def) end
+	if not SUI.Mover or not SUI.Mover.Register then return false end
+	local p, x, y = B.DefaultPoint(f, def)
+	local ok = SUI.Mover.Register(def.key, f, { label = def.label, point = p, x = x, y = y, scale = false, always = true })
+	if ok then
+		B.anchors[def.key] = f
+		pcall(f.RegisterForDrag, f)       -- sans argument : plus de glisser BigWigs (une seule source de position : le Mover)
+	end
+	return ok
+end
+
+function B.AttachAll()
+	local want = B.Opt("anchors") ~= false
+	local all = true
+	local i
+	for i = 1, getn(B.defs) do
+		local def = B.defs[i]
+		if want then
+			if not B.Attach(def) then all = false end
+		elseif B.anchors[def.key] then
+			B.Forget(def)
+		end
+	end
+	-- tout est accroche (ou l'option est coupee) : le balayage n'y revient plus tant que BigWigs ne recree pas ses cadres (PostSetup)
+	B.allAttached = all
+end
+
+-- Rend l'ancre a BigWigs (glisser, position, echelle). Le Mover n'a pas de "desenregistrement" : on retire ses entrees publiques.
+function B.Forget(def)
+	local f = B.anchors[def.key]
+	if not f then return end
+	B.anchors[def.key] = nil
+	local Mv, Ly = SUI.Mover, SUI.Layout
+	if Mv and type(Mv.items) == "table" then
+		local rec = Mv.items[def.key]
+		if rec and rec.handle then pcall(rec.handle.Hide, rec.handle) end
+		Mv.items[def.key] = nil
+		if type(Mv.order) == "table" then
+			local k
+			for k = getn(Mv.order), 1, -1 do
+				if Mv.order[k] == def.key then tremove(Mv.order, k) end
+			end
+		end
+	end
+	if Ly and type(Ly.items) == "table" then Ly.items[def.key] = nil end
+	f.layoutKey = nil
+	pcall(f.RegisterForDrag, f, "LeftButton")
+	pcall(f.SetScale, f, 1)
+	local m = gt(def.mod)
+	if m and type(m.RestorePosition) == "function" then pcall(m.RestorePosition, m) end
+end
+
+-- ---------------------------------------------------------------- habillage des barres
+function B.SetFont(fs, path, size, flags)
+	if type(fs) ~= "table" or type(fs.SetFont) ~= "function" then return end
+	local ok, r = pcall(fs.SetFont, fs, path, size, flags)
+	if not ok or r == false then pcall(fs.SetFont, fs, T.FONTS.arial, size, flags) end
+end
+
+-- Epaisseur du lisere selon le style (0 = aucun).
+function B.EdgePx()
+	local e = T.edge
+	if not e or not e.file then return 0 end
+	if e.size >= 2 and e.size <= 3 then return 2 end
+	return 1
+end
+
+function B.HideDeco(f)
+	local d = type(f) == "table" and f.suiDeco or nil
+	if d then
+		d.bar:Hide()
+		d.icon:Hide()
+	end
+end
+
+-- Lisere du corps de la barre et de l'icone : de simples textures posees SOUS les sous-cadres de la barre (aucun cadre cree).
+function B.Deco(f)
+	local d = f.suiDeco
+	if not d then
+		if SUI.InCombat() then
+			B.late = true
+			return
+		end
+		d = {}
+		d.bar = f:CreateTexture(nil, "BACKGROUND")
+		d.bar:SetTexture(T.tex.white)
+		d.icon = f:CreateTexture(nil, "BACKGROUND")
+		d.icon:SetTexture(T.tex.white)
+		d.px = -1
+		f.suiDeco = d
+	end
+	local px = B.EdgePx()
+	if px <= 0 then
+		d.bar:Hide()
+		d.icon:Hide()
+		return
+	end
+	if d.px ~= px then
+		d.px = px
+		d.bar:ClearAllPoints()
+		d.bar:SetPoint("TOPLEFT", f.statusbar, "TOPLEFT", -px, px)
+		d.bar:SetPoint("BOTTOMRIGHT", f.statusbar, "BOTTOMRIGHT", px, -px)
+		d.icon:ClearAllPoints()
+		d.icon:SetPoint("TOPLEFT", f.icon, "TOPLEFT", -px, px)
+		d.icon:SetPoint("BOTTOMRIGHT", f.icon, "BOTTOMRIGHT", px, -px)
+	end
+	local c = T.c.border
+	d.bar:SetVertexColor(c[1], c[2], c[3], c[4] or 1)
+	d.icon:SetVertexColor(c[1], c[2], c[3], c[4] or 1)
+	d.bar:Show()
+	d.icon:Show()
+end
+
+-- Couleur "accent" ou "alerte" d'une barre (modes accent / urgent).
+function B.Tint(h, f, mode)
+	local r, g, b = T.Accent()
+	if mode == "urgent" and not h.paused and h.running then
+		local left = (h.endtime or 0) - GetTime()
+		if left <= 5 then
+			r, g, b = T.c.bad[1], T.c.bad[2], T.c.bad[3]
+		elseif left <= 10 then
+			r, g, b = T.c.warn[1], T.c.warn[2], T.c.warn[3]
+		end
+	end
+	f.statusbar:SetStatusBarColor(r, g, b, 0.95)
+end
+
+-- Habille UNE barre. Memorise ce qu'il faut pour la restaurer (h.suiOrig).
+function B.StyleBar(name, h)
+	local f = h.frame
+	local lib = B.lib
+	if not lib or type(f) ~= "table" or type(f.statusbar) ~= "table" or type(f.statusbarbg) ~= "table" or type(f.text) ~= "table" or type(f.timertext) ~= "table" then return end
+	local df = lib.var.defaults or {}
+	local o = h.suiOrig
+	if not o then
+		o = { w = h.width, ht = h.height, grad = h.gradient, tex = h.texture, fs = h.fontsize }
+		if type(f.text.GetFont) == "function" then
+			local okf, p1, p2, p3 = pcall(f.text.GetFont, f.text)
+			if okf and type(p1) == "string" and type(p2) == "number" then o.tf, o.tfs, o.tff = p1, p2, p3 end
+		end
+		h.suiOrig = o
+	end
+	-- taille (0 = celle de BigWigs)
+	local cw, ch = B.Opt("width"), B.Opt("height")
+	local nw = (type(cw) == "number" and cw > 0) and mmax(cw, 80) or o.w
+	local nh = (type(ch) == "number" and ch > 0) and mmax(ch, 8) or o.ht
+	if nh ~= h.height then
+		pcall(lib.SetHeight, lib, name, nh or df.height or 22)
+		h.height = nh
+	end
+	if nw ~= h.width then
+		pcall(lib.SetWidth, lib, name, nw or df.width or 200)
+		h.width = nw
+	end
+	-- texture, fond
+	local tex = T.BarTexture("bossmods")
+	f.statusbar:SetStatusBarTexture(tex)
+	f.statusbarbg:SetStatusBarTexture(tex)
+	h.texture = tex
+	local ic = T.c.inset
+	f.statusbarbg:SetStatusBarColor(ic[1], ic[2], ic[3], (ic[4] or 1) * (T.alpha or 1))
+	-- couleur
+	local mode = B.Opt("color") or "keep"
+	if mode == "accent" or mode == "urgent" then
+		h.gradient = nil
+		B.Tint(h, f, mode)
+	else
+		if o.grad ~= nil then h.gradient = o.grad end
+		local c = h.color or df.color
+		if not h.gradient and type(c) == "table" then f.statusbar:SetStatusBarColor(c[1], c[2], c[3], c[4]) end
+	end
+	-- polices
+	local path, px = T.Font("bossmods")
+	local size = px or o.fs or df.fontsize or 11
+	local eh = h.height or df.height or 22
+	if size > eh - 3 then size = mmax(7, eh - 3) end
+	local flags = T.outline or EMPTY
+	B.SetFont(f.text, path, size, flags)
+	B.SetFont(f.timertext, path, size, flags)
+	if type(f.icon) == "table" then
+		if type(f.icon.text) == "table" then B.SetFont(f.icon.text, path, size * 1.5, "OUTLINE") end
+		if type(f.icon.GetNormalTexture) == "function" then
+			local nt = f.icon:GetNormalTexture()
+			if nt then nt:SetTexCoord(0.08, 0.92, 0.08, 0.92) end
+		end
+	end
+	if type(f.spark) == "table" then
+		if B.Opt("spark") then f.spark:Show() else f.spark:Hide() end
+	end
+	B.Deco(f)
+	h.suiStamp = h.starttime or 0
+	h.suiGen = B.gen
+	B.styled = B.styled + 1
+end
+
+-- Rend a une barre ce que BigWigs / CandyBar lui avait donne.
+function B.Unstyle(name, h)
+	local o = h.suiOrig
+	local f = h.frame
+	h.suiOrig, h.suiStamp, h.suiGen = nil, nil, nil
+	if not o or type(f) ~= "table" or not B.lib then return end
+	local lib = B.lib
+	local df = lib.var.defaults or {}
+	if h.height ~= o.ht then
+		pcall(lib.SetHeight, lib, name, o.ht or df.height or 22)
+		h.height = o.ht
+	end
+	if h.width ~= o.w then
+		pcall(lib.SetWidth, lib, name, o.w or df.width or 200)
+		h.width = o.w
+	end
+	if type(f.statusbar) == "table" and type(f.statusbarbg) == "table" then
+		local tex = o.tex or df.texture
+		if type(tex) == "string" then
+			f.statusbar:SetStatusBarTexture(tex)
+			f.statusbarbg:SetStatusBarTexture(tex)
+		end
+		h.texture = o.tex
+		h.gradient = o.grad
+		local c = h.color or df.color
+		if not h.gradient and type(c) == "table" then f.statusbar:SetStatusBarColor(c[1], c[2], c[3], c[4]) end
+		local bc = h.bgcolor or df.bgcolor
+		if type(bc) == "table" then f.statusbarbg:SetStatusBarColor(bc[1], bc[2], bc[3], bc[4]) end
+	end
+	local path, size, flags = o.tf, o.tfs, o.tff
+	if not path then
+		local gf = getglobal("GameFontHighlight")
+		if gf ~= nil and type(gf.GetFont) == "function" then
+			local ok, p, s2, f2 = pcall(gf.GetFont, gf)
+			if ok and type(p) == "string" then path, size, flags = p, s2, f2 end
+		end
+	end
+	path = path or T.font
+	size = size or o.fs or df.fontsize or 11
+	if type(f.text) == "table" then B.SetFont(f.text, path, size, flags or EMPTY) end
+	if type(f.timertext) == "table" then B.SetFont(f.timertext, path, size, flags or EMPTY) end
+	if type(f.icon) == "table" then
+		if type(f.icon.text) == "table" then B.SetFont(f.icon.text, path, size * 1.5, "OUTLINE") end
+		if type(f.icon.GetNormalTexture) == "function" then
+			local nt = f.icon:GetNormalTexture()
+			if nt then nt:SetTexCoord(0, 1, 0, 1) end
+		end
+	end
+	if type(f.spark) == "table" then f.spark:Show() end
+	B.HideDeco(f)
+end
+
+function B.StyleName(name)
+	local lib = B.lib
+	local h = lib and lib.var.handlers[name]
+	if type(h) == "table" then B.StyleOne(name, h) end
+end
+
+function B.StyleOne(name, h)
+	if B.Opt("skin") == false then
+		if h.suiOrig then B.Unstyle(name, h) end
+		return
+	end
+	if h.suiStamp ~= (h.starttime or 0) or h.suiGen ~= B.gen or not h.suiOrig then
+		B.StyleBar(name, h)
+	else
+		-- BigWigs recolore ses barres en route (emphase) : accent / urgence se reposent a chaque balayage
+		local mode = B.Opt("color") or "keep"
+		if (mode == "urgent" or mode == "accent") and type(h.frame) == "table" and h.frame.statusbar then
+			h.gradient = nil
+			B.Tint(h, h.frame, mode)
+		end
+	end
+end
+
+function B.UnstyleAll()
+	local lib = B.lib
+	if not lib then return end
+	local name, h
+	for name, h in pairs(lib.var.handlers) do
+		if type(h) == "table" and h.suiOrig then B.Unstyle(name, h) end
+	end
+	local pool = lib.var.framepool
+	if type(pool) == "table" then
+		local i
+		for i = 1, getn(pool) do B.HideDeco(pool[i]) end
+	end
+end
+
+-- ---------------------------------------------------------------- messages
+function B.StyleMsg()
+	local m = gt("BigWigsMessages")
+	local mf = m and m.msgframe
+	if type(mf) ~= "table" or type(mf.SetFont) ~= "function" then return end
+	if B.Opt("msgskin") ~= false then
+		local path, px = T.Font("bossmods")
+		local size = B.Opt("msgsize")
+		if type(size) ~= "number" or size <= 0 then size = px or floor(20 * (T.fontScale or 1) + 0.5) end
+		if not B.msgStyled and type(mf.GetFont) == "function" then
+			local okf, p1, p2, p3 = pcall(mf.GetFont, mf)
+			if okf and type(p1) == "string" and type(p2) == "number" then B.msgOrig = { p1, p2, p3 } end
+		end
+		B.SetFont(mf, path, size, "OUTLINE")
+		B.msgStyled = true
+	elseif B.msgStyled then
+		B.RestoreMsg()
+	end
+end
+
+function B.RestoreMsg()
+	if not B.msgStyled then return end
+	B.msgStyled = false
+	local m = gt("BigWigsMessages")
+	local mf = m and m.msgframe
+	if type(mf) ~= "table" then return end
+	local o = B.msgOrig
+	B.msgOrig = nil
+	if o then
+		B.SetFont(mf, o[1], o[2], o[3] or EMPTY)
+		return
+	end
+	local fo = getglobal("GameFontNormalLarge")
+	if fo ~= nil and type(mf.SetFontObject) == "function" then pcall(mf.SetFontObject, mf, fo) end
+end
+
+-- ---------------------------------------------------------------- balayage et cycle de vie du pont
+-- Filet de securite (0,5 s) : ancres creees plus tard (BigWigs ne cree ses barres qu'en groupe), barres qui ont perdu leur habillage,
+-- lisere a refaire hors combat, couleur d'alerte qui suit le temps restant.
+function B.Sweep()
+	if not B.on then return end
+	if not B.allAttached then B.AttachAll() end
+	-- le cadre de messages de BigWigs n'est cree qu'a son premier message : habillage des qu'il existe
+	if not B.msgStyled and B.Opt("msgskin") ~= false then B.StyleMsg() end
+	if not B.lib then B.lib = B.Lib() end
+	local lib = B.lib
+	if not lib then return end
+	if B.late and not SUI.InCombat() then
+		B.late = false
+		B.gen = B.gen + 1
+	end
+	local name, h
+	for name, h in pairs(lib.var.handlers) do
+		if type(h) == "table" and type(h.frame) == "table" then
+			local ok, err = pcall(B.StyleOne, name, h)
+			if not ok then SUI.Report("bossmods bw barre", err) end
+		end
+	end
+end
+
+function B.Restyle()
+	if not B.on then return end
+	B.allAttached = false
+	B.gen = B.gen + 1
+	B.StyleMsg()
+	B.Sweep()
+end
+
+function B.OnKey(key)
+	if not B.on then return end
+	if key == nil or sfind(key, "^bossmods%.bw%.") or sfind(key, "^bossmods%.bartex$") or sfind(key, "^bossmods%.font") then
+		if B.Opt("skin") == false then B.UnstyleAll() end
+		B.Restyle()
+	end
+end
+
+function B.Start()
+	if B.on then return end
+	B.on = true
+	B.allAttached = false
+	B.lib = B.Lib()
+	B.HookAll()
+	if not B.accentHooked then
+		B.accentHooked = true
+		T.OnAccent(B.Restyle)
+	end
+	B.StyleMsg()
+	B.Sweep()
+	B.task = SUI.Every(0.5, B.Sweep, "bossmods.bw", true)
+end
+
+function B.Stop()
+	if not B.on then return end
+	B.on = false
+	if B.task then
+		SUI.Cancel(B.task)
+		B.task = nil
+	end
+	B.UnhookAll()
+	B.UnstyleAll()
+	B.RestoreMsg()
+	local i
+	for i = 1, getn(B.defs) do B.Forget(B.defs[i]) end
+	B.lib = nil
+end
+
+-- ---------------------------------------------------------------- integration : options, test, pull
+function B.OpenOptions(anchor)
+	local o = gt("BigWigsOptions")
+	if o and type(o.OpenMenu) == "function" then
+		local ok = pcall(o.OpenMenu, o, anchor or UIParent)
+		if ok then return true end
+	end
+	local open = getglobal("ChatFrame_OpenChat")
+	if type(open) == "function" and pcall(open, "/bw ") then return true end
+	SUI.Print(L("msg.bossmods.bw.noapi"))
+	return false
+end
+
+function B.Test()
+	local m = gt("BigWigsBars") or gt("BigWigs")
+	if m and type(m.TriggerEvent) == "function" and pcall(m.TriggerEvent, m, "BigWigs_Test") then return true end
+	SUI.Print(L("msg.bossmods.bw.noapi"))
+	return false
+end
+
+-- Pull de BigWigs : en raid, par le chef ou un assistant (comme BigWigs). Retourne vrai si BigWigs s'en est charge ; faux : notre pull local.
+function B.PullBW(secs)
+	if GetNumRaidMembers() == 0 then return false end
+	local pt, bw = gt("BigWigsPulltimer"), gt("BigWigs")
+	if not pt or type(pt.BigWigs_PullCommand) ~= "function" then return false end
+	if bw and type(bw.IsActive) == "function" then
+		local ok, act = pcall(bw.IsActive, bw)
+		if ok and not act then return false end
+	end
+	if not M.CanLead() then
+		SUI.Print(L("msg.bossmods.nolead"))
+		return true
+	end
+	local ok, err = pcall(pt.BigWigs_PullCommand, pt, secs)
+	if not ok then
+		SUI.Report("bossmods bw pull", err)
+		return false
+	end
+	return true
+end
+
+function B.StatusText()
+	if M.eff == "bridge" then
+		local ver, nmods, nact, zone = B.Info()
+		return L("mod.bossmods.bw.status", ver, nmods, nact, zone), T.c.good
+	elseif M.eff == "none" then
+		return L("mod.bossmods.bw.none"), T.c.warn
+	end
+	if (C.Get("bossmods.mode") or "auto") == "own" then return L("mod.bossmods.bw.own"), T.c.dim end
+	return L("mod.bossmods.bw.absent"), T.c.dim
+end
+
+-- ---------------------------------------------------------------- page du menu (etat de BigWigs + boutons)
+function M.HookMenu()
+	local Mn = SUI.Menu
+	if not Mn or not Mn.Pages or M.hooked then return end
+	M.hooked = true
+	local orig = Mn.Pages.cat
+	Mn.Pages.cat = function()
+		if Mn.cat == "bossmods" and Mn.GridBtn then
+			local txt, col = B.StatusText()
+			Mn.Section(L("mod.bossmods.bw.sec"), "")
+			Mn.Para(txt, 34, col)
+			if M.eff == "bridge" then
+				Mn.GridBtn(L("mod.bossmods.bw.open"), 3, 208, 24, function() B.OpenOptions() end, false)
+				Mn.GridBtn(L("mod.bossmods.bw.test"), 3, 208, 24, function() B.Test() end, false)
+			end
+		end
+		orig()
 	end
 end
 
@@ -1604,30 +2392,168 @@ local function opt(key, typ, order, def, extra)
 end
 
 local function chanText(o, v) return L("choice.bossmods.channel." .. v) end
+local function modeText(o, v) return L("choice.bossmods.mode." .. v) end
+local function colorText(o, v) return L("choice.bossmods.bw.color." .. v) end
+
+local OPTIONS = {
+	opt("mode", "choice", 5, "auto", { choices = { "auto", "bigwigs", "own" }, choiceText = modeText }),
+	opt("lead", "number", 10, 10, { min = 0, max = 30, step = 1 }),
+	opt("channel", "choice", 20, "self", { choices = { "self", "raid", "party" }, choiceText = chanText }),
+	opt("sound", "bool", 30, true),
+	opt("width", "number", 40, 220, { min = 120, max = 400, step = 10 }),
+	opt("rows", "number", 50, 6, { min = 1, max = 8, step = 1 }),
+	opt("showmsg", "bool", 60, true),
+	opt("icons", "bool", 70, true),
+	opt("incoming", "bool", 80, true),
+	opt("active", "bool", 90, true),
+	opt("pull", "bool", 100, true),
+	opt("flash", "bool", 110, false),
+	opt("bw.skin", "bool", 200, true),
+	opt("bw.color", "choice", 210, "keep", { choices = { "keep", "accent", "urgent" }, choiceText = colorText }),
+	opt("bw.width", "number", 220, 0, { min = 0, max = 400, step = 10 }),
+	opt("bw.height", "number", 230, 0, { min = 0, max = 40, step = 1 }),
+	opt("bw.spark", "bool", 240, true),
+	opt("bw.anchors", "bool", 250, true),
+	opt("bw.msgskin", "bool", 260, true),
+	opt("bw.msgsize", "number", 270, 0, { min = 0, max = 40, step = 1 }),
+}
+if SUI.Look then
+	local lo = SUI.Look.Options("bossmods", { bar = true, font = true, cat = "bossmods", order = 820 })
+	local i
+	for i = 1, getn(lo) do tinsert(OPTIONS, lo[i]) end
+end
 
 SUI.RegisterModule("bossmods", {
 	default = true,
 	cost = "medium",
-	options = {
-		opt("lead", "number", 10, 10, { min = 0, max = 30, step = 1 }),
-		opt("channel", "choice", 20, "self", { choices = { "self", "raid", "party" }, choiceText = chanText }),
-		opt("sound", "bool", 30, true),
-		opt("width", "number", 40, 220, { min = 120, max = 400, step = 10 }),
-		opt("rows", "number", 50, 6, { min = 1, max = 8, step = 1 }),
-		opt("showmsg", "bool", 60, true),
-		opt("icons", "bool", 70, true),
-		opt("incoming", "bool", 80, true),
-		opt("active", "bool", 90, true),
-		opt("pull", "bool", 100, true),
-		opt("flash", "bool", 110, false),
-		opt("pull", "bool", 120, true),
-	},
+	options = OPTIONS,
 	enable = function() M.Enable() end,
 	disable = function() M.Disable() end,
 })
 
--- Mode test : barres et annonces FICTIVES pour placer l'interface sans etre en raid.
+-- Les integrations connues (menu, /sui status) listent BigWigs quand le pont tourne.
+if SUI.Api and SUI.Api.Integrations and not M.apiWrapped then
+	M.apiWrapped = true
+	local origInt = SUI.Api.Integrations
+	SUI.Api.Integrations = function()
+		local t = origInt()
+		if M.on and M.eff == "bridge" then tinsert(t, "BigWigs") end
+		return t
+	end
+end
+
+M.HookMenu()
+
+-- ---------------------------------------------------------------- apercu du menu (barres habillees, sans toucher aux vraies barres)
+local PVN = 3
+local function pvBuild(parent, w, h)
+	local P = SUI.Preview
+	local root = CreateFrame("Frame", nil, parent)
+	local st = { rows = {} }
+	root.st = st
+	local i
+	for i = 1, PVN do
+		local r = CreateFrame("Frame", nil, root)
+		r.edge, r.bg, r.fill, r.spark = P.NewTex(r, "BACKGROUND"), P.NewTex(r, "BACKGROUND"), P.NewTex(r, "ARTWORK"), P.NewTex(r, "OVERLAY")
+		r.nm = T.Text(r, 10, T.c.text, "LEFT", true)
+		r.tm = T.Text(r, 10, T.c.text, "RIGHT", true)
+		r.zone = P.Zone(root, "bar" .. i)
+		st.rows[i] = r
+	end
+	st.cap = T.Text(root, 9, T.c.dim, "LEFT", true)
+	st.zmsg = P.Zone(root, "msg")
+	st.msg = T.Text(root, 14, T.c.text, "CENTER", true)
+	return root
+end
+
+local PVF = { 0.78, 0.5, 0.22 }
+local function pvUpdate(root, w, h)
+	local P = SUI.Preview
+	local st = root.st
+	local bw = C.Get("bossmods.bw.width")
+	if type(bw) ~= "number" or bw <= 0 then bw = 200 end
+	local bh = C.Get("bossmods.bw.height")
+	if type(bh) ~= "number" or bh <= 0 then bh = 16 end
+	local sc = (w - 16) / mmax(bw, 120)
+	if sc > 1.4 then sc = 1.4 end
+	if sc < 0.3 then sc = 0.3 end
+	local rw, rh = floor(bw * sc + 0.5), floor(bh * sc + 0.5)
+	if rh < 8 then rh = 8 end
+	local mode = C.Get("bossmods.bw.color") or "keep"
+	local spark = C.Get("bossmods.bw.spark") ~= false
+	local fsz = mmin(rh - 3, 11)
+	local y = 6
+	local i
+	for i = 1, PVN do
+		local r = st.rows[i]
+		P.Place(r, root, 8, y, rw, rh)
+		P.Fill(r.edge, T.c.border, 1)
+		P.Box(r.edge, r, 0, 0, rw, rh)
+		P.Fill(r.bg, T.c.inset, 1)
+		P.Box(r.bg, r, 1, 1, rw - 2, rh - 2)
+		local cr, cg, cb
+		if mode == "keep" then
+			cr, cg, cb = T.c.warn[1], T.c.warn[2], T.c.warn[3]
+			if i == 3 then cr, cg, cb = T.c.bad[1], T.c.bad[2], T.c.bad[3] end
+			if i == 1 then cr, cg, cb = T.c.good[1], T.c.good[2], T.c.good[3] end
+		elseif mode == "urgent" and i >= 2 then
+			local tok = (i == 3) and T.c.bad or T.c.warn
+			cr, cg, cb = tok[1], tok[2], tok[3]
+		else
+			cr, cg, cb = T.Accent()
+		end
+		r.fill:SetVertexColor(cr, cg, cb, 0.95)
+		P.Box(r.fill, r, 1, 1, (rw - 2) * PVF[i], rh - 2)
+		if spark then
+			P.Fill(r.spark, T.c.text, 0.9)
+			P.Box(r.spark, r, 1 + (rw - 2) * PVF[i] - 1, 0, 3, rh)
+		else
+			r.spark:Hide()
+		end
+		P.Font(r.nm, fsz)
+		r.nm:SetText(L("mod.bossmods.bw.pv." .. i))
+		r.nm:ClearAllPoints()
+		r.nm:SetPoint("LEFT", r, "LEFT", 4, 0)
+		r.nm:SetWidth(rw * 0.65)
+		r.nm:Show()
+		P.Font(r.tm, fsz)
+		r.tm:SetText(tostring(floor(30 * PVF[i])))
+		r.tm:ClearAllPoints()
+		r.tm:SetPoint("RIGHT", r, "RIGHT", -4, 0)
+		r.tm:SetWidth(30)
+		r.tm:Show()
+		P.PlaceZone(r.zone, root, 8, y, rw, rh)
+		y = y + rh + 4
+	end
+	P.Font(st.cap, 9)
+	st.cap:SetText(L("mod.bossmods.bw.pvcap"))
+	st.cap:ClearAllPoints()
+	st.cap:SetPoint("TOPLEFT", root, "TOPLEFT", 8, -(y + 2))
+	st.cap:Show()
+	y = y + 22
+	local size = C.Get("bossmods.bw.msgsize")
+	if type(size) ~= "number" or size <= 0 then size = 20 end
+	P.Font(st.msg, mmin(size, 22))
+	st.msg:SetText(C.Get("bossmods.bw.msgskin") ~= false and L("mod.bossmods.bw.pvmsg") or EMPTY)
+	st.msg:ClearAllPoints()
+	st.msg:SetPoint("TOPLEFT", root, "TOPLEFT", 8, -y)
+	st.msg:SetWidth(w - 16)
+	st.msg:Show()
+	P.PlaceZone(st.zmsg, root, 8, y, w - 16, 24)
+end
+
+local PVK = { bar1 = "bossmods.bw.skin", bar2 = "bossmods.bw.color", bar3 = "bossmods.bw.height", msg = "bossmods.bw.msgskin" }
+if SUI.Preview and SUI.Preview.Register then
+	SUI.Preview.Register("bossmods", { watch = { "bossmods." }, build = pvBuild, update = pvUpdate, click = function(zone) return PVK[zone] end })
+end
+
+-- ---------------------------------------------------------------- mode test
+-- Mode test : barres et annonces FICTIVES pour placer l'interface sans etre en raid. Avec BigWigs : son propre test.
 function M.Test()
+	if M.eff == "bridge" then
+		B.Test()
+		return
+	end
 	M.testing = not M.testing
 	if not M.testing then
 		M.armed = {}
@@ -1650,10 +2576,10 @@ function M.Test()
 		M.narmed = 0
 		local now = GetTime()
 		local samples = {
-			{ name = "Exemple : cast important", endsAt = 20, dur = 8, warn = true },
-			{ name = "Exemple : debuff a dissiper", endsAt = 14, dur = 6, warn = true },
-			{ name = "Exemple : add a tuer", endsAt = 9, dur = 9, warn = true },
-			{ name = "Exemple : evenement urgent", endsAt = 5, dur = 5, warn = true },
+			{ name = L("mod.bossmods.sample.1"), endsAt = 20, dur = 8, warn = true },
+			{ name = L("mod.bossmods.sample.2"), endsAt = 14, dur = 6, warn = true },
+			{ name = L("mod.bossmods.sample.3"), endsAt = 9, dur = 9, warn = true },
+			{ name = L("mod.bossmods.sample.4"), endsAt = 5, dur = 5, warn = true },
 		}
 		local i
 		for i = 1, getn(samples) do
@@ -1668,7 +2594,8 @@ function M.Test()
 	end)
 end
 
--- /sui bossmods [open|close|test] : la fenetre d'alarmes de raid.
+-- ---------------------------------------------------------------- commandes
+-- /sui bossmods [open|close|test|bw|status|pull N] : la fenetre d'alarmes de raid (ou le pont BigWigs).
 SUI.RegisterCommand("bossmods", function(rest)
 	if not M.on then
 		C.Set("modules.bossmods", true)
@@ -1680,10 +2607,23 @@ SUI.RegisterCommand("bossmods", function(rest)
 		M.Close()
 	elseif rest == "test" then
 		M.Test()
-	elseif strfind(rest, "pull", 1, true) then
+	elseif rest == "bw" then
+		B.OpenOptions()
+	elseif rest == "status" then
+		local txt = B.StatusText()
+		SUI.Print(txt)
+	elseif sfind(rest, "pull", 1, true) then
 		local secs = tonumber(strsub(rest, 6)) or 10
 		M.Pull(secs)
 	else
 		M.ToggleWin()
 	end
 end, "help.bossmods")
+
+-- /sui pull [secondes] : compte a rebours d'engagement (celui de BigWigs s'il est la, sinon le notre).
+SUI.RegisterCommand("pull", function(rest)
+	if not M.on then
+		C.Set("modules.bossmods", true)
+	end
+	M.Pull(tonumber(rest or EMPTY) or 10)
+end, "help.bossmods.pull")

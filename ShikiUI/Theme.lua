@@ -833,13 +833,26 @@ function Layout.UpdateLock()
 	end
 end
 
+local applyPending = false
+local function applySoon()
+	if applyPending then return end
+	applyPending = true
+	-- coalesce : les rafales de Notify("pos") (reset, plusieurs detachements) ne font qu'UN ApplyAll
+	SUI.WhenSafe(function()
+		applyPending = false
+		Layout.ApplyAll()
+	end)
+end
 local function onThemeKey(key, value)
 	if key == nil then
-		Layout.ApplyAll()
+		-- reset de profil : Layouts.lua (charge apres Theme) fait InvalidateLinks + ApplyAll dans le BON ordre,
+		-- ici on ne repeint que le theme (l'ancien double ApplyAll travaillait avec un index de liens perime)
 		Layout.UpdateLock()
 		T.RefreshAccent()
-	elseif key == "ui.scale" or key == "pos" then
+	elseif key == "ui.scale" then
 		Layout.ApplyAll()
+	elseif key == "pos" then
+		applySoon()
 	elseif key == "ui.locked" then
 		Layout.UpdateLock()
 	elseif key == "ui.accent" then

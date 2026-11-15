@@ -24,6 +24,9 @@ local Layout = SUI.Layout
 local getn, tinsert = table.getn, table.insert
 local floor, abs = math.floor, math.abs
 
+-- Garde d'ordre : SUI.Layout (Theme.lua) est requis par Adopt/Register.
+if not SUI.Layout then error("ShikiUI: Theme.lua doit etre charge avant Mover.lua (verifie l'ordre du .toc)", 0) end
+
 local M = {}
 SUI.Mover = M
 
