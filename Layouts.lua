@@ -18,6 +18,8 @@
 -- l'application (independant de la resolution). Une entree "reset" efface toutes les positions.
 ShikiUI = ShikiUI or {}
 local SUI = ShikiUI
+-- Garde d'ordre : Theme.lua definit SUI.Layout et DOIT etre charge avant ce fichier (l'ordre du .toc est generate : ne pas le changer).
+if not SUI.Layout then error("ShikiUI: Theme.lua doit etre charge avant Layouts.lua (verifie l'ordre du .toc)", 0) end
 local C = SUI.Config
 local L = SUI.L
 local Layout = SUI.Layout
@@ -326,6 +328,7 @@ end
 
 function Layout.InvalidateLinks()
 	lkIdx = nil
+	if Layout.PollWake then Layout.PollWake() end
 end
 
 local function entryIn(child, mode)
@@ -622,6 +625,7 @@ function Layout.WriteLink(child, parent, side, dx, dy)
 	if type(child) ~= "string" or type(parent) ~= "string" then return false, "args" end
 	if not SIDECODE[side] then return false, "side" end
 	if not Layout.items[child] or not Layout.items[parent] then return false, "unknown" end
+	if Layout.PollWake then Layout.PollWake() end
 	if wouldCycle(child, parent) then return false, "cycle" end
 	local mode = writeMode()
 	local key = linkKey(child, parent, SIDECODE[side], mode)
@@ -713,7 +717,34 @@ C.Watch("", function(key, value)
 end)
 
 -- Filet de securite : un cadre parent qui change de taille sans passer par Layout.Apply (reglage d'un module, contenu variable).
-Layout.pollTask = SUI.Every(0.3, function() Layout.RefreshLinks(false) end, "layout.links")
+-- Cadence ADAPTEE : 0,3 s quand des liens bougent, 1,5 s apres ~2,4 s sans aucun changement (economie permanente :
+-- la plupart des profils n'ont aucun lien, la boucle ne sert qu'au cas ou). Relance rapide par Layout.PollWake().
+Layout.POLL_FAST, Layout.POLL_SLOW = 0.3, 1.5
+Layout.pollFast = true
+Layout.pollIdle = 0
+local function pollTick()
+	local n = Layout.RefreshLinks(false)
+	if n > 0 then
+		Layout.pollIdle = 0
+		if not Layout.pollFast then Layout.PollWake() end
+		return
+	end
+	Layout.pollIdle = Layout.pollIdle + 1
+	if Layout.pollFast and Layout.pollIdle >= 8 then
+		Layout.pollFast = false
+		SUI.Cancel(Layout.pollTask)
+		Layout.pollTask = SUI.Every(Layout.POLL_SLOW, pollTick, "layout.links")
+	end
+end
+function Layout.PollWake()
+	Layout.pollIdle = 0
+	if not Layout.pollFast then
+		Layout.pollFast = true
+		SUI.Cancel(Layout.pollTask)
+		Layout.pollTask = SUI.Every(Layout.POLL_FAST, pollTick, "layout.links")
+	end
+end
+Layout.pollTask = SUI.Every(Layout.POLL_FAST, pollTick, "layout.links")
 
 -- ---------------------------------------------------------------- liens conseilles (cles de positions reelles uniquement)
 local D = Layout.DefaultLink
