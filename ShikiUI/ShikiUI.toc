@@ -74,6 +74,8 @@ Locale_Bags.lua
 Mod_Bags.lua
 Locale_BossMods.lua
 Mod_BossMods.lua
+Locale_BuffWatch.lua
+Mod_BuffWatch.lua
 Locale_Bulletin.lua
 Mod_Bulletin.lua
 Locale_CastBar.lua
