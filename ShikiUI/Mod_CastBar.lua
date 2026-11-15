@@ -715,6 +715,28 @@ end
 if SUI.Visibility then addAll(SUI.Visibility.Options("castbar.cond", { cat = "castbar", order = 800 })) end
 if SUI.Look then addAll(SUI.Look.Options("castbar", { bar = true, shape = true, font = true, cat = "castbar", order = 820 })) end
 
+-- Adaptation de taille (Mover, bouton "Accrocher + taille") : la castbar epouse la largeur du cadre
+-- joueur ou cible auquel elle est accrochee (castbar.width pour le joueur, castbar.owidth pour la cible).
+local function fitWidthTo(parentKey)
+	local it = SUI.Layout and SUI.Layout.items and SUI.Layout.items[parentKey]
+	if not it or not it.frame or not it.frame.GetWidth then return false end
+	local w = it.frame:GetWidth()
+	if not w or w < 60 then return false end
+	w = floor(w + 0.5)
+	if parentKey == "unit.player" then
+		C.Set("castbar.width", w)
+	elseif parentKey == "unit.target" then
+		C.Set("castbar.owidth", w)
+	else
+		return false
+	end
+	return true
+end
+if SUI.Mover and SUI.Mover.RegisterSizeFit then
+	SUI.Mover.RegisterSizeFit("castbar.player", function(pk) return fitWidthTo(pk) end)
+	SUI.Mover.RegisterSizeFit("castbar.target", function(pk) return fitWidthTo(pk) end)
+end
+
 SUI.RegisterModule("castbar", {
 	default = false,
 	cost = "medium",
