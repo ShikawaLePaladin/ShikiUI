@@ -1203,6 +1203,26 @@ function M.ClosePropose()
 	if M.prop then M.prop:Hide() end
 end
 
+-- Adaptation de taille : un module declare que la taille de son cadre peut epouser celui du parent auquel
+-- on l'accroche (ex : la castbar prend la largeur du cadre joueur/cible). La barre de proposition montre
+-- alors un 3e bouton "Accrocher + taille".
+M.SizeFit = {}            -- [key enfant] = fonction(parentKey) -> true si la taille a ete adaptee
+function M.RegisterSizeFit(key, fn)
+	M.SizeFit[key] = fn
+end
+
+function M.ProposeFit()
+	local d = M.propData
+	M.ClosePropose()
+	if not d then return end
+	local ok, why = Layout.SetLink(d.child, d.parent, d.side, d.dx, d.dy)
+	M.ReportLink(d, ok, why)
+	if ok and M.SizeFit[d.child] then
+		local fok = pcall(M.SizeFit[d.child], d.parent)
+		if fok then SUI.Print(L("mod.mover.fit.ok", M.Label(d.child), M.Label(d.parent))) end
+	end
+end
+
 function M.ProposeYes()
 	local d = M.propData
 	M.ClosePropose()
@@ -1239,13 +1259,17 @@ function M.Propose(rec, tgt, side, dx, dy)
 		p.text:SetPoint("TOP", p, "TOP", 0, -9)
 		p.text:SetWidth(450)
 		p.text:SetHeight(16)
-		p.yes = T.Button(p, L("mod.mover.prop.yes"), 160, 22, M.ProposeYes)
-		p.yes:SetPoint("BOTTOMLEFT", p, "BOTTOMLEFT", 50, 8)
-		p.no = T.Button(p, L("mod.mover.prop.no"), 160, 22, M.ClosePropose)
-		p.no:SetPoint("BOTTOMRIGHT", p, "BOTTOMRIGHT", -50, 8)
+		p.yes = T.Button(p, L("mod.mover.prop.yes"), 130, 22, M.ProposeYes)
+		p.yes:SetPoint("BOTTOMLEFT", p, "BOTTOMLEFT", 26, 8)
+		p.fit = T.Button(p, L("mod.mover.prop.fit"), 150, 22, M.ProposeFit)
+		p.fit:SetPoint("BOTTOM", p, "BOTTOM", 0, 8)
+		p.no = T.Button(p, L("mod.mover.prop.no"), 130, 22, M.ClosePropose)
+		p.no:SetPoint("BOTTOMRIGHT", p, "BOTTOMRIGHT", -26, 8)
 		p:Hide()
 	end
 	M.propData = { child = rec.id, parent = tgt.id, side = side, dx = dx, dy = dy }
+	p.fit:Show()
+	if not M.SizeFit[rec.id] then p.fit:Hide() end
 	p.text:SetText(L("mod.mover.prop.text", M.Label(rec.id), M.Label(tgt.id), L("mod.mover.side." .. side)))
 	p:Show()
 	SUI.Cancel(M.propTask)
