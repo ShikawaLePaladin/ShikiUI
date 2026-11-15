@@ -1414,11 +1414,12 @@ function M.CanMove()
 	return true
 end
 
-function M.DragStart(win)
+-- force : Maj enfoncee = convention universelle ShikiUI (Maj+glisser deplace toujours, verrou contourne ; combat reste interdit)
+function M.DragStart(win, force)
 	if not win or not win.frame or win.dragging then return false end
 	local ok, why = M.CanMove()
-	if not ok then
-		if why == "locked" and not M.warnedLock then
+	if not ok and not (force and why == "locked") then
+		if why == "locked" and not M.warnedLock and not force then
 			M.warnedLock = true
 			SUI.Print(L("msg.bags.locked"))
 		end
@@ -1465,7 +1466,10 @@ function M.ResetPos()
 	end
 end
 
-barDragStart = function() M.DragStart(this.win) end
+barDragStart = function()
+	local shift = IsShiftKeyDown and IsShiftKeyDown() and true or false
+	M.DragStart(this.win, shift)
+end
 barDragStop = function() M.DragStop(this.win) end
 
 function M.BuildWindow(key)
