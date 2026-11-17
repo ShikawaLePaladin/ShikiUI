@@ -672,12 +672,27 @@ local function windowShown(i)
 	return name, shown
 end
 
+-- Fenetre reellement affichee : le client laisse parfois SELECTED_CHAT_FRAME sur General alors que l'onglet clique (Raid...) est visible -> l'encadre bleu
+-- suit la fenetre qui est a l'ecran, pas la variable.
+function M.TrueSel(pref)
+	local sel = getglobal("SELECTED_CHAT_FRAME")
+	if pref and pref.IsShown and pref:IsShown() then return pref end
+	if sel and sel.IsShown and sel:IsShown() then return sel end
+	if M.frames then
+		for i = 1, 12 do
+			local f = M.frames[i]
+			if f and not f.suiSkip and f.IsShown and f:IsShown() and f.isDocked then return f end
+		end
+	end
+	return sel or pref
+end
+
 function M.OnTabClick(b, btn)
 	local f = M.frames[b.idx]
 	if not f then return end
 	if btn == "RightButton" and M.tabMenu and M.tabMenu(b.idx, b) then return end
 	FCF_SelectDockFrame(f)
-	M.selected = getglobal("SELECTED_CHAT_FRAME") or f
+	M.selected = M.TrueSel(f)
 	M.unread[b.idx] = 0
 	M.dirty = true
 	M.RefreshBar()
@@ -1193,7 +1208,7 @@ end
 -- ---------------------------------------------------------------- minuterie partagee
 function M.Tick()
 	if M.rosterDirty then M.ScanRoster() end
-	local sel = getglobal("SELECTED_CHAT_FRAME")
+	local sel = M.TrueSel(nil)
 	if sel ~= M.selected then
 		M.selected = sel
 		if sel and sel.GetID then

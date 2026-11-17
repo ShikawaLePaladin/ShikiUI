@@ -839,6 +839,10 @@ end
 -- ---------------------------------------------------------------- clics, glisser, infobulle
 function M.Press(b, mouse)
 	local kind = b.kind
+	if getglobal("SUI_ABDBG") then       -- diagnostic : /script SUI_ABDBG=1
+		local st, du, en = GetActionCooldown(b.slot or 0)
+		SUI.Print("AB clic " .. tostring(b.name) .. " kind=" .. tostring(kind) .. " slot=" .. tostring(b.slot) .. " has=" .. tostring(HasAction(b.slot or 0)) .. " usable=" .. tostring(IsUsableAction(b.slot or 0)) .. " cd=" .. tostring(du) .. " stn=" .. tostring(b.stn ~= nil) .. " auto=" .. tostring(cfg.autostance) .. " combat=" .. tostring(SUI.InCombat()))
+	end
 	if kind == "stance" then
 		CastShapeshiftForm(b.idx)
 	elseif kind == "pet" then

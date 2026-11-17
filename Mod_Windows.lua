@@ -28,11 +28,11 @@ local function bankManaged()
 end
 
 local DEFS = {
-	{ id = "character", frame = "CharacterFrame" },
+	{ id = "character", frame = "CharacterFrame", kids = { "PaperDollFrame", "PetPaperDollFrame", "ReputationFrame", "SkillFrame", "HonorFrame" } },
 	{ id = "spellbook", frame = "SpellBookFrame" },
 	{ id = "talents", frame = "TalentFrame" },
 	{ id = "quests", frame = "QuestLogFrame" },
-	{ id = "social", frame = "FriendsFrame" },
+	{ id = "social", frame = "FriendsFrame", kids = { "FriendsListFrame", "IgnoreListFrame", "WhoFrame", "GuildFrame", "ChannelFrame" } },
 	{ id = "tradeskill", frame = "TradeSkillFrame" },
 	{ id = "craft", frame = "CraftFrame" },
 	{ id = "map", frame = "WorldMapFrame" },
@@ -249,6 +249,36 @@ local function onHide()
 	if this.suiWinDrag then M.DragStop(this) end
 end
 
+-- Cadres enfants qui couvrent la fenetre et avalent la souris (pages Competences, Reputation...) : ils relaient le glisser au cadre parent.
+local function kidDown()
+	local p = this.suiWinParent
+	local o = this.suiWinKD
+	if o then o() end
+	if p then M.DragStart(p, arg1) end
+end
+
+local function kidUp()
+	local p = this.suiWinParent
+	local o = this.suiWinKU
+	if o then o() end
+	if p then M.DragStop(p) end
+end
+
+function M.HookKids(d, parent)
+	if not d.kids then return end
+	for i = 1, getn(d.kids) do
+		local k = getglobal(d.kids[i])
+		if k and not k.suiWinParent and type(k.GetScript) == "function" and type(k.SetScript) == "function" then
+			k.suiWinParent = parent
+			k.suiWinKD = k:GetScript("OnMouseDown")
+			k.suiWinKU = k:GetScript("OnMouseUp")
+			k:SetScript("OnMouseDown", kidDown)
+			k:SetScript("OnMouseUp", kidUp)
+			k:EnableMouse(true)
+		end
+	end
+end
+
 function M.Hook(d)
 	local f = getglobal(d.frame)
 	if not f or f.suiWinHooked or type(f.GetScript) ~= "function" or type(f.SetScript) ~= "function" then return false end
@@ -263,6 +293,7 @@ function M.Hook(d)
 	f:SetScript("OnMouseUp", onUp)
 	f:SetScript("OnHide", onHide)
 	f:EnableMouse(true)
+	M.HookKids(d, f)
 	M.nhooked = M.nhooked + 1
 	return true
 end
@@ -450,7 +481,7 @@ local function buildOptions()
 	local o = {
 		{ key = "windows.hdr.drag", type = "header", cat = "windows", label = "mod.windows.hdr.drag", order = 5 },
 		{ key = "windows.key", type = "choice", cat = "windows", label = "opt.windows.key", tip = "tip.windows.key",
-			default = "shift", choices = KEYS, simple = true, order = 10 },
+			default = "none", choices = KEYS, simple = true, order = 10 },
 		{ key = "windows.resetall", type = "bool", cat = "windows", label = "opt.windows.resetall", tip = "tip.windows.resetall",
 			default = false, order = 20 },
 		{ key = "windows.hdr.list", type = "header", cat = "windows", label = "mod.windows.hdr.list", order = 100 },
