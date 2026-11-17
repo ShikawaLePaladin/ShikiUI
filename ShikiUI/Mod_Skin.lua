@@ -541,6 +541,27 @@ function M.Tab(b, id)
 	if b.GetFontString then M.Font(b:GetFontString(), id, 1) end
 end
 
+-- Onglets du bas : Blizzard les chevauche (decalage -15) et les redimensionne a sa guise -> largeur = texte + marge, hauteur fixe, 3 px d'ecart.
+function M.FitTabs(list)
+	if not list then return end
+	local prev = nil
+	for i = 1, getn(list) do
+		local b = list[i]
+		if b and b.IsShown and b:IsShown() then
+			local w = 56
+			local fs = b.GetFontString and b:GetFontString()
+			if fs and fs.GetStringWidth then
+				local tw = fs:GetStringWidth()
+				if type(tw) == "number" and tw + 24 > w then w = tw + 24 end
+			end
+			b:SetWidth(w)
+			b:SetHeight(24)
+			if prev then b:SetPoint("LEFT", prev, "RIGHT", 3, 0) end
+			prev = b
+		end
+	end
+end
+
 function M.Slot(b, id)
 	if b.suiSkin then return end
 	b.suiSkin = true
@@ -715,6 +736,17 @@ function M.SkinSpec(g, sp, f)
 	each(sp.strips, stripOnly, id, sp)
 	each(sp.texts, paperText, id, sp)
 	each(sp.tabs, M.Tab, id, sp)
+	if sp.tabs then
+		local grp = {}
+		for i = 1, getn(sp.tabs) do
+			local tb = frameOf(sp.tabs[i])
+			if tb then
+				tb.suiGroup = grp
+				tinsert(grp, tb)
+			end
+		end
+		pcall(M.FitTabs, grp)
+	end
 	each(sp.buttons, M.Button, id, sp)
 	each(sp.checks, M.Check, id, sp)
 	each(sp.sliders, M.Slider, id, sp)
@@ -861,6 +893,7 @@ local function tabHook(tab)
 		r.sel = (not tab:IsEnabled()) and true or false
 		paintBd(r)
 	end
+	if tab and tab.suiGroup and M.on then pcall(M.FitTabs, tab.suiGroup) end
 end
 
 function M.Wrap(name)
