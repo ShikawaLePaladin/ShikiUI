@@ -12,6 +12,9 @@
 -- Postures : sorts qui exigent une posture / forme / aura (guerrier, druide, voleur...) -> bouton grise tant qu'elle n'est pas active, posture
 -- requise dans l'infobulle ou le bouton, changement de posture au clic (option). Table de donnees : section "POSTURES" plus bas.
 -- Cout declare : medium (une minuterie partagee de 0,1 s ; la portee est relue une fois sur deux ; aucun OnUpdate personnel).
+-- Confort : action a l'appui de la touche (option keydown : ActionButtonDown / Up du jeu enveloppes a la main), retour visuel d'appui, textes
+-- du bouton (taille, coin, decalage, police), reglages PAR BARRE (espacement, fond, raccourcis / noms / quantites, cases vides), pages par
+-- Maj / Ctrl / Alt et pages automatiques (furtivite, forme d'ombre) via ChangeActionBarPage, couleurs d'etat reglables, delai avant masquage.
 ShikiUI = ShikiUI or {}
 local SUI = ShikiUI
 local C = SUI.Config
@@ -54,6 +57,10 @@ M.formIdx, M.formKey = {}, {}     -- cle -> indice de forme (GetShapeshiftFormIn
 M.auraPosture = false    -- vrai si la classe a une posture donnee par une aura (camouflage, forme d'ombre) : PLAYER_AURAS_CHANGED
 M.dPost = false
 M.stnCache, M.shortCache = {}, {}
+M.pushList, M.pushN = {}, 0            -- boutons montrant le retour d'appui (liste sans allocation)
+M.autoSaved, M.autoSet, M.autoLast = nil, nil, nil    -- page d'origine, page imposee, derniere page voulue (pages automatiques)
+M.stealthOn, M.shadowOn, M.dAura, M.dPage = false, false, false, false
+M.holdTill, M.combatHold = nil, nil     -- delai avant masquage : echeance generale / fin de combat
 M.fading = false         -- vrai tant qu'une barre n'a pas atteint son opacite cible (la minuterie de fondu est permanente, sans allocation)
 
 -- kind : action (emplacements du jeu) | stance | pet. base : decalage d'emplacements des barres fixes de Blizzard (releve dans pfUI :
@@ -80,6 +87,12 @@ for i = 1, getn(M.order) do
 	d.kAOut = "actionbars." .. k .. ".alphaout"
 	d.kAIn = "actionbars." .. k .. ".alphain"
 	d.kLayout = "bars." .. k
+	d.kSp = "actionbars." .. k .. ".spacing"
+	d.kBg = "actionbars." .. k .. ".bg"
+	d.kHot = "actionbars." .. k .. ".hot"
+	d.kMac = "actionbars." .. k .. ".mac"
+	d.kCnt = "actionbars." .. k .. ".cnt"
+	d.kEmpty = "actionbars." .. k .. ".empty"
 end
 
 -- Blizzard : barres a masquer (le jeu les recree sinon). Les boutons ActionButton1-12 restent EXISTANTS (cachees) : les raccourcis
@@ -89,6 +102,24 @@ local BLIZZ = { "MainMenuBarArtFrame", "BonusActionBarFrame", "ShapeshiftBarFram
 
 local cfg = { size = 36, spacing = 3, fade = 0.25 }
 local function noop() end
+local PUSH_MAX = 0.6          -- un retour d'appui s'eteint seul apres ce delai (relache perdu, touche tenue)
+local CLEAR = { 0, 0, 0, 0 }  -- style:ok fond de barre transparent (barre sans fond) : ce n'est pas une couleur de style
+
+-- Textes du bouton reglables : cle -> coin d'ancrage par defaut. Coins : point, decalage de base x / y, justification.
+local TXT = { "hot", "cnt", "mac" }
+local TXT_DEF = { hot = { 9, "topright" }, cnt = { 10, "bottomright" }, mac = { 8, "bottomleft" } }
+M.ANCHORS = { "topleft", "top", "topright", "left", "center", "right", "bottomleft", "bottom", "bottomright" }
+local ANCH = {
+	topleft = { "TOPLEFT", 2, -2, "LEFT" }, top = { "TOP", 0, -2, "CENTER" }, topright = { "TOPRIGHT", -2, -2, "RIGHT" },
+	left = { "LEFT", 2, 0, "LEFT" }, center = { "CENTER", 0, 0, "CENTER" }, right = { "RIGHT", -2, 0, "RIGHT" },
+	bottomleft = { "BOTTOMLEFT", 1, 2, "LEFT" }, bottom = { "BOTTOM", 0, 2, "CENTER" }, bottomright = { "BOTTOMRIGHT", -2, 2, "RIGHT" },
+}
+M.ANCH = ANCH
+-- Textures de buff des postures qui commandent une page automatique (a completer ; A VERIFIER EN JEU : icones relevees de memoire).
+M.AUTO_STEALTH = { ["interface\\icons\\ability_stealth"] = true, ["interface\\icons\\ability_ambush"] = true }
+M.AUTO_SHADOW = { ["interface\\icons\\spell_shadow_shadowform"] = true }
+local COL = { range = {}, oom = {}, unus = {}, equip = {} }     -- couleurs d'etat reglees par l'utilisateur (tables reutilisees)
+local PGKEY = { "shift", "ctrl", "alt", "stealth", "shadow" }
 
 -- textes de recharge en secondes entieres (pre-calcules : pas de chaine nouvelle chaque dixieme de seconde)
 local CDSTR = {}
@@ -129,6 +160,30 @@ function M.ReadConfig()
 	cfg.autopage = C.Get("actionbars.autopage")
 	cfg.hideblizz = C.Get("actionbars.hideblizz")
 	cfg.xpbar = C.Get("actionbars.xpbar")
+	cfg.keydown = C.Get("actionbars.keydown")
+	cfg.presshl = C.Get("actionbars.presshl")
+	cfg.lockmod = C.Get("actionbars.lockmod")
+	cfg.hidedelay = C.Get("actionbars.hidedelay")
+	cfg.pgMod, cfg.pg = false, cfg.pg or {}
+	for i = 1, 5 do
+		local v = C.Get("actionbars.page." .. PGKEY[i])
+		if type(v) ~= "number" then v = 0 end
+		cfg.pg[PGKEY[i]] = v
+		if i <= 3 and v > 0 then cfg.pgMod = true end        -- une page par modificateur : relecture des touches a chaque tic
+	end
+	cfg.txt = cfg.txt or {}
+	for i = 1, 3 do
+		local k = TXT[i]
+		local t = cfg.txt[k] or {}
+		cfg.txt[k] = t
+		t.size, t.anchor = C.Get("actionbars." .. k .. "size"), C.Get("actionbars." .. k .. "anchor")
+		t.x, t.y = C.Get("actionbars." .. k .. "x"), C.Get("actionbars." .. k .. "y")
+		if not ANCH[t.anchor] then t.anchor = TXT_DEF[k][2] end
+	end
+	cfg.cRange = M.ReadColor(COL.range, "actionbars.c.range")
+	cfg.cOom = M.ReadColor(COL.oom, "actionbars.c.oom")
+	cfg.cUnus = M.ReadColor(COL.unus, "actionbars.c.unusable")
+	cfg.cEquip = M.ReadColor(COL.equip, "actionbars.c.equipped")
 	cfg.micro = C.Get("actionbars.micro")
 	cfg.microscale = C.Get("actionbars.micro.scale")
 	cfg.microcols = C.Get("actionbars.micro.cols")
@@ -145,8 +200,35 @@ function M.ReadConfig()
 			bar.scale = C.Get(d.kScale)
 			bar.aout = C.Get(d.kAOut) / 100
 			bar.ain = C.Get(d.kAIn) / 100
+			local sp = C.Get(d.kSp)
+			if type(sp) ~= "number" or sp < 0 then sp = cfg.spacing end       -- -1 = reglage general
+			bar.sp = sp
+			bar.bgOn = C.Get(d.kBg) ~= "hide"
+			bar.hotOn = M.Tri(C.Get(d.kHot), cfg.keybinds)
+			bar.macOn = M.Tri(C.Get(d.kMac), cfg.macrotext)
+			bar.cntOn = M.Tri(C.Get(d.kCnt), cfg.counts)
+			local e = C.Get(d.kEmpty)
+			if e ~= "show" and e ~= "drag" then e = cfg.empty end
+			bar.emptyMode = e
 		end
 	end
+end
+
+-- Couleur reglee (RRGGBB) -> table reutilisee { r, g, b } ; nil si pas de surcharge ("" = couleur du style).
+function M.ReadColor(slot, key)
+	local h = C.Get(key)
+	if type(h) ~= "string" or h == "" or not SUI.Style then return nil end
+	local r, g, b = SUI.Style.ParseHex(h)
+	if not r then return nil end
+	slot[1], slot[2], slot[3] = r, g, b
+	return slot
+end
+
+-- Reglage a trois etats par barre : "show" / "hide" forcent, autre ("auto") suit le reglage general.
+function M.Tri(v, glob)
+	if v == "show" then return true end
+	if v == "hide" then return false end
+	return glob and true or false
 end
 
 -- ---------------------------------------------------------------- page active de la barre principale
@@ -202,6 +284,10 @@ local function paintBorder(b, st)
 		b:SetBackdropBorderColor(r, g, bl, 1)
 		return
 	elseif st == 2 then
+		if cfg.cEquip then
+			b:SetBackdropBorderColor(cfg.cEquip[1], cfg.cEquip[2], cfg.cEquip[3], 1)
+			return
+		end
 		c = T.c.good
 	end
 	b:SetBackdropBorderColor(c[1], c[2], c[3], c[4])
@@ -211,6 +297,9 @@ end
 -- couleurs de l'icone : un jeton de style tel quel (rouge 0,91 / 0,33 / 0,33) la rend terne. On part donc du jeton, on pousse sa
 -- composante dominante au maximum (rouge vif) ou on l'eclaircit vers le blanc (ressource) : aucune couleur en dur.
 function M.TintColor(st)
+	local o = nil
+	if st == 1 then o = cfg.cRange elseif st == 2 then o = cfg.cOom elseif st == 3 then o = cfg.cUnus end
+	if o then return o[1], o[2], o[3] end            -- couleur choisie par l'utilisateur : appliquee telle quelle
 	if st == 1 then
 		local c = T.c.bad
 		return NO_TINT, c[2] * 0.45, c[3] * 0.45
@@ -402,7 +491,7 @@ local function hotText(b)
 end
 
 function M.UpdateBinding(b)
-	if cfg.keybinds then setText(b.hot, hotText(b)) else setText(b.hot, "") end
+	if b.bar.hotOn then setText(b.hot, hotText(b)) else setText(b.hot, "") end
 end
 
 -- portee : IsActionInRange (1 / 0 / nil) ; repli UnitXP / SuperWoW pour l'attaque automatique (le jeu n'en donne pas).
@@ -639,6 +728,74 @@ function M.ReadPosture()
 	M.postureReady = not (class == "WARRIOR" and M.nforms == 0)
 end
 
+-- ---------------------------------------------------------------- pages automatiques (modificateurs, furtivite, forme d'ombre)
+-- Le jeu change VRAIMENT de page (ChangeActionBarPage, non protegee en 1.12) : les touches, l'affichage et les autres addons restent
+-- d'accord. La page d'origine est rendue quand la condition cesse (si l'utilisateur n'a pas change de page entre-temps).
+-- Furtivite (voleur, Rodeur du druide) et forme d'ombre sont des BUFFS : relus sur PLAYER_AURAS_CHANGED seulement.
+function M.ReadAutoAuras()
+	local st, sh = false, false
+	local ub = getglobal("UnitBuff")
+	if type(ub) == "function" then
+		for i = 1, 32 do
+			local tex = ub("player", i)
+			if not tex then break end
+			local low = lowerCache[tex]
+			if not low then
+				low = string.lower(tex)
+				lowerCache[tex] = low
+			end
+			if M.AUTO_STEALTH[low] then st = true end
+			if M.AUTO_SHADOW[low] then sh = true end
+		end
+	end
+	if st ~= M.stealthOn or sh ~= M.shadowOn then M.dPage = true end
+	M.stealthOn, M.shadowOn = st, sh
+end
+
+-- Une saisie de texte en cours (zone de saisie du jeu) ne compte pas comme un modificateur tenu.
+local function typing()
+	local fn = getglobal("GetCurrentKeyBoardFocus")
+	return type(fn) == "function" and fn() ~= nil
+end
+
+-- Page voulue (1 a 6) ou nil. Priorite : Maj, Ctrl, Alt, puis furtivite, puis forme d'ombre.
+function M.WantPage()
+	local pg = cfg.pg
+	if cfg.pgMod and not typing() then
+		if pg.shift > 0 and IsShiftKeyDown() then return pg.shift end
+		if pg.ctrl > 0 and IsControlKeyDown() then return pg.ctrl end
+		if pg.alt > 0 and IsAltKeyDown() then return pg.alt end
+	end
+	if pg.stealth > 0 and M.stealthOn then return pg.stealth end
+	if pg.shadow > 0 and M.shadowOn then return pg.shadow end
+	return nil
+end
+
+function M.AutoPage()
+	local want = M.WantPage()
+	if want == M.autoLast then return end
+	M.autoLast = want
+	local cur = CURRENT_ACTIONBAR_PAGE or 1
+	if want then
+		if not M.autoSaved then M.autoSaved = cur end
+		M.autoSet = want
+		if cur ~= want and type(ChangeActionBarPage) == "function" then ChangeActionBarPage(want) end
+	else
+		if M.autoSaved and cur == M.autoSet and type(ChangeActionBarPage) == "function" then ChangeActionBarPage(M.autoSaved) end
+		M.autoSaved, M.autoSet = nil, nil
+	end
+	M.dBase = true
+end
+
+-- Module coupe : la page d'origine est rendue, les pages automatiques s'oublient.
+function M.AutoRestore()
+	M.autoLast = nil
+	if M.autoSaved and (CURRENT_ACTIONBAR_PAGE or 1) == M.autoSet and type(ChangeActionBarPage) == "function" then
+		ChangeActionBarPage(M.autoSaved)
+	end
+	M.autoSaved, M.autoSet = nil, nil
+end
+
 -- La posture courante satisfait-elle l'exigence ? Vrai quand les formes ne sont pas encore lues (on ne grise jamais sur une donnee absente).
 function M.PostureOk(req)
 	if not M.postureReady then return true end
@@ -819,8 +976,8 @@ function M.UpdateButton(b)
 		b.icon:Hide()
 	end
 	if kind == "action" and has then
-		if cfg.macrotext then setText(b.mac, GetActionText(b.slot) or "") else setText(b.mac, "") end
-		if cfg.counts and IsConsumableAction(b.slot) then
+		if b.bar.macOn then setText(b.mac, GetActionText(b.slot) or "") else setText(b.mac, "") end
+		if b.bar.cntOn and IsConsumableAction(b.slot) then
 			setText(b.cnt, tostring(GetActionCount(b.slot)))
 		else
 			setText(b.cnt, "")
@@ -829,7 +986,7 @@ function M.UpdateButton(b)
 		setText(b.mac, "")
 		setText(b.cnt, "")
 	end
-	local show = b.want and (has or cfg.empty == "show" or M.grid or M.bind)
+	local show = b.want and (has or b.bar.emptyMode == "show" or M.grid or M.bind)
 	if show then b:Show() else b:Hide() end
 	M.UpdateBinding(b)
 	M.UpdateCooldown(b)
@@ -837,7 +994,7 @@ function M.UpdateButton(b)
 end
 
 -- ---------------------------------------------------------------- clics, glisser, infobulle
-function M.Press(b, mouse)
+function M.Press(b, mouse, key)
 	local kind = b.kind
 	if getglobal("SUI_ABDBG") then       -- diagnostic : /script SUI_ABDBG=1
 		local st, du, en = GetActionCooldown(b.slot or 0)
@@ -859,7 +1016,7 @@ function M.Press(b, mouse)
 		end
 		local onself = nil
 		if (cfg.altself and IsAltKeyDown()) or (cfg.rightself and mouse == "RightButton") then onself = 1 end
-		UseAction(b.slot, 1, onself)
+		UseAction(b.slot, key and 0 or 1, onself)          -- touche : comme le jeu (0) ; clic : depose l'objet tenu (1)
 	end
 end
 
@@ -867,10 +1024,18 @@ function M.OnClick()
 	M.Press(this, arg1)
 end
 
+-- Modificateur qui deverrouille le glisser (option lockmod : shift | ctrl | alt).
+function M.LockModDown()
+	local m = cfg.lockmod
+	if m == "ctrl" then return IsControlKeyDown() and true or false end
+	if m == "alt" then return IsAltKeyDown() and true or false end
+	return IsShiftKeyDown() and true or false
+end
+
 function M.OnDragStart()
 	local b = this
 	if b.kind == "stance" then return end
-	if cfg.lockdrag and not IsShiftKeyDown() then return end
+	if cfg.lockdrag and not M.LockModDown() then return end
 	if b.kind == "pet" then PickupPetAction(b.idx) else PickupAction(b.slot) end
 end
 
@@ -885,13 +1050,17 @@ end
 function M.TargetAlpha(bar)
 	local a = 1
 	local show = bar.show
+	-- delai avant masquage (option hidedelay) : le combat / le survol comptent encore quelques secondes apres leur fin
+	local now = GetTime()
+	local fight = M.combat or (M.combatHold and now < M.combatHold)
+	local over = bar.hover or bar.geo or (bar.holdUntil and now < bar.holdUntil)
 	if show == "incombat" then
 		-- invisible hors combat ; visible (opaque) en combat, au survol (pour pouvoir deposer un sort) et pendant la mise en place des raccourcis
-		if not (M.combat or bar.hover or M.bind) then a = 0 end
+		if not (fight or over or M.bind) then a = 0 end
 	elseif show == "combat" then
-		if not (M.combat or bar.hover or M.bind) then a = cfg.fade end
+		if not (fight or over or M.bind) then a = cfg.fade end
 	elseif show == "hover" then
-		if not (bar.hover or M.bind) then a = cfg.fade end
+		if not (over or M.bind) then a = cfg.fade end
 	end
 	if not (M.bind or M.grid) then
 		if M.combat then a = a * cfg.ain * bar.ain else a = a * cfg.aout * bar.aout end
@@ -935,6 +1104,44 @@ function M.FadeStep()
 	M.fading = busy
 end
 
+-- Le curseur est-il sur la barre (cadre entier, interstices entre boutons compris) ? true / false, ou nil si le jeu ne sait pas le dire.
+-- Pas de survol compte pendant la rotation de la camera (curseur cache : sa position gelee ne designe rien).
+function M.Over(bar)
+	local mio = getglobal("MouseIsOver")
+	if not mio then return nil end
+	local ml = getglobal("IsMouselooking")
+	if ml and ml() then return false end
+	if mio(bar.frame) then return true end
+	return false
+end
+
+-- Detection du survol par la geometrie (minuterie partagee) : les evenements d'entree / sortie des boutons seuls se perdent (interstices,
+-- bouton cache pendant le survol, ordre sortie / entree inverse) et laissaient la barre estompee alors que le curseur etait dessus.
+function M.ScanHover()
+	for i = 1, getn(M.order) do
+		local bar = M.bars[M.order[i]]
+		if bar.vis and (bar.show == "hover" or bar.show == "combat" or bar.show == "incombat" or bar.hover or bar.geo) then
+			local over = M.Over(bar)
+			if over then
+				if not bar.geo then
+					bar.geo = true
+					hoverAlpha(bar)
+				end
+			elseif over == false then
+				local was = bar.geo or bar.hover          -- une entree jamais suivie de sortie est corrigee ici
+				bar.geo, bar.hover = false, false
+				if was then
+					if cfg.hidedelay > 0 then
+						bar.holdUntil = GetTime() + cfg.hidedelay
+						M.StartHold(bar.holdUntil)
+					end
+					hoverAlpha(bar)
+				end
+			end
+		end
+	end
+end
+
 function M.OnEnter()
 	local b = this
 	b.bar.hover = true
@@ -960,12 +1167,81 @@ function M.OnEnter()
 	GameTooltip:Show()
 end
 
+-- Echeance du delai avant masquage : memorisee, relue par la minuterie partagee (M.Tick) qui redemande alors la visibilite.
+function M.StartHold(until_)
+	if not M.holdTill or until_ > M.holdTill then M.holdTill = until_ end
+end
+
+-- Retour visuel d'appui : voile d'accent sur le bouton tant que la touche / le clic est tenu (eteint seul apres PUSH_MAX).
+function M.PushOn(b)
+	if not cfg.presshl or not b.push then return end
+	local r, g, bl = T.Accent()
+	b.push:SetVertexColor(r, g, bl, 0.5)
+	b.push:Show()
+	b.pushT = GetTime()
+	if not b.pushed then
+		b.pushed = true
+		M.pushN = M.pushN + 1
+		M.pushList[M.pushN] = b
+	end
+end
+
+function M.PushOff(b)
+	if not b.pushed then return end
+	b.pushed = false
+	if b.push then b.push:Hide() end
+	for i = 1, M.pushN do
+		if M.pushList[i] == b then
+			M.pushList[i] = M.pushList[M.pushN]
+			M.pushList[M.pushN] = nil
+			M.pushN = M.pushN - 1
+			break
+		end
+	end
+end
+
+function M.OnMouseDown()
+	if arg1 == "LeftButton" and this.has then M.PushOn(this) end
+end
+
+function M.OnMouseUp()
+	M.PushOff(this)
+end
+
 function M.OnLeave()
 	local b = this
 	b.bar.hover = false
+	if cfg.hidedelay > 0 then
+		b.bar.holdUntil = GetTime() + cfg.hidedelay
+		M.StartHold(b.bar.holdUntil)
+	end
+	M.PushOff(b)
 	if M.hoverBtn == b then M.hoverBtn = nil end
+	if M.Over(b.bar) then
+		b.bar.geo = true             -- simple passage d'un bouton a l'autre : la barre reste montree, ni delai ni fondu
+		b.bar.hover = true
+		if GameTooltip then GameTooltip:Hide() end
+		return
+	end
 	hoverAlpha(b.bar)
 	if GameTooltip then GameTooltip:Hide() end
+end
+
+-- ---------------------------------------------------------------- textes du bouton (raccourci, quantite, nom de macro)
+-- Taille, coin, decalage (x, y en pixels, ajoutes au retrait de base du coin) et police (option actionbars.font). Aucune allocation.
+function M.StyleTexts(b)
+	for i = 1, 3 do
+		local k = TXT[i]
+		local fs = b[k]
+		local t = cfg.txt and cfg.txt[k]
+		if fs and t then
+			local a = ANCH[t.anchor] or ANCH[TXT_DEF[k][2]]
+			fs:ClearAllPoints()
+			fs:SetPoint(a[1], b, a[1], a[2] + t.x, a[3] + t.y)
+			fs:SetJustifyH(a[4])
+			if SUI.Look then SUI.Look.ApplyText(fs, "actionbars", t.size, true) end
+		end
+	end
 end
 
 -- ---------------------------------------------------------------- construction (hors combat)
@@ -1008,6 +1284,13 @@ local function newButton(bar, i)
 	f.cnt:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -2, 2)
 	f.mac = T.Text(tf, 8, T.c.dim, "CENTER", true)
 	f.mac:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", 1, 2)
+	-- retour d'appui : voile au-dessus de l'icone et du voile de recharge, sous le balayage et les textes
+	f.push = f:CreateTexture(nil, "OVERLAY")
+	f.push:SetTexture(T.tex.white)
+	f.push:SetPoint("TOPLEFT", f, "TOPLEFT", 1, -1)
+	f.push:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -1, 1)
+	f.push:Hide()
+	M.StyleTexts(f)
 	f.cdt = T.Text(tf, 14, T.c.text, "CENTER", true)
 	f.cdt:SetPoint("CENTER", f, "CENTER", 0, 0)
 	trackCd(f)
@@ -1023,6 +1306,8 @@ local function newButton(bar, i)
 	f:SetScript("OnReceiveDrag", M.OnReceiveDrag)
 	f:SetScript("OnEnter", M.OnEnter)
 	f:SetScript("OnLeave", M.OnLeave)
+	f:SetScript("OnMouseDown", M.OnMouseDown)
+	f:SetScript("OnMouseUp", M.OnMouseUp)
 	f:Hide()
 	return f
 end
@@ -1041,7 +1326,7 @@ end
 function M.LayoutBar(bar)
 	local n = M.EffN(bar)
 	local size = floor(cfg.size * bar.scale / 100 + 0.5)
-	local sp = cfg.spacing
+	local sp = bar.sp or cfg.spacing            -- espacement propre a la barre (-1 = general)
 	local per = bar.per
 	if per > n then per = n end
 	if per < 1 then per = 1 end
@@ -1094,6 +1379,13 @@ function M.ReadWorld()
 	M.ReadPosture()
 end
 
+-- Fond de la barre (option <barre>.bg) : un fond transparent est enregistre dans le suivi du style, il survit donc aux changements de style.
+function M.PaintBarBg(bar)
+	if bar.bgPaint == bar.bgOn then return end
+	bar.bgPaint = bar.bgOn
+	if bar.bgOn then T.Backdrop(bar.frame, T.c.bg, T.c.border) else T.Backdrop(bar.frame, CLEAR, CLEAR) end
+end
+
 -- Applique les reglages : lit la config, cree ce qui manque (hors combat), recale la mise en page, marque tout a redessiner.
 function M.ApplyOptions()
 	if not M.built then return end
@@ -1122,14 +1414,19 @@ function M.ApplyOptions()
 	M.ReadWorld()
 	for i = 1, getn(M.order) do
 		local bar = M.bars[M.order[i]]
+		M.PaintBarBg(bar)
 		if bar.made > 0 then
 			M.LayoutBar(bar)
 			for j = 1, bar.made do
-				bar.btn[j].cdtier = nil           -- couleur et taille du chiffre relues tout de suite
-				M.FontCd(bar.btn[j])
+				local b = bar.btn[j]
+				b.cdtier = nil           -- couleur et taille du chiffre relues tout de suite
+				b.vst, b.bst = nil, nil  -- couleurs d'etat reglables : teinte et bordure repeintes
+				M.FontCd(b)
+				M.StyleTexts(b)
 			end
 		end
 	end
+	M.dPage, M.dAura = true, true        -- pages automatiques : etat relu (et page d'origine rendue si l'option est coupee)
 	M.Rebase()
 	-- masquage des barres de Blizzard : s'applique tout de suite a l'activation du reglage (le retablir demande un /reload)
 	if cfg.hideblizz then M.HideBlizzard() end
@@ -1371,6 +1668,26 @@ end
 function M.Tick()
 	if not M.built then return end
 	M.tickN = M.tickN + 1
+	if M.dAura then
+		M.dAura = false
+		M.ReadAutoAuras()
+	end
+	if cfg.pgMod or M.dPage then
+		M.dPage = false
+		M.AutoPage()
+	end
+	if M.holdTill and GetTime() >= M.holdTill then
+		M.holdTill, M.combatHold = nil, nil
+		M.dVis = true                 -- delai avant masquage ecoule
+	end
+	M.ScanHover()
+	if M.pushN > 0 then
+		local now = GetTime()
+		for i = M.pushN, 1, -1 do
+			local pb = M.pushList[i]
+			if pb and now - pb.pushT > PUSH_MAX then M.PushOff(pb) end
+		end
+	end
 	if M.dBase then
 		M.dBase = false
 		M.ReadWorld()
@@ -1476,6 +1793,7 @@ function M.OnEvent(ev, a1)
 		M.combat = true
 		M.dVis = true
 	elseif ev == "PLAYER_AURAS_CHANGED" then
+		if cfg.pg and (cfg.pg.stealth > 0 or cfg.pg.shadow > 0) then M.dAura = true end
 		if M.auraPosture then M.dPost = true end
 		-- paladin : les auras sont des "formes" ; le client met l'aura active a jour APRES l'evenement -> etat des boutons relu tout de suite puis un peu plus tard
 		if M.class == "PALADIN" and (M.nforms or 0) > 0 then
@@ -1484,6 +1802,10 @@ function M.OnEvent(ev, a1)
 		end
 	elseif ev == "PLAYER_REGEN_ENABLED" then
 		M.combat = false
+		if cfg.hidedelay > 0 then
+			M.combatHold = GetTime() + cfg.hidedelay          -- barres "en combat" : visibles encore quelques secondes
+			M.StartHold(M.combatHold)
+		end
 		M.dVis = true
 		if M.stnPending then
 			M.stnPending = false
@@ -1491,6 +1813,7 @@ function M.OnEvent(ev, a1)
 		end
 	elseif ev == "PLAYER_ENTERING_WORLD" then
 		M.dBase, M.dAll, M.dVis = true, true, true
+		M.dAura = true
 	end
 end
 
@@ -1500,6 +1823,106 @@ function M.OnKey(key, value)
 		SUI.Print(L("msg.reload"))
 	end
 	M.ApplyOptions()
+end
+
+-- ---------------------------------------------------------------- touches : ActionButtonDown / Up et MultiActionButtonDown / Up du jeu
+-- Les raccourcis ACTIONBUTTONn / MULTIACTIONBARnBUTTONn appellent ces fonctions (pas de hooksecurefunc en 1.12 : enveloppe faite a la main,
+-- rendue a la coupure du module). Trois usages : (1) retour visuel d'appui sur NOS boutons ; (2) option keydown : l'action part a
+-- l'APPUI de la touche et non au relachement ; (3) barre principale en page de forme (le bouton cache du jeu viserait la page 1) : c'est
+-- notre bouton, donc la bonne action, qui est lance. Toute erreur de notre part laisse passer l'appel d'origine : une touche n'est jamais perdue.
+local KEYBAR = { MultiBarBottomLeft = "bar2", MultiBarBottomRight = "bar3", MultiBarRight = "bar4", MultiBarLeft = "bar5" }
+local ORIG = {}
+
+function M.KeyButton(barKey, id)
+	if not (M.on and M.built) then return nil end
+	local bar = M.bars[barKey]
+	if not bar or not bar.vis or type(id) ~= "number" or id < 1 or id > bar.made then return nil end
+	local b = bar.btn[id]
+	if not b or not b.want then return nil end
+	return b
+end
+
+-- Notre bouton lance-t-il l'action a la place du jeu ?
+function M.Takes(barKey, b)
+	if cfg.keydown then return true end
+	if barKey == "main" then return b.slot ~= b.idx + ((CURRENT_ACTIONBAR_PAGE or 1) - 1) * 12 end
+	return false
+end
+
+-- Appui : retourne vrai si l'action est prise en charge ici (le jeu ne doit alors pas etre appele).
+function M.KeyDown(barKey, id)
+	local b = M.KeyButton(barKey, id)
+	if not b then return false end
+	M.PushOn(b)
+	if not M.Takes(barKey, b) then return false end
+	b.keyTake, b.keyFired = true, false
+	if cfg.keydown then
+		b.keyFired = true
+		pcall(M.Press, b, nil, true)
+	end
+	return true
+end
+
+function M.KeyUp(barKey, id)
+	local b = M.KeyButton(barKey, id)
+	if not b then return false end
+	M.PushOff(b)
+	if not b.keyTake then return false end
+	b.keyTake = false
+	if not b.keyFired then pcall(M.Press, b, nil, true) end
+	b.keyFired = false
+	return true
+end
+
+function M.WDown(id)
+	local ok, took = pcall(M.KeyDown, "main", id)
+	if not (ok and took) then ORIG.down(id) end
+end
+
+function M.WUp(id, onself)
+	local ok, took = pcall(M.KeyUp, "main", id)
+	if not (ok and took) then ORIG.up(id, onself) end
+end
+
+function M.WMDown(bar, id)
+	local key = KEYBAR[bar]
+	local ok, took = false, false
+	if key then ok, took = pcall(M.KeyDown, key, id) end
+	if not (ok and took) then ORIG.mdown(bar, id) end
+end
+
+function M.WMUp(bar, id, onself)
+	local key = KEYBAR[bar]
+	local ok, took = false, false
+	if key then ok, took = pcall(M.KeyUp, key, id) end
+	if not (ok and took) then ORIG.mup(bar, id, onself) end
+end
+
+function M.WrapKeys()
+	if M.keyWrapped then return end
+	local d, u = getglobal("ActionButtonDown"), getglobal("ActionButtonUp")
+	local md, mu = getglobal("MultiActionButtonDown"), getglobal("MultiActionButtonUp")
+	if type(d) ~= "function" or type(u) ~= "function" or type(md) ~= "function" or type(mu) ~= "function" then return end
+	if d == M.WDown then
+		M.keyWrapped = true            -- enveloppe restee en place apres une coupure : on la reprend
+		return
+	end
+	ORIG.down, ORIG.up, ORIG.mdown, ORIG.mup = d, u, md, mu
+	setglobal("ActionButtonDown", M.WDown)
+	setglobal("ActionButtonUp", M.WUp)
+	setglobal("MultiActionButtonDown", M.WMDown)
+	setglobal("MultiActionButtonUp", M.WMUp)
+	M.keyWrapped = true
+end
+
+-- Rend les fonctions du jeu (seulement si personne ne les a enveloppees apres nous ; l'enveloppe, inerte module coupe, reste alors en place).
+function M.UnwrapKeys()
+	if not M.keyWrapped then return end
+	if getglobal("ActionButtonDown") == M.WDown then setglobal("ActionButtonDown", ORIG.down) end
+	if getglobal("ActionButtonUp") == M.WUp then setglobal("ActionButtonUp", ORIG.up) end
+	if getglobal("MultiActionButtonDown") == M.WMDown then setglobal("MultiActionButtonDown", ORIG.mdown) end
+	if getglobal("MultiActionButtonUp") == M.WMUp then setglobal("MultiActionButtonUp", ORIG.mup) end
+	M.keyWrapped = false
 end
 
 -- ---------------------------------------------------------------- raccourcis par survol (service SUI.Bind, voir Bind.lua)
@@ -1531,6 +1954,7 @@ function M.Enable()
 	for i = 1, getn(EVENTS) do SUI.On(EVENTS[i], M.OnEvent) end
 	M.task = SUI.Every(TICK, M.Tick, "actionbars.tick", true)
 	M.fadeTask = SUI.Every(FADE_TICK, M.FadeStep, "actionbars.fade", true)
+	M.WrapKeys()
 	if not M.watching then
 		M.watching = true
 		C.Watch("actionbars.", M.OnKey)
@@ -1549,6 +1973,9 @@ function M.Disable()
 	M.fadeTask = nil
 	M.fading = false
 	for i = 1, getn(EVENTS) do SUI.Off(EVENTS[i], M.OnEvent) end
+	M.UnwrapKeys()
+	M.AutoRestore()
+	for i = M.pushN, 1, -1 do M.PushOff(M.pushList[i]) end
 	if M.bind then SUI.Bind.Exit(true) end
 	if M.built then
 		for i = 1, getn(M.order) do
@@ -1630,7 +2057,31 @@ local OPTS = {
 	{ key = "actionbars.micro.space", type = "number", min = 0, max = 12, step = 1, default = 1 },
 	{ key = "actionbars.micro.alpha", type = "number", min = 20, max = 100, step = 5, default = 100 },
 	{ key = "actionbars.xpbar", type = "choice", choices = { "slim", "hide", "blizz" }, default = "slim" },
+	-- confort : touche, retour d'appui, delai avant masquage, verrou
+	{ key = "actionbars.keydown", type = "bool", default = false, simple = true },
+	{ key = "actionbars.presshl", type = "bool", default = true, simple = true },
+	{ key = "actionbars.hidedelay", type = "number", min = 0, max = 10, step = 0.5, default = 0 },
+	{ key = "actionbars.lockmod", type = "choice", choices = { "shift", "ctrl", "alt" }, default = "shift" },
+	-- pages par modificateur et pages automatiques (0 = aucune)
+	{ key = "actionbars.page.shift", type = "number", min = 0, max = 6, step = 1, default = 0 },
+	{ key = "actionbars.page.ctrl", type = "number", min = 0, max = 6, step = 1, default = 0 },
+	{ key = "actionbars.page.alt", type = "number", min = 0, max = 6, step = 1, default = 0 },
+	{ key = "actionbars.page.stealth", type = "number", min = 0, max = 6, step = 1, default = 0 },
+	{ key = "actionbars.page.shadow", type = "number", min = 0, max = 6, step = 1, default = 0 },
+	-- couleurs d'etat ("" = couleur du style)
+	{ key = "actionbars.c.range", type = "color", default = "" },
+	{ key = "actionbars.c.oom", type = "color", default = "" },
+	{ key = "actionbars.c.unusable", type = "color", default = "" },
+	{ key = "actionbars.c.equipped", type = "color", default = "" },
 }
+-- textes du bouton : taille, coin, decalage
+for i = 1, getn(TXT) do
+	local k = TXT[i]
+	OPTS[getn(OPTS) + 1] = { key = "actionbars." .. k .. "size", type = "number", min = 6, max = 18, step = 1, default = TXT_DEF[k][1] }
+	OPTS[getn(OPTS) + 1] = { key = "actionbars." .. k .. "anchor", type = "choice", choices = M.ANCHORS, default = TXT_DEF[k][2] }
+	OPTS[getn(OPTS) + 1] = { key = "actionbars." .. k .. "x", type = "number", min = -12, max = 12, step = 1, default = 0 }
+	OPTS[getn(OPTS) + 1] = { key = "actionbars." .. k .. "y", type = "number", min = -12, max = 12, step = 1, default = 0 }
+end
 local options = {}
 for i = 1, getn(OPTS) do
 	local o = OPTS[i]
@@ -1652,6 +2103,12 @@ for i = 1, getn(M.order) do
 		{ key = d.kScale, type = "number", min = 50, max = 150, step = 5, default = 100 },
 		{ key = d.kAOut, type = "number", min = 0, max = 100, step = 5, default = 100 },
 		{ key = d.kAIn, type = "number", min = 0, max = 100, step = 5, default = 100 },
+		{ key = d.kSp, type = "number", min = -1, max = 12, step = 1, default = -1 },          -- -1 = espacement general
+		{ key = d.kBg, type = "choice", choices = { "show", "hide" }, default = "show" },
+		{ key = d.kHot, type = "choice", choices = { "auto", "show", "hide" }, default = "auto" },
+		{ key = d.kMac, type = "choice", choices = { "auto", "show", "hide" }, default = "auto" },
+		{ key = d.kCnt, type = "choice", choices = { "auto", "show", "hide" }, default = "auto" },
+		{ key = d.kEmpty, type = "choice", choices = { "auto", "show", "drag" }, default = "auto" },
 	}
 	for j = 1, getn(list) do
 		local o = list[j]
@@ -1661,6 +2118,12 @@ for i = 1, getn(M.order) do
 		o.order = o0 + j
 		options[getn(options) + 1] = o
 	end
+end
+
+-- police des textes du bouton (actionbars.font / actionbars.fontsize : 0 = tailles propres a chaque texte)
+if SUI.Look then
+	local lo = SUI.Look.Options("actionbars", { font = true, cat = "actionbars", order = 820 })
+	for i = 1, getn(lo) do options[getn(options) + 1] = lo[i] end
 end
 
 SUI.RegisterModule("actionbars", {

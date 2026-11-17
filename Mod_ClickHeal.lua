@@ -752,18 +752,53 @@ end
 
 -- Infobulle d'un sort du grimoire : ajoute les gestes qui le lancent (apres l'infobulle de Blizzard).
 function M.BookTip(b)
-	local name = b.healName
-	if not (M.on and name and GameTooltip and M.bound[name]) then return end
+	if not (M.on and GameTooltip and b) then return end
+	local name = M.BookBoundName(b)
+	if not name then return end
 	tipLine(L("mod.clickheal.book.tip"), T.c.text)
 	tipLine(table.concat(M.bound[name], ", "), T.c.dim)
 	GameTooltip:Show()
+end
+
+-- Nom (cle EN) du sort du bouton `b` s'il a une liaison, sinon nil. Independant du surlignage : l'infobulle ne depend plus de l'option "mark".
+function M.BookBoundName(b)
+	local name = M.BookSpellName(b)
+	if not name then return nil end
+	local en = M.FRKEY[fold(name)] or ALIAS[name] or name
+	if M.bound[en] then return en end
+	return nil
+end
+
+-- Blizzard rappelle SpellButton_OnEnter (fonction globale) a intervalles reguliers tant que la souris reste sur le sort : l'infobulle est
+-- alors reconstruite et nos lignes disparaissaient apres un instant. On enveloppe donc la fonction globale, pas le script du bouton.
+function M.WrapEnter()
+	if M.enterOrig then return end
+	local orig = getglobal("SpellButton_OnEnter")
+	if type(orig) ~= "function" then return end
+	M.enterOrig = orig
+	M.enterWrap = function()
+		orig()
+		if M.on then
+			local ok = pcall(M.BookTip, this)
+			if not ok then M.markErr = (M.markErr or 0) + 1 end
+		end
+	end
+	setglobal("SpellButton_OnEnter", M.enterWrap)
+end
+
+function M.UnwrapEnter()
+	if not M.enterOrig then return end
+	if getglobal("SpellButton_OnEnter") == M.enterWrap then
+		setglobal("SpellButton_OnEnter", M.enterOrig)
+		M.enterOrig, M.enterWrap = nil, nil
+	end
 end
 
 function M.MarkAll()
 	for i = 1, M.NBOOK do
 		local b = getglobal("SpellButton" .. i)
 		if b then
-			if not b.healTip and M.on and not SUI.InCombat() then
+			if not M.enterOrig and not b.healTip and M.on and not SUI.InCombat() then
 				b.healTip = true
 				local oe = b:GetScript("OnEnter")
 				b:SetScript("OnEnter", function()
@@ -833,6 +868,7 @@ function M.Enable()
 	SUI.On("LEARNED_SPELL_IN_TAB", M.OnBook)
 	SUI.On("CHARACTER_POINTS_CHANGED", M.OnBook)
 	SUI.On("PLAYER_REGEN_ENABLED", M.OnRegen)
+	M.WrapEnter()
 	M.Scan()
 	M.Rebuild()
 	M.WrapBook()
@@ -857,6 +893,7 @@ function M.Disable()
 	M.MarkAll()                          -- module coupe : plus aucun bandeau
 	if M.bbtn then M.bbtn:Hide() end
 	M.UnwrapBook()
+	M.UnwrapEnter()
 end
 
 -- ---------------------------------------------------------------- commandes

@@ -55,11 +55,17 @@ local function box(parent, layer)
 end
 
 -- ================================================================ cadres d'unites
+-- cn = nom du cadre dans les cles units.<cn>.* ; uk = jeton du cadre dans SUI.Units.caps ; small = petit cadre (proportions de la cible de cible).
 local UNITS = {
-	{ id = "player", name = "Shikiwa", lvl = "60", hpr = 0.72, class = "PALADIN", pt = 0, friend = true },
-	{ id = "target", name = "Thorgrim", lvl = "61", hpr = 0.45, class = "WARRIOR", pt = 1, friend = false },
-	{ id = "tot", name = "Elaria", lvl = "60", hpr = 0.9, class = "PRIEST", pt = 0, friend = true },
+	{ id = "player", cn = "player", uk = "player", name = "Shikiwa", lvl = "60", hpr = 0.72, class = "PALADIN", pt = 0, friend = true },
+	{ id = "target", cn = "target", uk = "target", name = "Thorgrim", lvl = "61", hpr = 0.45, class = "WARRIOR", pt = 1, friend = false },
+	{ id = "tot", cn = "tot", uk = "targettarget", name = "Elaria", lvl = "60", hpr = 0.9, class = "PRIEST", pt = 0, friend = true, small = true },
+	{ id = "tott", cn = "tott", uk = "targettargettarget", name = "Kaelith", lvl = "60", hpr = 0.6, class = "MAGE", pt = 0, friend = true, small = true },
+	{ id = "focus", cn = "focus", uk = "focus", name = "Ragnaros", lvl = "63", hpr = 0.8, class = "WARRIOR", pt = 1, friend = false },
 }
+local UZ = { "frame", "hp", "hptext", "power", "edgeh", "port", "mark", "ind", "auras" }
+local IKEYS = { "pvp", "lead", "loot", "comb" }
+local ICOL = { T.c.bad, T.c.warn, T.c.good, T.c.text }       -- jetons vivants : repeints avec le style
 
 local function newUnit(parent)
 	local c = CreateFrame("Frame", nil, parent)
@@ -67,7 +73,16 @@ local function newUnit(parent)
 	c.hp, c.pw = box(c, "ARTWORK"), box(c, "ARTWORK")
 	c.name = txt(c, 11, T.c.text, "LEFT")
 	c.hpt = txt(c, 11, T.c.text, "RIGHT")
-	c.rc = { frame = { 0, 0, 0, 0 }, hp = { 0, 0, 0, 0 }, hptext = { 0, 0, 0, 0 }, power = { 0, 0, 0, 0 }, edgeh = { 0, 0, 0, 0 } }
+	c.pwt = txt(c, 9, T.c.text, "CENTER")
+	c.spark = box(c, "OVERLAY")
+	c.port = { edge = box(c, "BACKGROUND"), bg = box(c, "BACKGROUND"), art = box(c, "ARTWORK"), head = box(c, "OVERLAY"),
+		body = box(c, "OVERLAY"), letter = txt(c, 11, T.c.text, "CENTER") }
+	c.ind = { mark = box(c, "OVERLAY"), pvp = box(c, "OVERLAY"), lead = box(c, "OVERLAY"), loot = box(c, "OVERLAY"), comb = box(c, "OVERLAY") }
+	c.aur = {}
+	for i = 1, 5 do c.aur[i] = box(c, "OVERLAY") end
+	c.o = {}
+	c.rc = { frame = { 0, 0, 0, 0 }, hp = { 0, 0, 0, 0 }, hptext = { 0, 0, 0, 0 }, power = { 0, 0, 0, 0 }, edgeh = { 0, 0, 0, 0 },
+		port = { 0, 0, 0, 0 }, mark = { 0, 0, 0, 0 }, ind = { 0, 0, 0, 0 }, auras = { 0, 0, 0, 0 } }
 	return c
 end
 
@@ -81,31 +96,99 @@ local function hpStr(mode, hp, mx)
 	local pct = floor(hp / mx * 100 + 0.5) .. "%"
 	if mode == "value" then return tostring(hp) end
 	if mode == "percent" then return pct end
+	if mode == "deficit" then
+		if mx - hp <= 0 then return "" end
+		return "-" .. (mx - hp)
+	end
+	if mode == "maxvalue" then return hp .. "/" .. mx end
 	return hp .. " | " .. pct
 end
 
-local function paintUnit(c, u, w, h, ph, showPower, classColor, hptextMode, s, dim)
+local function hexRGB(key)
+	local v = C.Get(key)
+	if type(v) == "string" and v ~= "" and SUI.Style and SUI.Style.ParseHex then
+		local r, g, b = SUI.Style.ParseHex(v)
+		return r, g, b
+	end
+	return nil
+end
+
+-- Couleur de la barre de vie d'un cadre d'exemple selon units.hpcolor (meme regles que Units.lua).
+local function unitHp(o, u)
+	local m = o.hpcol
+	if m == "gradient" then
+		local a, b, t
+		if u.hpr < 0.5 then a, b, t = T.c.bad, T.c.warn, u.hpr * 2 else a, b, t = T.c.warn, T.c.good, (u.hpr - 0.5) * 2 end
+		return a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t, a[3] + (b[3] - a[3]) * t
+	elseif m == "custom" then
+		if o.hr then return o.hr, o.hg, o.hb end
+		return T.c.good[1], T.c.good[2], T.c.good[3]
+	end
+	if m == "auto" and o.cc and u.friend then return classRGB(u.class) end
+	if u.friend then return T.c.good[1], T.c.good[2], T.c.good[3] end
+	return T.c.bad[1], T.c.bad[2], T.c.bad[3]
+end
+
+-- Reglages d'un cadre (taille, textes, portrait, indicateurs, effets) lus dans c.o ; g = reglages communs.
+local function unitCk(cn, k) return "units." .. cn .. "." .. k end
+
+local function unitResolve(c, u, g)
+	local o = c.o
+	local cn = u.cn
+	local caps = (SUI.Units and SUI.Units.caps and SUI.Units.caps[u.uk]) or {}
+	o.caps = caps
+	local w, h = num(unitCk(cn, "width"), 0), num(unitCk(cn, "height"), 0)
+	o.w = (w > 0) and w or floor(g.w * (u.small and 0.6 or 1))
+	o.h = math.max(14, (h > 0) and h or floor(g.h * (u.small and 0.7 or 1)))
+	local ph = num(unitCk(cn, "powerheight"), 0)
+	o.ph = (ph > 0) and ph or g.ph
+	o.power = (g.sp and caps.power) and true or false
+	o.hpm = C.Get(unitCk(cn, "hptext"))
+	if o.hpm == nil or o.hpm == "default" then o.hpm = g.mode end
+	o.al = C.Get(unitCk(cn, "hpalign")) or "right"
+	o.ts = num(unitCk(cn, "textsize"), 11)
+	o.ptm = caps.power and (C.Get(unitCk(cn, "powertext")) or "none") or "none"
+	o.port = caps.port and (C.Get(unitCk(cn, "portrait")) or "off") or "off"
+	o.side = C.Get(unitCk(cn, "portraitside")) or "left"
+	o.mark = (caps.mark and flag(unitCk(cn, "mark"), false)) and true or false
+	o.pvp = (caps.pvp and flag(unitCk(cn, "pvp"), false)) and true or false
+	o.lead = (caps.leader and flag(unitCk(cn, "leader"), false)) and true or false
+	o.loot = (caps.loot and flag(unitCk(cn, "loot"), false)) and true or false
+	o.comb = (caps.combat and flag(unitCk(cn, "combat"), false)) and true or false
+	o.au = caps.auras and (C.Get(unitCk(cn, "auras")) or "off") or "off"
+	o.fsr = (caps.fsr and flag(unitCk(cn, "fsr"), false)) and true or false
+	o.on = flag(unitCk(cn, "enabled"), true)
+	o.hpcol, o.cc, o.hr, o.hg, o.hb = g.hpcol, g.cc, g.hr, g.hg, g.hb
+	o.isz, o.asz, o.amax = g.isz, g.asz, g.amax
+	-- marges autour du cadre (portrait, indicateurs, effets), a l'echelle 1
+	o.lx = (o.port ~= "off" and o.side ~= "right") and (o.h + 2) or 0
+	o.rx = (o.port ~= "off" and o.side == "right") and (o.h + 2) or 0
+	if o.lead or o.loot or o.pvp or o.comb then o.top = o.isz + 2 elseif o.mark then o.top = floor(o.isz / 2) else o.top = 0 end
+	o.bot = (o.au ~= "off") and (o.asz + 4) or 0
+end
+
+local function paintUnit(c, u, s)
+	local o = c.o
+	local w, h = floor(o.w * s + 0.5), floor(o.h * s + 0.5)
 	c:SetWidth(w)
 	c:SetHeight(h)
 	P.Fill(c.edge, T.c.border, 1)
 	P.Box(c.edge, c, 0, 0, w, h)
 	P.Fill(c.bg, T.c.bg, 1)
 	P.Box(c.bg, c, 1, 1, w - 2, h - 2)
-	local pw = (showPower and ph > 0) and floor(ph * s + 0.5) or 0
+	local pw = (o.power and o.ph > 0) and floor(o.ph * s + 0.5) or 0
 	local hpH = h - 2 - (pw > 0 and pw + 1 or 0)
 	if hpH < 1 then hpH = 1 end
-	local r, g, b
-	if classColor and u.friend then
-		r, g, b = classRGB(u.class)
-	elseif u.friend then
-		r, g, b = T.c.good[1], T.c.good[2], T.c.good[3]
-	else
-		r, g, b = T.c.bad[1], T.c.bad[2], T.c.bad[3]
-	end
+	local r, g, b = unitHp(o, u)
 	c.hp:SetVertexColor(r, g, b, 1)
 	P.Box(c.hp, c, 1, 1, (w - 2) * u.hpr, hpH)
 	if pw > 0 then
-		P.Fill(c.pw, T.c.dim, 1)
+		local pr, pg, pb = T.c.dim[1], T.c.dim[2], T.c.dim[3]
+		local pk = (u.pt == 0 and "units.c.mana") or (u.pt == 1 and "units.c.rage") or (u.pt == 3 and "units.c.energy") or nil
+		local cr, cg, cb = nil, nil, nil
+		if pk then cr, cg, cb = hexRGB(pk) end
+		if cr then pr, pg, pb = cr, cg, cb end
+		c.pw:SetVertexColor(pr, pg, pb, 1)
 		P.Box(c.pw, c, 1, h - 1 - pw, (w - 2) * 0.8, pw)
 	else
 		c.pw:Hide()
@@ -114,101 +197,313 @@ local function paintUnit(c, u, w, h, ph, showPower, classColor, hptextMode, s, d
 	setrc(c, "edgeh", w - 6, 0, 6, h)
 	setrc(c, "hp", 1, 1, w - 2, hpH)
 	setrc(c, "power", 1, h - 1 - (pw > 0 and pw or 3), w - 2, pw > 0 and pw or 3)
-	local fs = 11 * s
-	if fs > 14 then fs = 14 end
-	if hpH >= 9 and not dim then
-		putText(c.name, c, 4, 1 + (hpH - fs) / 2, fs, u.name)
-		c.name:SetWidth(floor(w * 0.55))
-		local str = hpStr(hptextMode, floor(u.hpr * 4000), 4000)
+	-- textes : le texte de vie prend le cote choisi, le nom l'autre
+	local fs = o.ts * s
+	if fs > 18 then fs = 18 end
+	local ty = 1 + (hpH - fs) / 2
+	if hpH >= 9 then
+		local str = hpStr(o.hpm, floor(u.hpr * 4000), 4000)
+		local hx, hw, nx, nw, hj, nj
+		if o.al == "left" then
+			hx, hw, hj, nx, nw, nj = 4, w * 0.45, "LEFT", w * 0.45, w * 0.5, "RIGHT"
+		elseif o.al == "center" then
+			hx, hw, hj, nx, nw, nj = w * 0.25, w * 0.5, "CENTER", 4, w * 0.4, "LEFT"
+		else
+			hx, hw, hj, nx, nw, nj = w * 0.45, w * 0.5, "RIGHT", 4, w * 0.55, "LEFT"
+		end
+		putText(c.name, c, nx, ty, fs, u.name)
+		c.name:SetWidth(floor(nw))
+		c.name:SetJustifyH(nj)
 		if str ~= "" then
-			putText(c.hpt, c, w * 0.45, 1 + (hpH - fs) / 2, fs, str)
-			c.hpt:SetWidth(floor(w * 0.5))
+			putText(c.hpt, c, hx, ty, fs, str)
+			c.hpt:SetWidth(floor(hw))
+			c.hpt:SetJustifyH(hj)
 			c.hpt:Show()
 		else
 			c.hpt:Hide()
 		end
-		setrc(c, "hptext", w * 0.45, 1, w * 0.5, hpH)
+		setrc(c, "hptext", hx, 1, hw, hpH)
 	else
 		c.name:Hide()
 		c.hpt:Hide()
 		setrc(c, "hptext", w * 0.45, 1, w * 0.5, hpH)
 	end
+	-- texte de ressource, centre sur la barre de ressource
+	if pw > 0 and o.ptm ~= "none" then
+		local pf = math.max(7, (o.ts - 2) * s)
+		putText(c.pwt, c, 1, h - 1 - pw + (pw - pf) / 2, pf, (o.ptm == "percent") and "80%" or ((o.ptm == "both") and "2.4k | 80%" or "2.4k"))
+		c.pwt:SetWidth(w - 2)
+		c.pwt:Show()
+	else
+		c.pwt:Hide()
+	end
+	-- etincelle de tick de mana (regle des 5 secondes) sur la barre de ressource
+	if o.fsr and pw > 0 then
+		P.Fill(c.spark, T.c.good, 1)
+		P.Box(c.spark, c, (w - 2) * 0.4, h - 2 - pw, 2, pw + 2)
+	else
+		c.spark:Hide()
+	end
+	-- portrait a cote du cadre : silhouette (2D) ou initiale de classe sur sa couleur
+	local p = c.port
+	if o.port ~= "off" then
+		local px = (o.side == "right") and (w + 2) or -(h + 2)
+		P.Fill(p.edge, T.c.border, 1)
+		P.Box(p.edge, c, px, 0, h, h)
+		P.Fill(p.bg, T.c.inset, 1)
+		P.Box(p.bg, c, px + 1, 1, h - 2, h - 2)
+		if o.port == "class" then
+			local cr, cg, cb = classRGB(u.class)
+			p.art:SetVertexColor(cr, cg, cb, 0.9)
+			P.Box(p.art, c, px + 1, 1, h - 2, h - 2)
+			p.head:Hide()
+			p.body:Hide()
+			putText(p.letter, c, px, h / 2 - 6 * s, 11 * s, string.sub(u.class, 1, 1))
+			p.letter:SetWidth(h)
+			p.letter:Show()
+		else
+			p.art:Hide()
+			p.letter:Hide()
+			P.Fill(p.head, T.c.dim, 1)
+			P.Box(p.head, c, px + h * 0.32, h * 0.16, h * 0.36, h * 0.36)
+			P.Fill(p.body, T.c.dim, 1)
+			P.Box(p.body, c, px + h * 0.16, h * 0.58, h * 0.68, h * 0.34)
+		end
+		setrc(c, "port", px, 0, h, h)
+	else
+		p.edge:Hide() p.bg:Hide() p.art:Hide() p.head:Hide() p.body:Hide() p.letter:Hide()
+		setrc(c, "port", 0, 0, 0, 0)
+	end
+	-- marqueur de raid (a cheval sur le bord haut) et rangee d'indicateurs au-dessus du coin haut gauche
+	local ind = c.ind
+	local isz = floor(o.isz * s + 0.5)
+	if o.mark then
+		P.Fill(ind.mark, T.c.bad, 1)
+		P.Box(ind.mark, c, floor((w - isz) / 2), -floor(isz / 2), isz, isz)
+		setrc(c, "mark", floor((w - isz) / 2), -floor(isz / 2), isz, isz)
+	else
+		ind.mark:Hide()
+		setrc(c, "mark", 0, 0, 0, 0)
+	end
+	local x = 0
+	for k = 1, 4 do
+		local t = ind[IKEYS[k]]
+		if o[IKEYS[k]] then
+			P.Fill(t, ICOL[k], 1)
+			P.Box(t, c, x, -(isz + 2), isz, isz)
+			x = x + isz + 1
+		else
+			t:Hide()
+		end
+	end
+	if x > 0 then setrc(c, "ind", 0, -(isz + 2), x, isz) else setrc(c, "ind", 0, 0, 0, 0) end
+	-- effets sous le cadre : malefices (rouge) puis benefices
+	local na = 0
+	if o.au ~= "off" then na = math.min(o.amax, 5) end
+	local asz = floor(o.asz * s + 0.5)
+	for k = 1, 5 do
+		local t = c.aur[k]
+		if k <= na then
+			local debuff = (o.au == "debuffs") or (o.au == "both" and k <= 2)
+			P.Fill(t, debuff and T.c.bad or T.c.dim, 1)
+			P.Box(t, c, (k - 1) * (asz + 2), h + 2, asz, asz)
+		else
+			t:Hide()
+		end
+	end
+	if na > 0 then setrc(c, "auras", 0, h + 2, na * (asz + 2), asz) else setrc(c, "auras", 0, 0, 0, 0) end
 	c:Show()
 end
 
-local UZ = { "frame", "hp", "hptext", "power", "edgeh" }
+local UNIT_N = getn(UNITS)
 
 local function unitsBuild(parent, w, h)
 	local root = CreateFrame("Frame", nil, parent)
-	local st = { cells = {}, zones = {} }
+	local st = { cells = {}, zones = {}, one = {} }
 	root.st = st
-	for i = 1, 3 do
+	for i = 1, UNIT_N do
 		st.cells[i] = newUnit(root)
 		st.zones[i] = {}
-		for j = 1, getn(UZ) do st.zones[i][j] = P.Zone(root, UZ[j]) end
+		for j = 1, getn(UZ) do st.zones[i][j] = P.Zone(root, UZ[j] .. ":" .. UNITS[i].cn) end
+		st.one[i] = P.Zone(root, "on:" .. UNITS[i].cn)
 	end
-	st.tot = P.Zone(root, "tot")
+	st.tot = st.one[3]
 	st.hint = txt(root, 10, T.c.dim, "LEFT")
 	return root
 end
 
 local function unitsUpdate(root, w, h, key, value)
 	local st = root.st
-	local uw, uh, ph = num("units.width", 180), num("units.height", 28), num("units.powerheight", 4)
-	local sp = flag("units.showpower", true)
-	local cc = flag("units.classcolor", true)
-	local mode = C.Get("units.hptext") or "percent"
-	local s = (w - 8) / uw
+	local g = st.g
+	if not g then
+		g = {}
+		st.g = g
+	end
+	g.w, g.h, g.ph = num("units.width", 180), num("units.height", 28), num("units.powerheight", 4)
+	g.sp = flag("units.showpower", true)
+	g.cc = flag("units.classcolor", true)
+	g.mode = C.Get("units.hptext") or "percent"
+	g.hpcol = C.Get("units.hpcolor") or "auto"
+	g.hr, g.hg, g.hb = hexRGB("units.c.hp")
+	g.isz, g.asz, g.amax = num("units.indsize", 14), num("units.aurasize", 14), num("units.auramax", 6)
+	-- echelle : tous les cadres (portraits et marges compris) tiennent dans la largeur ET la hauteur de l'apercu
+	local needW, sumH = 1, 0
+	for i = 1, UNIT_N do
+		local c = st.cells[i]
+		unitResolve(c, UNITS[i], g)
+		local o = c.o
+		local nw = o.lx + o.w + o.rx
+		if nw > needW then needW = nw end
+		sumH = sumH + o.top + o.h + o.bot + 10
+	end
+	local s = (w - 8) / needW
+	local sh = (h - 68) / sumH
+	if sh < s then s = sh end
 	if s > 1.6 then s = 1.6 end
+	if s < 0.4 then s = 0.4 end
 	local y = 6
-	for i = 1, 3 do
+	for i = 1, UNIT_N do
 		local c = st.cells[i]
 		local u = UNITS[i]
-		local on = (i == 1) or (i == 2) or flag("units.tot.enabled", true)
-		if i == 1 then on = flag("units.player.enabled", true) elseif i == 2 then on = flag("units.target.enabled", true) end
-		local cw, chh = floor(uw * s), floor(uh * s)
-		if i == 3 then cw, chh = floor(cw * 0.6), floor(chh * 0.8) end
-		paintUnit(c, u, cw, chh, ph, sp, cc, mode, i == 3 and s * 0.7 or s, i == 3)
-		P.Place(c, root, 4, y, cw, chh)
-		if not on then c:SetAlpha(0.35) else c:SetAlpha(1) end
+		local o = c.o
+		paintUnit(c, u, s)
+		local cw, chh = c:GetWidth(), c:GetHeight()
+		local x0 = 4 + floor(o.lx * s + 0.5)
+		y = y + floor(o.top * s + 0.5)
+		P.Place(c, root, x0, y, cw, chh)
+		if not o.on then c:SetAlpha(0.35) else c:SetAlpha(1) end
+		local showOne = u.small or not o.on
 		for j = 1, getn(UZ) do
 			local rc = c.rc[UZ[j]]
-			P.PlaceZone(st.zones[i][j], root, 4 + rc[1], y + rc[2], rc[3], rc[4])
-			if i == 3 then st.zones[i][j]:Hide() end
+			local z = st.zones[i][j]
+			if showOne or rc[3] <= 0 then z:Hide() else P.PlaceZone(z, root, x0 + rc[1], y + rc[2], rc[3], rc[4]) end
 		end
-		if i == 3 then
-			P.PlaceZone(st.tot, root, 4, y, cw, chh)
-		end
-		y = y + chh + 10
+		if showOne then P.PlaceZone(st.one[i], root, x0, y, cw, chh) else st.one[i]:Hide() end
+		y = y + chh + floor(o.bot * s + 0.5) + 10
 	end
 	st.hint:ClearAllPoints()
 	st.hint:SetPoint("TOPLEFT", root, "TOPLEFT", 4, -(y + 4))
 	st.hint:SetWidth(w - 8)
-	st.hint:SetHeight(40)
+	st.hint:SetHeight(56)
 	st.hint:SetText(L("mod.preview.units.hint"))
 	st.hint:Show()
 end
 
 local UKEY = { frame = "units.width", hp = "units.classcolor", hptext = "units.hptext", edgeh = "units.height", tot = "units.tot.enabled" }
+-- Une zone s'appelle <zone>:<cadre> (frame:player...). Elle mene au reglage PAR CADRE quand il est deja personnalise, sinon au reglage commun.
+local function unitsHasKey(key)
+	return P.FindOption(key) ~= nil
+end
+
 local function unitsClick(zone)
-	if zone == "power" then
-		if flag("units.showpower", true) then return "units.powerheight" end
-		return "units.showpower"
+	local _, _, base, cn = string.find(zone, "^(%a+):(%a+)$")
+	if not base then
+		if zone == "power" then
+			if flag("units.showpower", true) then return "units.powerheight" end
+			return "units.showpower"
+		end
+		return UKEY[zone]
 	end
-	return UKEY[zone]
+	local key
+	if base == "on" then
+		return unitCk(cn, "enabled")
+	elseif base == "frame" then
+		if num(unitCk(cn, "width"), 0) > 0 then return unitCk(cn, "width") end
+		return "units.width"
+	elseif base == "edgeh" then
+		if num(unitCk(cn, "height"), 0) > 0 then return unitCk(cn, "height") end
+		return "units.height"
+	elseif base == "hp" then
+		if (C.Get("units.hpcolor") or "auto") ~= "auto" then return "units.hpcolor" end
+		return "units.classcolor"
+	elseif base == "hptext" then
+		local v = C.Get(unitCk(cn, "hptext"))
+		if v ~= nil and v ~= "default" then return unitCk(cn, "hptext") end
+		return "units.hptext"
+	elseif base == "power" then
+		if not flag("units.showpower", true) then return "units.showpower" end
+		key = unitCk(cn, "powerheight")
+		if num(key, 0) > 0 and unitsHasKey(key) then return key end
+		return "units.powerheight"
+	elseif base == "port" then
+		key = unitCk(cn, "portrait")
+	elseif base == "mark" then
+		key = unitCk(cn, "mark")
+	elseif base == "auras" then
+		key = unitCk(cn, "auras")
+	elseif base == "ind" then
+		local names = { "leader", "loot", "pvp", "combat" }
+		for i = 1, getn(names) do
+			local k = unitCk(cn, names[i])
+			if unitsHasKey(k) and flag(k, false) then return k end
+		end
+		for i = 1, getn(names) do
+			local k = unitCk(cn, names[i])
+			if unitsHasKey(k) then return k end
+		end
+		return nil
+	end
+	if key and unitsHasKey(key) then return key end
+	return nil
 end
 
 P.Register("units", { watch = { "units." }, build = unitsBuild, update = unitsUpdate, click = unitsClick })
 
 -- ================================================================ barres d'action
 local NBTN = 12
-local BKEYS = { "size", "keybinds", "cooldowns", "counts", "range", "mana", "macrotext", "size", "size", "size", "size", "empty" }
+local BKEYS = { "size", "keybinds", "cooldowns", "counts", "range", "mana", "macrotext", "c.unusable", "c.equipped", "presshl", "size", "empty" }
 local KEYTXT = { "1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "-", "=" }
+-- coins de texte (memes noms que les reglages hotanchor / cntanchor / macanchor) : point, retrait de base x / y, justification
+local BANCH = {
+	topleft = { "TOPLEFT", 2, -2, "LEFT" }, top = { "TOP", 0, -2, "CENTER" }, topright = { "TOPRIGHT", -2, -2, "RIGHT" },
+	left = { "LEFT", 2, 0, "LEFT" }, center = { "CENTER", 0, 0, "CENTER" }, right = { "RIGHT", -2, 0, "RIGHT" },
+	bottomleft = { "BOTTOMLEFT", 2, 2, "LEFT" }, bottom = { "BOTTOM", 0, 2, "CENTER" }, bottomright = { "BOTTOMRIGHT", -2, 2, "RIGHT" },
+}
+local HEXC = { 0, 0, 0, 1 }           -- couleur d'etat choisie (RRGGBB) lue dans les reglages, table reutilisee
+
+-- Reglage a trois etats de la barre principale : "show" / "hide" forcent, sinon on suit le reglage general.
+local function bTri(key, glob)
+	local v = C.Get(key)
+	if v == "show" then return true end
+	if v == "hide" then return false end
+	return glob
+end
+
+-- Couleur d'etat choisie : true et HEXC rempli si l'utilisateur a saisi un RRGGBB, sinon faux (couleur du style).
+local function bHex(key)
+	local h = C.Get(key)
+	if type(h) ~= "string" or h == "" or not SUI.Style then return false end
+	local r, g, b = SUI.Style.ParseHex(h)
+	if not r then return false end
+	HEXC[1], HEXC[2], HEXC[3] = r, g, b
+	return true
+end
+
+-- Place un texte de bouton dans son coin (reglages <cle>anchor / <cle>x / <cle>y).
+local function bText(fs, b, bs, key, dflt, str, fsz)
+	local name = C.Get("actionbars." .. key .. "anchor")
+	local a = BANCH[name] or BANCH[dflt]
+	P.Font(fs, fsz)
+	fs:SetText(str)
+	fs:ClearAllPoints()
+	fs:SetPoint(a[1], b, a[1], a[2] + num("actionbars." .. key .. "x", 0), a[3] + num("actionbars." .. key .. "y", 0))
+	fs:SetJustifyH(a[4])
+	fs:SetWidth(bs - 4)
+	fs:Show()
+end
+
+-- Taille de texte a l'echelle de l'apercu (jamais sous 7).
+local function bFs(size, s)
+	local v = size * s
+	if v < 7 then v = 7 end
+	return v
+end
 
 local function barsBuild(parent, w, h)
 	local root = CreateFrame("Frame", nil, parent)
 	local st = { b = {}, z = {} }
 	root.st = st
+	st.bgEdge, st.bg = box(root, "BACKGROUND"), box(root, "BACKGROUND")          -- bordure d'abord, fond par-dessus
 	st.gap = P.Zone(root, "gap", 1)
 	for i = 1, NBTN do
 		local b = CreateFrame("Frame", nil, root)
@@ -230,6 +525,8 @@ local function barsUpdate(root, w, h, key, value)
 	local st = root.st
 	local size = num("actionbars.size", 36)
 	local spc = num("actionbars.spacing", 3)
+	local ownSp = num("actionbars.main.spacing", -1)          -- espacement propre a la barre principale (-1 = general)
+	if ownSp >= 0 then spc = ownSp end
 	local per = num("actionbars.main.perrow", 12)
 	local n = num("actionbars.main.buttons", 12)
 	if n > NBTN then n = NBTN end
@@ -244,7 +541,13 @@ local function barsUpdate(root, w, h, key, value)
 	if per > fit then per = fit end
 	local showKeys, showCnt, showCd, showRange, showMana = flag("actionbars.keybinds", true), flag("actionbars.counts", true),
 		flag("actionbars.cooldowns", true), flag("actionbars.range", true), flag("actionbars.mana", true)
-	local showMac, showEmpty = flag("actionbars.macrotext", false), flag("actionbars.empty", true)
+	local showMac = flag("actionbars.macrotext", false)
+	local showEmpty = C.Get("actionbars.empty") ~= "drag"
+	local own = C.Get("actionbars.main.empty")
+	if own == "show" then showEmpty = true elseif own == "drag" then showEmpty = false end
+	showKeys, showCnt, showMac = bTri("actionbars.main.hot", showKeys), bTri("actionbars.main.cnt", showCnt),
+		bTri("actionbars.main.mac", showMac)
+	local showPush = flag("actionbars.presshl", true)
 	local shade = C.Get("actionbars.cdshade")
 	if type(shade) ~= "number" then shade = 0.6 elseif shade > 1 then shade = shade / 100 end
 	local rows = floor((n - 1) / per) + 1
@@ -261,7 +564,13 @@ local function barsUpdate(root, w, h, key, value)
 			b:SetWidth(bs)
 			b:SetHeight(bs)
 			P.Place(b, root, x, y, bs, bs)
-			P.Fill(b.edge, T.c.border, 1)
+			if i == 9 and bHex("actionbars.c.equipped") then
+				P.Fill(b.edge, HEXC, 1)               -- objet equipe : bordure de la couleur choisie
+			elseif i == 9 then
+				P.Fill(b.edge, T.c.good, 1)
+			else
+				P.Fill(b.edge, T.c.border, 1)
+			end
 			P.Box(b.edge, b, 0, 0, bs, bs)
 			P.Fill(b.bg, T.c.inset, 1)
 			P.Box(b.bg, b, 1, 1, bs - 2, bs - 2)
@@ -279,10 +588,16 @@ local function barsUpdate(root, w, h, key, value)
 			end
 			b.tint:Hide()
 			if showRange and i == 5 then
-				P.Fill(b.tint, T.c.bad, 0.45)
+				if bHex("actionbars.c.range") then P.Fill(b.tint, HEXC, 0.45) else P.Fill(b.tint, T.c.bad, 0.45) end
 				P.Box(b.tint, b, 1, 1, bs - 2, bs - 2)
 			elseif showMana and i == 6 then
-				P.Fill(b.tint, T.c.dim, 0.55)
+				if bHex("actionbars.c.oom") then P.Fill(b.tint, HEXC, 0.55) else P.Fill(b.tint, T.c.dim, 0.55) end
+				P.Box(b.tint, b, 1, 1, bs - 2, bs - 2)
+			elseif i == 8 then
+				if bHex("actionbars.c.unusable") then P.Fill(b.tint, HEXC, 0.55) else P.Fill(b.tint, T.c.dim, 0.55) end
+				P.Box(b.tint, b, 1, 1, bs - 2, bs - 2)
+			elseif showPush and i == 10 then
+				b.tint:SetVertexColor(ar, ag, ab, 0.5)          -- retour d'appui : voile d'accent
 				P.Box(b.tint, b, 1, 1, bs - 2, bs - 2)
 			end
 			if showCd and i == 3 then
@@ -299,32 +614,17 @@ local function barsUpdate(root, w, h, key, value)
 				b.cdt:Hide()
 			end
 			if showKeys then
-				P.Font(b.key, fs)
-				b.key:SetText(KEYTXT[i])
-				b.key:ClearAllPoints()
-				b.key:SetPoint("TOPRIGHT", b, "TOPRIGHT", -2, -2)
-				b.key:SetWidth(bs - 4)
-				b.key:Show()
+				bText(b.key, b, bs, "hot", "topright", KEYTXT[i], bFs(num("actionbars.hotsize", 9), s))
 			else
 				b.key:Hide()
 			end
 			if showCnt and i == 4 then
-				P.Font(b.cnt, fs)
-				b.cnt:SetText("20")
-				b.cnt:ClearAllPoints()
-				b.cnt:SetPoint("BOTTOMRIGHT", b, "BOTTOMRIGHT", -2, 2)
-				b.cnt:SetWidth(bs - 4)
-				b.cnt:Show()
+				bText(b.cnt, b, bs, "cnt", "bottomright", "20", bFs(num("actionbars.cntsize", 10), s))
 			else
 				b.cnt:Hide()
 			end
 			if showMac and i == 7 then
-				P.Font(b.mac, fs)
-				b.mac:SetText("Heal")
-				b.mac:ClearAllPoints()
-				b.mac:SetPoint("BOTTOMLEFT", b, "BOTTOMLEFT", 2, 2)
-				b.mac:SetWidth(bs - 4)
-				b.mac:Show()
+				bText(b.mac, b, bs, "mac", "bottomleft", "Heal", bFs(num("actionbars.macsize", 8), s))
 			else
 				b.mac:Hide()
 			end
@@ -336,6 +636,16 @@ local function barsUpdate(root, w, h, key, value)
 		end
 	end
 	local gw, gh = per * (bs + bsp), rows * (bs + bsp)
+	if C.Get("actionbars.main.bg") ~= "hide" then
+		-- fond de la barre (option actionbars.main.bg) : cadre derriere les boutons
+		P.Fill(st.bgEdge, T.c.border, 1)
+		P.Box(st.bgEdge, root, 1, 3, gw - bsp + 6, gh - bsp + 6)
+		P.Fill(st.bg, T.c.bg, 1)
+		P.Box(st.bg, root, 2, 4, gw - bsp + 4, gh - bsp + 4)
+	else
+		st.bgEdge:Hide()
+		st.bg:Hide()
+	end
 	P.PlaceZone(st.gap, root, 4, 6, gw, gh)
 	st.hint:ClearAllPoints()
 	st.hint:SetPoint("TOPLEFT", root, "TOPLEFT", 4, -(gh + 16))
