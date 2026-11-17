@@ -2320,7 +2320,30 @@ function M.BuildWindow()
 		SUI.Layout.Register(f, "finder.win", "CENTER", 0, 20)
 	end
 	tinsert(UISpecialFrames, "ShikiUI_FinderWin")
+	-- Glisser la fenetre a la souris (zone vide ou barre de titre) sans deverrouiller le Mover : la position est memorisee via le Mover.
+	f:SetMovable(true)
+	f:RegisterForDrag("LeftButton")
+	f:SetScript("OnDragStart", function() M.DragStart(this) end)
+	f:SetScript("OnDragStop", function() M.DragStop(this) end)
 	return f
+end
+
+function M.DragStart(f)
+	if not f or f.suiDrag then return end
+	f.suiDrag = true
+	f:StartMoving()
+end
+
+function M.DragStop(f)
+	if not f or not f.suiDrag then return end
+	f.suiDrag = nil
+	f:StopMovingOrSizing()
+	local rec = SUI.Mover and SUI.Mover.items and SUI.Mover.items["finder.win"]
+	local l, b = f:GetLeft(), f:GetBottom()
+	if rec and type(l) == "number" and type(b) == "number" then
+		local sc = f:GetScale() or 1
+		SUI.Mover.Commit(rec, l * sc, b * sc)
+	end
 end
 
 function M.ClearBuffer()
@@ -2901,10 +2924,17 @@ end
 function M.BuildAccess()
 	if not M.on then return end
 	local mm = getglobal("Minimap")
-	if mm and not M.mbtn then M.mbtn = M.MakeAccess(mm, 36) end
+	if mm and not M.mbtn then
+		M.mbtn = M.MakeAccess(mm, 40)
+		M.mbtn:SetHeight(22)
+		M.mbtn:SetFrameStrata("HIGH")
+		M.mbtn:SetFrameLevel((mm:GetFrameLevel() or 0) + 12)   -- au-dessus des cadres de Mod_Minimap (+5..+7) et du tiroir
+		if M.mbtn.SetHitRectInsets then M.mbtn:SetHitRectInsets(-6, -6, -6, -6) end   -- zone de clic plus large que le dessin
+	end
 	local ff = getglobal("FriendsFrame")
 	if ff and not M.sbtn then
 		M.sbtn = M.MakeAccess(ff, 72)
+		if M.sbtn.SetHitRectInsets then M.sbtn:SetHitRectInsets(-4, -4, -4, -4) end
 		M.sbtn:SetPoint("TOPRIGHT", ff, "TOPRIGHT", -62, -14)
 	end
 	M.UpdateAccess()

@@ -147,11 +147,11 @@ function M.Paint()
 		b:SetPoint("TOPLEFT", M.win, "TOPLEFT", 6 + (i - 1) * (size + 4), -6)
 		local st = M.state[e.key] or {}
 		if st.found then
-			b.icon:SetVertexColor(1, 1, 1, 1)
+			b.icon:SetVertexColor(1, 1, 1, 1) -- style:ok blanc neutre : texture du jeu non teintee
 			b.icon:SetTexture(st.tex or ("Interface\\Icons\\" .. e.icon))
 			b.timer:SetText(cfg.timers and st.left > 0 and M.LeftString(st.left) or "")
 		else
-			b.icon:SetVertexColor(0.3, 0.3, 0.3, 1)
+			b.icon:SetVertexColor(0.3, 0.3, 0.3, 1) -- style:ok icone grisee = teinte neutre de texture du jeu
 			b.icon:SetTexture("Interface\\Icons\\" .. e.icon)
 			b.timer:SetText("")
 		end

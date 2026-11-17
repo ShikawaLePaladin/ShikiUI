@@ -48,6 +48,7 @@ M.ICONS = { stance = "Interface\\Icons\\Ability_Warrior_DefensiveStance", fury =
 	salv = "Interface\\Icons\\Spell_Holy_SealOfSalvation" }   -- icones relevees dans OctoMeterModulesThreat.lua (non verifie en jeu)
 M.SOUND = "Sound\\Interface\\RaidWarning.wav"
 M.WAIT = 5            -- secondes : un paquet n'est accepte que juste apres notre demande
+M.FASTRATE, M.FASTSPAN = 0.25, 5   -- debut de combat : demande toutes les 0.25 s pendant 5 s
 M.LINGER = 5          -- secondes gardees apres la fin du combat
 M.VIEWS = { "players", "mobs" }
 M.TANKMODES = { "auto", "on", "off" }
@@ -972,7 +973,33 @@ function M.Estimate(now)
 end
 
 function M.OnPull()
-	if M.running then M.ClearEst() end
+	if not M.running then return end
+	M.ClearEst()
+	M.Boost()
+end
+
+-- Debut de combat / nouvelle cible en combat : demande tout de suite (sans attendre la minuterie lente), puis une minuterie rapide
+-- (M.FASTRATE) pendant M.FASTSPAN secondes ; la fenetre est montree et repeinte aussitot (pas d'attente du prochain cycle de M.Tick).
+function M.Boost()
+	local now = GetTime()
+	M.fastUntil = now + M.FASTSPAN
+	if not M.fastTask then M.fastTask = SUI.Every(M.FASTRATE, M.FastTick, "threat.fast") end
+	M.FastTick()
+end
+
+function M.FastTick()
+	if not M.running then return end
+	local now = GetTime()
+	if not M.fastUntil or now >= M.fastUntil then
+		SUI.Cancel(M.fastTask)
+		M.fastTask, M.fastUntil = nil, nil
+		return
+	end
+	if not UnitAffectingCombat("player") then return end
+	M.Request(now)
+	if M.cfg.estimate and not (M.lastPkt and now - M.lastPkt <= M.FRESH) then M.Estimate(now) end
+	M.UpdateVisibility()
+	if M.ver ~= M.paintedVer and M.win then M.Paint() end
 end
 
 -- ---------------------------------------------------------------- provocation
@@ -1127,11 +1154,15 @@ end
 function M.OnAddon(ev, a1, a2, a3, a4)
 	if not M.running or type(a2) ~= "string" or not M.reqAt then return end
 	if GetTime() - M.reqAt > M.WAIT then return end
-	if strfind(a2, M.API, 1, true) then M.Parse(a2) end
+	if strfind(a2, M.API, 1, true) then
+		M.Parse(a2)
+		if M.fastTask and M.win and M.ver ~= M.paintedVer then M.Paint() end    -- debut de combat : affichage immediat du paquet
+	end
 end
 
 function M.OnTarget()
 	if not M.running then return end
+	local hot = UnitAffectingCombat("player")
 	M.n, M.mobn, M.nrec = 0, 0, 0
 	M.selfRank, M.holder = 0, nil
 	for i = getn(M.list), 1, -1 do M.list[i] = nil end
@@ -1140,6 +1171,7 @@ function M.OnTarget()
 	M.tankName, M.selfPct = nil, 0
 	M.estimated = false
 	M.ver = M.ver + 1
+	if hot then M.Boost() end    -- cible changee en plein combat : liste vide jusqu'au prochain paquet, on le demande tout de suite
 end
 
 -- ---------------------------------------------------------------- rapport
@@ -1326,6 +1358,8 @@ function M.Stop()
 	SUI.Off("SPELL_GO_SELF", M.OnGoSelf)
 	SUI.Cancel(M.task)
 	SUI.Cancel(M.tauntTask)
+	SUI.Cancel(M.fastTask)
+	M.fastTask, M.fastUntil = nil, nil
 	M.task, M.tauntTask = nil, nil
 	M.Reset()
 end

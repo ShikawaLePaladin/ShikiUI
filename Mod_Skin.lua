@@ -426,7 +426,12 @@ function M.Backdrop(f, role, id, ins, art, paper)
 	if f.suiBd then return f.suiBd end
 	local bd = CreateFrame("Frame", nil, f)
 	local lv = f:GetFrameLevel()
-	if lv > 0 then lv = lv - 1 end
+	if lv > 0 then
+		lv = lv - 1
+	else
+		-- niveau 0 : le fond (enfant, meme niveau) se dessinait PAR-DESSUS les textures du bouton (icones de talents noires). On monte le bouton d'un cran.
+		pcall(f.SetFrameLevel, f, 1)
+	end
 	bd:SetFrameLevel(lv)
 	ins = ins or ZERO
 	bd:SetPoint("TOPLEFT", f, "TOPLEFT", ins[1], -ins[2])
@@ -676,8 +681,11 @@ end
 
 local function onShow()
 	local f = this
+	if f.suiInShow then return end   -- anti-boucle avec Mod_Windows (voir Mod_Windows.onShow)
+	f.suiInShow = true
 	local o = f.suiOldShow
-	if o then o() end
+	if o then pcall(o) end
+	f.suiInShow = nil
 	local sp = f.suiSpec
 	if sp and M.on then
 		if f.suiSelf then pcall(paintBd, f.suiSelf) end
@@ -1039,7 +1047,7 @@ M.AddGroup("spellbook", { pfui = { "Spellbook" }, specs = {
 M.AddGroup("talents", { pfui = { "Talents" }, specs = {
 	{ f = "TalentFrame", addon = "Blizzard_TalentUI", box = "child", inset = { 10, 10, 32, 72 }, title = "TalentFrameTitleText",
 		close = { "TalentFrameCloseButton" }, tabs = seq("TalentFrameTab", 3), buttons = { "TalentFrameCancelButton" },
-		scrolls = { "TalentFrameScrollFrameScrollBar" }, icons = seq("TalentFrameTalent", 40), strips = { "TalentFrameScrollFrame" } },
+		scrolls = { "TalentFrameScrollFrameScrollBar" }, strips = { "TalentFrameScrollFrame" } },
 } })
 
 M.AddGroup("questlog", { pfui = { "Quest Log" }, specs = {
@@ -1082,7 +1090,7 @@ M.AddGroup("trade", { pfui = { "Trade" }, specs = {
 M.AddGroup("trainer", { pfui = { "Trainer" }, specs = {
 	{ f = "ClassTrainerFrame", addon = "Blizzard_TrainerUI", box = "child", inset = PANEL, close = { "ClassTrainerFrameCloseButton" },
 		buttons = { "ClassTrainerTrainButton", "ClassTrainerCancelButton" }, drops = { "ClassTrainerFrameFilterDropDown" },
-		scrolls = { "ClassTrainerListScrollFrameScrollBar", "ClassTrainerDetailScrollFrameScrollBar" }, icons = { "ClassTrainerSkillIcon" },
+		scrolls = { "ClassTrainerListScrollFrameScrollBar", "ClassTrainerDetailScrollFrameScrollBar" },
 		strips = { "ClassTrainerListScrollFrame", "ClassTrainerDetailScrollFrame", "ClassTrainerExpandButtonFrame" } },
 } })
 
@@ -1091,12 +1099,12 @@ M.AddGroup("professions", { pfui = { "Profession" }, specs = {
 		buttons = { "TradeSkillCreateButton", "TradeSkillCancelButton", "TradeSkillCreateAllButton" },
 		checks = { "TradeSkillFrameAvailableFilterCheckButton" }, edits = { "TradeSkillInputBox" },
 		drops = { "TradeSkillSubClassDropDown", "TradeSkillInvSlotDropDown" },
-		scrolls = { "TradeSkillListScrollFrameScrollBar", "TradeSkillDetailScrollFrameScrollBar" }, icons = { "TradeSkillSkillIcon" },
+		scrolls = { "TradeSkillListScrollFrameScrollBar", "TradeSkillDetailScrollFrameScrollBar" },
 		strips = { "TradeSkillListScrollFrame", "TradeSkillDetailScrollFrame", "TradeSkillExpandButtonFrame" } },
 	{ f = "CraftFrame", addon = "Blizzard_CraftUI", box = "child", inset = PANEL, close = { "CraftFrameCloseButton" },
 		buttons = { "CraftCreateButton", "CraftCancelButton" }, checks = { "CraftFrameAvailableFilterCheckButton" },
 		drops = { "CraftFrameFilterDropDown" }, scrolls = { "CraftListScrollFrameScrollBar", "CraftDetailScrollFrameScrollBar" },
-		icons = { "CraftIcon" }, strips = { "CraftListScrollFrame", "CraftDetailScrollFrame", "CraftExpandButtonFrame" } },
+		strips = { "CraftListScrollFrame", "CraftDetailScrollFrame", "CraftExpandButtonFrame" } },
 } })
 
 M.AddGroup("social", { pfui = { "Friends" }, specs = {

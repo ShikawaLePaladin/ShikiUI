@@ -81,7 +81,7 @@ local function textFor(cf)
 	if not t then
 		t = cf:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
 		t:SetPoint("CENTER", cf, "CENTER", 0, 0)
-		t:SetShadowColor(0, 0, 0, 1)
+		t:SetShadowColor(0, 0, 0, 1) -- style:ok ombre noire de texte du jeu
 		t:SetShadowOffset(1, -1)
 		M.texts[cf] = t
 	end

@@ -5,6 +5,10 @@
 -- La grille suit la geometrie de SUI.GroupEngine.Arrange (Mod_Group.lua) a l'echelle (reduction uniforme) ; un cadre AGRANDI (le joueur
 -- clique dans la grille, ou un exemple complet) montre chaque element : un clic sur un element saute a l'option qui le regle.
 -- Aucun cadre du jeu n'est touche ; tout est cree dans build (hors combat) ; update ne cree rien (40 cadres + 4 de demonstration, prepares).
+-- 4e passe : pseudo place librement (+ petites icones a cote), grosses icones de dissipation (1 a 3), petites icones en ligne, contour
+-- decoupe en parts egales (meme fonction que les vrais cadres : SUI.GroupEngine.SplitLayout), effets de boss simules (SUI.GroupFx.Sample,
+-- icone + minuteur + teinte) et aggro simulee (cadre rouge + icone pour un non-tank, fine barre pour un tank) : ce sont des EXEMPLES, lus
+-- avec les vrais reglages group.* / raid.* et groupfx.* (le menu redessine en direct).
 -- NON VERIFIE EN JEU : voir NOTES en bas de ce fichier.
 ShikiUI = ShikiUI or {}
 local SUI = ShikiUI
@@ -44,11 +48,14 @@ local ROLERANK = { T = 1, H = 2, D = 3 }
 local KEYS = { maxgroup = 8, width = 64, height = 28, powerheight = 0, spacing = 1, groupgap = 6, sort = "group", orient = "vertical",
 	perline = 5, hpcolor = "class", hptext = "deficit", namelen = 6, range = true, outalpha = 0.45, debuffs = 2, buffs = 0, hots = 2,
 	iconsize = 10, dispelmode = "known", dispelonly = true, dispelstyle = "both", dispelprio = "magic", aggro = true, incoming = true,
-	resinfo = true, roletag = false, leader = true, marks = true, target = true }
-local ZKEY = { frame = "width", hp = "hpcolor", heal = "incoming", power = "powerheight", name = "namelen", hptext = "hptext", tag = "roletag",
+	resinfo = true, roletag = false, leader = true, marks = true, target = true, nameanchor = "topleft", nameicons = "dispel", dispelbig = true,
+	dispelbigmax = 1, dispelsize = 20, dispelpos = "center", dispelsmall = false, dispelsmallpos = "bottomleft", dispelsmallsize = 9,
+	dispelthick = 2, fxframes = true, fxsize = 20, fxpos = "left", fxmax = 2, aggroframes = true }
+local ZKEY = { frame = "width", hp = "hpcolor", heal = "incoming", power = "powerheight", name = "nameanchor", hptext = "hptext", tag = "roletag",
 	mark = "marks", dispel = "dispelstyle", deb = "debuffs", hot = "hots", buf = "buffs", aggro = "aggro", far = "range", dead = "outalpha",
-	off = "outalpha" }
-local ZORDER = { "frame", "hp", "heal", "power", "name", "hptext", "tag", "mark", "dispel", "deb", "hot", "buf", "aggro" }
+	off = "outalpha", nic = "nameicons", big = "dispelbigmax", small = "dispelsmall", fx = "fxframes", agg = "aggroframes" }
+local ZORDER = { "frame", "hp", "heal", "power", "name", "hptext", "tag", "mark", "dispel", "deb", "hot", "buf", "aggro", "nic", "big", "small",
+	"fx", "agg" }
 
 R.roster = {}
 for i = 1, getn(LINES) do
@@ -71,6 +78,16 @@ R.roster[13].state = 2                            -- un hors ligne
 R.roster[19].far, R.roster[26].far, R.roster[33].far = true, true, true     -- trois hors portee
 R.roster[3].aggro = true                          -- un en aggro
 R.roster[4].target = true                         -- une cible
+-- effets de boss et aggro d'exemple (indices de SUI.GroupFx.ORDER : 1 = bombe vivante, 2 = adrenaline brulante, 3 = panique) ; fxt = secondes
+local NOFX = {}
+for i = 1, getn(R.roster) do R.roster[i].fx, R.roster[i].fxt, R.roster[i].ag = NOFX, NOFX, nil end
+R.roster[1].ag = "tank"                           -- un tank qui a l'aggro : discret
+R.roster[2].fx, R.roster[2].fxt = { 1 }, { 6 }    -- un soigneur avec la bombe
+R.roster[4].fx, R.roster[4].fxt = { 2 }, { 14 }
+R.roster[5].ag = "off"                            -- un voleur qui a l'aggro : alerte
+R.roster[10].fx, R.roster[10].fxt = { 1, 2 }, { 3, 18 }
+R.roster[21].ag = "off"
+R.roster[22].fx, R.roster[22].fxt = { 3 }, { 7 }
 
 -- Joueur d'exemple complet (cadre agrandi) et ses variantes d'etat.
 local function copyOf(p)
@@ -81,11 +98,15 @@ end
 R.demo = { name = "Elaria", class = "PRIEST", role = "H", sub = 1, idx = 0, hpr = 0.58, hpmax = 4800, state = 0, far = false, aggro = true,
 	target = false, inc = 0.2, deb = { "Magic", "Curse", "Poison", "Disease" }, hots = 4, bufs = 6, mark = 8, rank = 2, pr = 0.7, ptype = 0 }
 R.demoFar = copyOf(R.demo)
+R.demo.fx, R.demo.fxt, R.demo.ag = { 1, 2 }, { 8, 20 }, "off"
 R.demoFar.far, R.demoFar.aggro, R.demoFar.mark, R.demoFar.deb = true, false, nil, { "Magic" }
+R.demoFar.fx, R.demoFar.fxt, R.demoFar.ag = { 1 }, { 6 }, nil
 R.demoDead = copyOf(R.demo)
 R.demoDead.state, R.demoDead.hpr, R.demoDead.aggro, R.demoDead.deb, R.demoDead.mark = 1, 0, false, {}, nil
+R.demoDead.fx, R.demoDead.fxt, R.demoDead.ag = NOFX, NOFX, nil
 R.demoOff = copyOf(R.demo)
 R.demoOff.state, R.demoOff.aggro, R.demoOff.deb, R.demoOff.mark = 2, false, {}, nil
+R.demoOff.fx, R.demoOff.fxt, R.demoOff.ag = NOFX, NOFX, nil
 
 -- ---------------------------------------------------------------- reglages reels
 local function readCfg(prefix, cfg)
@@ -95,6 +116,14 @@ local function readCfg(prefix, cfg)
 		cfg[k] = v
 	end
 	cfg.ns = (prefix == "raid.") and "raid" or "group"
+	-- reglages d'affichage de SUI.GroupFx (le module peut etre coupe : l'apercu montre quand meme ce qu'il donnerait)
+	cfg.gIcon = C.Get("groupfx.fx.on") ~= false and C.Get("groupfx.fx.icon") ~= false
+	cfg.gTint = C.Get("groupfx.fx.on") ~= false and C.Get("groupfx.fx.tint") ~= false
+	cfg.gTimer = C.Get("groupfx.fx.on") ~= false and C.Get("groupfx.fx.timer") ~= false
+	local am = C.Get("groupfx.aggromode") or "target"
+	cfg.gAgFrame = am ~= "off" and C.Get("groupfx.aggro.frame") ~= false
+	cfg.gAgIcon = am ~= "off" and C.Get("groupfx.aggro.icon") ~= false
+	cfg.gAgTank = am ~= "off" and C.Get("groupfx.aggro.tank") == true
 	return cfg
 end
 
@@ -189,6 +218,31 @@ local function newCell(parent, caps, clickable)
 	end
 	for k = 1, caps[3] do c.hi[k] = P.NewTex(c, "OVERLAY") end
 	for k = 1, caps[2] do c.bi[k] = P.NewTex(c, "OVERLAY") end
+	-- contour decoupe / bordure, grosses et petites icones de dissipation, icones a cote du pseudo
+	c.sp, c.bge, c.bgi, c.sme, c.smi, c.nic = {}, {}, {}, {}, {}, {}
+	for k = 1, 8 do c.sp[k] = P.NewTex(c, "OVERLAY") end
+	for k = 1, 3 do
+		c.bge[k] = P.NewTex(c, "OVERLAY")
+		c.bgi[k] = P.NewTex(c, "OVERLAY")
+		c.nic[k] = P.NewTex(c, "OVERLAY")
+	end
+	for k = 1, 4 do
+		c.sme[k] = P.NewTex(c, "OVERLAY")
+		c.smi[k] = P.NewTex(c, "OVERLAY")
+	end
+	-- effets de boss (teinte, icones, minuteurs) et aggro
+	c.fxhl = P.NewTex(c, "ARTWORK")
+	c.fxe, c.fxi, c.fxt = {}, {}, {}
+	for k = 1, 3 do
+		c.fxe[k] = P.NewTex(c, "OVERLAY")
+		c.fxi[k] = c:CreateTexture(nil, "OVERLAY")
+		c.fxi[k]:SetTexture(T.tex.white)
+		c.fxt[k] = T.Text(c, 9, T.c.text, "CENTER", true)
+	end
+	c.aghl = P.NewTex(c, "ARTWORK")
+	c.agbar = P.NewTex(c, "OVERLAY")
+	c.agic = P.NewTex(c, "OVERLAY")
+	c.agtx = T.Text(c, 10, T.c.text, "CENTER", true)
 	c.mk = c:CreateTexture(nil, "OVERLAY")
 	c.mk:SetTexture("Interface\\TargetingFrame\\UI-RaidTargetingIcons")
 	c.name = T.Text(c, 10, T.c.text, "LEFT", true)
@@ -260,21 +314,246 @@ local function markCoords(t, idx)
 	t:SetTexCoord(col * 0.25, col * 0.25 + 0.25, row * 0.25, row * 0.25 + 0.25)
 end
 
--- Type de debuff dissipable a montrer (priorite choisie, puis ordre Magie, Malediction, Poison, Maladie) ; nil si aucun.
-local function dispelType(cfg, p)
-	if cfg.dispelmode == "off" or p.state ~= 0 then return nil end
+-- Types a dissiper presents sur p, du plus prioritaire au moins prioritaire (le type de dispelprio d'abord, puis Magie, Malediction,
+-- Poison, Maladie) : remplit out[1..n] et renvoie n. Aucun type si la dissipation est coupee ou si le joueur est mort / hors ligne.
+local function dispelList(cfg, p, out)
+	if cfg.dispelmode == "off" or p.state ~= 0 then return 0 end
 	local want = PRIO[cfg.dispelprio]
-	local first
-	for i = 1, getn(TYPES) do
-		local tp = TYPES[i]
-		for j = 1, getn(p.deb) do
-			if p.deb[j] == tp then
-				if tp == want then return tp end
-				if not first then first = tp end
+	local n = 0
+	for pass = 1, 2 do
+		for i = 1, getn(TYPES) do
+			local tp = TYPES[i]
+			if (pass == 1) == (tp == want) then
+				for j = 1, getn(p.deb) do
+					if p.deb[j] == tp then
+						n = n + 1
+						out[n] = tp
+						break
+					end
+				end
 			end
 		end
 	end
-	return first
+	return n
+end
+
+local TY = {}                 -- types du cadre en cours de dessin
+local SEG = {}                -- segments du contour decoupe (tables creees une seule fois)
+for i = 1, 8 do SEG[i] = { k = 0, x = 0, y = 0, w = 0, h = 0 } end
+-- Place du pseudo : { ligne (1 haut, 2 milieu, 3 bas), colonne (1 gauche, 2 centre, 3 droite) } (memes noms que SUI.GroupEngine.NAME_AT).
+local NAMEAT = { topleft = { 1, 1 }, topcenter = { 1, 2 }, topright = { 1, 3 }, left = { 2, 1 }, center = { 2, 2 }, right = { 2, 3 },
+	bottomleft = { 3, 1 }, bottomcenter = { 3, 2 }, bottomright = { 3, 3 } }
+local JUST = { "LEFT", "CENTER", "RIGHT" }
+
+-- Effet de boss d'exemple numero k du joueur p (SUI.GroupFx.Sample) ; nil si le module d'effets est absent.
+local function fxRec(p, k)
+	local G = SUI.GroupFx
+	local idx = p.fx[k]
+	if not idx or not G or type(G.Sample) ~= "function" then return nil end
+	return G.Sample(idx)
+end
+
+local function fxColor(rec)
+	local G = SUI.GroupFx
+	if G and type(G.Color) == "function" then return G.Color(rec) end
+	return T.c.bad[1], T.c.bad[2], T.c.bad[3]
+end
+
+-- Contour decoupe (style "split") ou bordure unie (marque "cadre" avec grosse icone) : memes segments que les vrais cadres.
+local function paintOutline(c, cfg, s, w, h, nt)
+	local E = SUI.GroupEngine
+	local m = 0
+	local style = cfg.dispelstyle
+	if nt > 0 and E and type(E.SplitLayout) == "function" then
+		if style == "split" then
+			local th = floor(cfg.dispelthick * s + 0.5)
+			if th < 1 then th = 1 end
+			m = E.SplitLayout(w, h, th, nt, SEG)
+		elseif cfg.dispelbig and (style == "frame" or style == "both") then
+			local th = floor(2 * s + 0.5)
+			if th < 1 then th = 1 end
+			m = E.SplitLayout(w, h, th, 1, SEG)
+		end
+	end
+	for i = 1, 8 do
+		local t = c.sp[i]
+		if i <= m then
+			local r = SEG[i]
+			local dr, dg, db = debCol(TY[r.k])
+			t:SetVertexColor(dr, dg, db, 1)
+			P.Box(t, c, r.x, r.y, r.w, r.h)
+		else
+			t:Hide()
+		end
+	end
+end
+
+-- Abscisse de la k-ieme grosse icone (dissipation ou effet de boss) selon la place choisie ; cnt = nombre affiche (centrage).
+local function rowX(pos, w, s, sz, gap, k, cnt, padL)
+	if pos == "right" then return w - floor(2 * s + 0.5) - (sz + 2) - (k - 1) * gap end
+	if pos == "left" then return floor(padL * s + 0.5) + (k - 1) * gap end
+	return floor(w / 2 + (k - (cnt + 1) / 2) * gap - (sz + 2) / 2)
+end
+
+-- Grosses icones de dissipation (1 a 3), petites icones en ligne, effets de boss (icone + minuteur + teinte) et aggro d'exemple.
+-- Sauve dans c : fxN (nombre d'icones d'effets montrees), pour les petites icones a cote du pseudo.
+local function paintFx(c, p, cfg, s, w, h, base, nt)
+	local state = p.state
+	-- grosses icones de dissipation
+	local nb = 0
+	if cfg.dispelbig then
+		nb = nt
+		if nb > cfg.dispelbigmax then nb = cfg.dispelbigmax end
+	end
+	local bsz = floor(cfg.dispelsize * s + 0.5)
+	if bsz > h - 2 then bsz = h - 2 end
+	if bsz < 2 then bsz = 2 end
+	local bgap = bsz + floor(3 * s + 0.5)
+	local by = floor((h - (bsz + 2)) / 2)
+	local bc = nb > 0 and nb or 1
+	for k = 1, 3 do
+		if k <= nb then
+			local x = rowX(cfg.dispelpos, w, s, bsz, bgap, k, nb, 4)
+			local dr, dg, db = debCol(TY[k])
+			c.bge[k]:SetVertexColor(dr, dg, db, 1)
+			P.Box(c.bge[k], c, x, by, bsz + 2, bsz + 2)
+			P.Fill(c.bgi[k], T.c.inset, 1)
+			P.Box(c.bgi[k], c, x + 1, by + 1, bsz, bsz)
+		else
+			c.bge[k]:Hide()
+			c.bgi[k]:Hide()
+		end
+	end
+	local bx1, bx2 = rowX(cfg.dispelpos, w, s, bsz, bgap, 1, bc, 4), rowX(cfg.dispelpos, w, s, bsz, bgap, bc, bc, 4)
+	if bx2 < bx1 then bx1, bx2 = bx2, bx1 end
+	rect(c, "big", bx1, by, bx2 - bx1 + bsz + 2, bsz + 2)
+	-- petites icones en ligne
+	local ssz = floor(cfg.dispelsmallsize * s + 0.5)
+	if ssz < 2 then ssz = 2 end
+	local sgap = ssz + floor(3 * s + 0.5)
+	local nsm = cfg.dispelsmall and nt or 0
+	local tagres = floor(((cfg.roletag or cfg.leader) and 12 or 0) * s + 0.5)
+	local agres = floor((cfg.aggroframes and 14 or 0) * s + 0.5)
+	local sx0, sy
+	for k = 1, 4 do
+		local x, y
+		if cfg.dispelsmallpos == "bottomright" then
+			x = w - floor(2 * s + 0.5) - (ssz + 2) - (k - 1) * sgap
+			y = h - (base - 1) - (ssz + 2)
+		elseif cfg.dispelsmallpos == "topright" then
+			x = w - floor(2 * s + 0.5) - tagres - agres - (ssz + 2) - (k - 1) * sgap
+			y = floor(2 * s + 0.5)
+		else
+			x = floor(2 * s + 0.5) + (k - 1) * sgap
+			y = h - (base - 1) - (ssz + 2)
+		end
+		if k == 1 then sx0, sy = x, y end
+		if k <= nsm then
+			local dr, dg, db = debCol(TY[k])
+			c.sme[k]:SetVertexColor(dr, dg, db, 1)
+			P.Box(c.sme[k], c, x, y, ssz + 2, ssz + 2)
+			P.Fill(c.smi[k], T.c.inset, 1)
+			P.Box(c.smi[k], c, x + 1, y + 1, ssz, ssz)
+		else
+			c.sme[k]:Hide()
+			c.smi[k]:Hide()
+		end
+	end
+	rect(c, "small", sx0, sy, ssz + 2, ssz + 2)
+	-- effets de boss
+	local nf = 0
+	if state == 0 and cfg.fxframes then
+		nf = getn(p.fx)
+		if nf > cfg.fxmax then nf = cfg.fxmax end
+	end
+	local nIcon = (nf > 0 and cfg.gIcon) and nf or 0
+	local fsz = floor(cfg.fxsize * s + 0.5)
+	if fsz > h - 2 then fsz = h - 2 end
+	if fsz < 3 then fsz = 3 end
+	local fgap = fsz + floor(3 * s + 0.5)
+	local fy = floor((h - (fsz + 2)) / 2)
+	local fc = nIcon > 0 and nIcon or 1
+	c.fxN = 0
+	local fs = 9 * s
+	if fs > 12 then fs = 12 end
+	for k = 1, 3 do
+		local rec = (k <= nIcon) and fxRec(p, k) or nil
+		if rec then
+			c.fxN = k
+			local x = rowX(cfg.fxpos, w, s, fsz, fgap, k, nIcon, 2)
+			local fr, fg, fb = fxColor(rec)
+			c.fxe[k]:SetVertexColor(fr, fg, fb, 1)
+			P.Box(c.fxe[k], c, x, fy, fsz + 2, fsz + 2)
+			c.fxi[k]:SetTexture(rec.texture)
+			c.fxi[k]:SetVertexColor(1, 1, 1, 1)
+			P.Box(c.fxi[k], c, x + 1, fy + 1, fsz, fsz)
+			local left = p.fxt[k] or rec.left or 0
+			if cfg.gTimer and left > 0 and fsz >= 9 then
+				local sec = floor(left + 0.5)
+				P.Font(c.fxt[k], fs)
+				c.fxt[k]:SetText(sec >= 100 and (floor(sec / 60) .. "m") or tostring(sec))
+				c.fxt[k]:ClearAllPoints()
+				c.fxt[k]:SetPoint("CENTER", c, "TOPLEFT", x + (fsz + 2) / 2, -(fy + (fsz + 2) / 2))
+				c.fxt[k]:SetWidth(fsz + 8)
+				c.fxt[k]:SetHeight(fs + 2)
+				c.fxt[k]:Show()
+			else
+				c.fxt[k]:Hide()
+			end
+		else
+			c.fxe[k]:Hide()
+			c.fxi[k]:Hide()
+			c.fxt[k]:Hide()
+		end
+	end
+	local fx1, fx2 = rowX(cfg.fxpos, w, s, fsz, fgap, 1, fc, 2), rowX(cfg.fxpos, w, s, fsz, fgap, fc, fc, 2)
+	if fx2 < fx1 then fx1, fx2 = fx2, fx1 end
+	rect(c, "fx", fx1, fy, fx2 - fx1 + fsz + 2, fsz + 2)
+	local rec1 = (nf > 0 and cfg.gTint) and fxRec(p, 1) or nil
+	if rec1 then
+		local fr, fg, fb = fxColor(rec1)
+		c.fxhl:SetVertexColor(fr, fg, fb, 0.30)
+		P.Box(c.fxhl, c, 0, 0, w, h)
+	else
+		c.fxhl:Hide()
+	end
+	-- aggro (SUI.GroupFx.Aggro) : cadre rouge + icone pour un non-tank, fine barre pour un tank
+	local ag = (state == 0 and cfg.aggroframes) and p.ag or nil
+	if ag == "off" and cfg.gAgFrame then
+		P.Fill(c.aghl, T.c.bad, 0.45)
+		P.Box(c.aghl, c, 0, 0, w, h)
+	else
+		c.aghl:Hide()
+	end
+	local isz = floor(12 * s + 0.5)
+	if isz < 3 then isz = 3 end
+	local ax, ay = w - floor(2 * s + 0.5) - tagres - isz, floor(2 * s + 0.5)
+	if ag == "off" and cfg.gAgIcon then
+		P.Fill(c.agic, T.c.bad, 1)
+		P.Box(c.agic, c, ax, ay, isz, isz)
+		if isz >= 8 then
+			P.Font(c.agtx, 10 * s)
+			c.agtx:SetText("!")
+			c.agtx:ClearAllPoints()
+			c.agtx:SetPoint("CENTER", c, "TOPLEFT", ax + isz / 2, -(ay + isz / 2))
+			c.agtx:SetWidth(isz)
+			c.agtx:SetHeight(isz)
+			c.agtx:Show()
+		else
+			c.agtx:Hide()
+		end
+	else
+		c.agic:Hide()
+		c.agtx:Hide()
+	end
+	if ag == "tank" and cfg.gAgTank then
+		local ar, agg, ab = T.Accent()
+		c.agbar:SetVertexColor(ar, agg, ab, 0.8)
+		P.Box(c.agbar, c, 1, 1, w - 2, floor(2 * s + 0.5) < 1 and 1 or floor(2 * s + 0.5))
+	else
+		c.agbar:Hide()
+	end
+	rect(c, "agg", ax, ay, isz, isz)
 end
 
 -- Dessine le joueur p dans la cellule c a l'echelle s (reglages cfg, plafonds caps = { debuffs, buffs, hots }).
@@ -348,32 +627,39 @@ function R.Paint(c, p, cfg, s, caps)
 		c.hl:Hide()
 	end
 	rect(c, "aggro", 0, 0, w, 4)
-	-- dissipation : liseret a gauche et/ou voile colore
-	local dt = dispelType(cfg, p)
+	-- dissipation : types presents (priorite choisie d'abord), liseret a gauche et/ou voile colore (du type prioritaire), contour decoupe
+	local nt = dispelList(cfg, p, TY)
+	local dt = (nt > 0) and TY[1] or nil
 	local sw = floor(3 * s + 0.5)
 	if sw < 1 then sw = 1 end
+	local dstyle = cfg.dispelstyle
 	if dt then
 		local dr, dg, db = debCol(dt)
 		c.dtx:SetVertexColor(dr, dg, db, 1)
 		c.dhl:SetVertexColor(dr, dg, db, 0.32)
-		if cfg.dispelstyle ~= "frame" then P.Box(c.dtx, c, 0, 0, sw, h) else c.dtx:Hide() end
-		if cfg.dispelstyle ~= "stripe" then P.Box(c.dhl, c, 0, 0, w, h) else c.dhl:Hide() end
+		if dstyle == "stripe" or dstyle == "both" then P.Box(c.dtx, c, 0, 0, sw, h) else c.dtx:Hide() end
+		if dstyle == "frame" or dstyle == "both" then P.Box(c.dhl, c, 0, 0, w, h) else c.dhl:Hide() end
 	else
 		c.dtx:Hide()
 		c.dhl:Hide()
 	end
+	paintOutline(c, cfg, s, w, h, nt)
 	rect(c, "dispel", 0, 0, sw + 2, h)
 	-- icones : debuffs (gauche), HoTs puis buffs (droite)
 	local isz = floor(cfg.iconsize * s + 0.5)
 	if isz < 2 then isz = 2 end
 	local base = floor((2 + ((ph > 0) and (ph + 1) or 0)) * s + 0.5)
+	-- place reservee aux petites icones de dissipation dans la rangee du bas (comme les vrais cadres)
+	local ssz = cfg.dispelsmallsize
+	local resL = (cfg.dispelsmall and cfg.dispelsmallpos == "bottomleft") and floor(2 * (ssz + 3) * s + 0.5) or 0
+	local resR = (cfg.dispelsmall and cfg.dispelsmallpos == "bottomright") and floor(2 * (ssz + 3) * s + 0.5) or 0
 	local shown = 0
 	local maxDeb = caps[1]
 	for j = 1, getn(p.deb) do
 		local tp = p.deb[j]
 		if (tp ~= "" or not cfg.dispelonly or cfg.dispelmode == "off") and shown < cfg.debuffs and shown < maxDeb then
 			shown = shown + 1
-			local x = floor(2 * s + 0.5) + (shown - 1) * (isz + floor(3 * s + 0.5))
+			local x = floor(2 * s + 0.5) + resL + (shown - 1) * (isz + floor(3 * s + 0.5))
 			local y = h - base - isz - 2
 			local e, ic = c.de[shown], c.di[shown]
 			if tp == "" then
@@ -396,7 +682,7 @@ function R.Paint(c, p, cfg, s, caps)
 	if nhot > caps[3] then nhot = caps[3] end
 	local shownH = nhot
 	if shownH > p.hots then shownH = p.hots end
-	local hx = floor(2 * s + 0.5)
+	local hx = floor(2 * s + 0.5) + resR
 	for k = 1, caps[3] do
 		local ic = c.hi[k]
 		if k <= shownH then
@@ -421,6 +707,8 @@ function R.Paint(c, p, cfg, s, caps)
 		end
 	end
 	rect(c, "buf", w - hx - (nhot + (nb > 0 and nb or 1)) * isz - (nhot + nb), h - base - isz, (nb > 0 and nb or 1) * isz, isz)
+	-- grosses / petites icones de dissipation, effets de boss et aggro d'exemple
+	paintFx(c, p, cfg, s, w, h, base, nt)
 	-- marqueur
 	if cfg.marks and p.mark then
 		markCoords(c.mk, p.mark)
@@ -441,18 +729,92 @@ function R.Paint(c, p, cfg, s, caps)
 	if ty < 1 then ty = 1 end
 	local nm = cutName(p.name, cfg.namelen)
 	local tx = 1 + floor(3 * s + 0.5)
+	-- pseudo place librement : ligne (haut / milieu / bas) et colonne (gauche / centre / droite)
+	local at = NAMEAT[cfg.nameanchor] or NAMEAT.left
+	local nw = floor(w * 0.62)
+	local nx, ny = tx, ty
+	if at[1] == 1 then
+		ny = 1 + floor(2 * s + 0.5)
+	elseif at[1] == 3 then
+		ny = 1 + hpH - fs - 2 - floor(2 * s + 0.5)
+		if ny < 1 then ny = 1 end
+	end
+	if at[2] == 1 then
+		if at[1] == 1 and cfg.marks and p.mark then nx = nx + isz + floor(2 * s + 0.5) end      -- sous le marqueur de raid
+	elseif at[2] == 2 then
+		nx = floor((w - nw) / 2)
+	else
+		nx = w - nw - tx
+		if at[1] == 1 and cfg.leader and p.rank > 0 then nx = nx - floor(12 * s + 0.5) end     -- a gauche du chef / role
+	end
 	if textOk then
 		P.Font(c.name, fs)
 		c.name:SetText(nm)
+		c.name:SetJustifyH(JUST[at[2]])
 		c.name:ClearAllPoints()
-		c.name:SetPoint("TOPLEFT", c, "TOPLEFT", tx, -ty)
-		c.name:SetWidth(floor(w * 0.62))
+		c.name:SetPoint("TOPLEFT", c, "TOPLEFT", nx, -ny)
+		c.name:SetWidth(nw)
 		c.name:SetHeight(fs + 2)
 		c.name:Show()
 	else
 		c.name:Hide()
 	end
-	rect(c, "name", tx, ty, floor(w * 0.62), fs + 2)
+	rect(c, "name", nx, ny, nw, fs + 2)
+	-- petites icones a cote du pseudo : types a dissiper (carres colores) puis effets de boss (leur icone), 3 au plus
+	local kk = 0
+	local nsz = floor(cfg.dispelsmallsize * s + 0.5)
+	if nsz > fs + 2 then nsz = floor(fs + 2) end
+	if nsz < 2 then nsz = 2 end
+	local sw2 = 0
+	if textOk then
+		sw2 = c.name:GetStringWidth() or 0
+		if sw2 > nw then sw2 = nw end
+	end
+	local mode = cfg.nameicons
+	local ncx = nx + sw2 + floor(2 * s + 0.5)
+	if textOk and mode ~= "off" then
+		for pass = 1, 2 do
+			local count = 0
+			if pass == 1 and (mode == "dispel" or mode == "both") then count = nt end
+			if pass == 2 and (mode == "fx" or mode == "both") then count = c.fxN end
+			for i = 1, count do
+				if kk < 3 then
+					local t = c.nic[kk + 1]
+					local ok = true
+					if pass == 1 then
+						local dr, dg, db = debCol(TY[i])
+						t:SetTexture(T.tex.white)
+						t:SetTexCoord(0, 1, 0, 1)
+						t:SetVertexColor(dr, dg, db, 1)
+					else
+						local rec = fxRec(p, i)
+						if rec then
+							t:SetTexture(rec.texture)
+							t:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+							t:SetVertexColor(1, 1, 1, 1)
+						else
+							ok = false
+						end
+					end
+					if ok then
+						kk = kk + 1
+						local off = (kk - 1) * (nsz + floor(s + 0.5))
+						local x
+						if at[2] == 1 then
+							x = nx + sw2 + floor(2 * s + 0.5) + off
+						elseif at[2] == 3 then
+							x = nx + nw - sw2 - floor(2 * s + 0.5) - nsz - off
+						else
+							x = nx + nw / 2 + sw2 / 2 + floor(2 * s + 0.5) + off
+						end
+						P.Box(t, c, x, ny + (fs + 2 - nsz) / 2, nsz, nsz)
+					end
+				end
+			end
+		end
+	end
+	for k = kk + 1, 3 do c.nic[k]:Hide() end
+	rect(c, "nic", ncx, ny + (fs + 2 - nsz) / 2, nsz * (kk > 0 and kk or 1), nsz)
 	local hs = ""
 	if state == 0 then hs = hpString(cfg, floor(p.hpr * p.hpmax + 0.5), p.hpmax) end
 	if textOk and hs ~= "" and w >= 40 then
@@ -602,7 +964,7 @@ local function layoutAll(root, w, h)
 	P.Place(st.gap, root, gx + offx, gy, floor(tw * sg), floor(th * sg))
 	st.gap:Show()
 	setCaption(st, cfg, prefix, cnt)
-	st.legend:SetText(L("mod.preview.raid.legend"))
+	st.legend:SetText(L("mod.preview.raid.legend") .. " " .. L("mod.preview.raid.legend2"))
 end
 
 local function onPick()
@@ -619,7 +981,7 @@ local function onSize(b)
 end
 
 local function makeDef(kind, prefix, sizes, defN, caps)
-	local def = { title = nil, watch = { prefix } }
+	local def = { title = nil, watch = { prefix, "groupfx." } }
 	def.build = function(parent, w, h)
 		local root = CreateFrame("Frame", nil, parent)
 		local st = { kind = kind, prefix = prefix, sizes = sizes, n = defN, pick = 0, caps = caps, cfg = {}, ord = {}, px = {}, py = {},
@@ -654,7 +1016,7 @@ local function makeDef(kind, prefix, sizes, defN, caps)
 		st.cap:SetHeight(12)
 		st.capZone = P.Zone(root, "sort")
 		st.legend = T.Text(root, 10, T.c.dim, "LEFT")
-		st.legend:SetHeight(40)
+		st.legend:SetHeight(64)
 		st.legend:SetJustifyV("TOP")
 		for i = 1, getn(ZORDER) do st.zones[ZORDER[i]] = P.Zone(root, ZORDER[i]) end
 		local sz = { "far", "dead", "off" }

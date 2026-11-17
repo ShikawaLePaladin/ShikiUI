@@ -55,7 +55,8 @@ M.SEGCHOICES = { "current", "previous", "boss", "overall", "h1", "h2", "h3", "h4
 M.REPORT = { "self", "auto", "say", "party", "raid", "guild" }
 M.SOURCES = { "auto", "log" }
 M.MAXWIN, M.MAXROWS, M.PREROWS = 4, 30, 15
-M.HDR, M.FOOT = 20, 10           -- hauteur de l'en-tete, marge basse (poignee)
+M.SBW = 4                         -- largeur de la barre de defilement
+M.HDR, M.FOOT = 20, 10          -- hauteur de l'en-tete, marge basse (poignee)
 M.MINW, M.MAXW, M.MINH, M.MAXH = 120, 500, 60, 700
 M.GAP = 5            -- secondes : au-dela, une pause compte pour 1 s de temps actif
 M.POOL = 120         -- entrees preparees a l'activation
@@ -180,7 +181,7 @@ M.on = false
 M.cfg = { open = { true, true, true, true }, windows = 1, rows = 10, rowh = 16, width = 240, height = 0, fontsize = 11, spacing = 1, alpha = 0.9, classcolor = true,
 	showrank = true, showpct = true, shortnum = true, refresh = 1, idle = 8, minlen = 3, segments = 8, dpsmode = "active", mergepets = true,
 	trackall = false, detail = true, overheal = false, interrupts = true, dispels = true, deaths = true, autoreset = false, tooltips = true,
-	source = "auto", setcvars = true, reportn = 5, reportchan = "self", view = { "damage", "heal", "taken", "interrupts" },
+	source = "auto", setcvars = true, pinme = true, scrollbar = true, wheelstep = 1, reportn = 5, reportchan = "self", view = { "damage", "heal", "taken", "interrupts" },
 	seg = { "current", "current", "overall", "current" } }
 
 M.recs = {}          -- evenement -> liste de motifs compiles
@@ -1358,18 +1359,41 @@ local function rowLeave()
 	if GameTooltip then GameTooltip:Hide() end
 end
 
-local function wheel()
-	local w = this.win
-	if not w then return end
-	local d = arg1 or 0
-	local off = w.off - d
-	if off < 0 then off = 0 end
+-- Decalage de lecture (nombre de joueurs sautes en haut), borne a [0, liste - lignes] ; repeint si change.
+function M.ScrollTo(w, off)
+	off = floor(off + 0.5)
 	local maxoff = mmax(M.listn - (w.nrows or M.cfg.rows), 0)
 	if off > maxoff then off = maxoff end
+	if off < 0 then off = 0 end
 	if off ~= w.off then
 		w.off = off
 		M.PaintWindow(w)
 	end
+end
+
+function M.ScrollBy(w, d)
+	M.ScrollTo(w, w.off + d)
+end
+
+-- Clic sur la barre : saute a la position cliquee (haut = tete du classement, bas = fin de liste).
+local function sbClick()
+	local b = this
+	local w = b.win
+	if not w then return end
+	local _, cy = GetCursorPosition()
+	local es = b:GetEffectiveScale() or 1
+	local hh = (b:GetHeight() or 0) * es
+	local top = (b:GetTop() or 0) * es
+	if hh <= 0 or not cy then return end
+	local frac = (top - cy) / hh
+	if frac < 0 then frac = 0 elseif frac > 1 then frac = 1 end
+	M.ScrollTo(w, frac * mmax(M.listn - (w.nrows or M.cfg.rows), 0))
+end
+
+local function wheel()
+	local w = this.win
+	if not w then return end
+	M.ScrollBy(w, -(arg1 or 0) * M.cfg.wheelstep)
 end
 
 local function nextOf(list, cur, step)
@@ -1746,6 +1770,22 @@ function M.BuildWindow(i)
 	w.grip:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -1, 1)
 	w.grip:SetScript("OnMouseDown", gripDown)
 	w.grip:SetScript("OnMouseUp", gripUp)
+	-- Barre de defilement (a droite des lignes) : piste cliquable + poignee de position ; se cache si tout tient.
+	w.sb = CreateFrame("Button", nil, f)
+	w.sb.win = w
+	w.sb:SetWidth(M.SBW)
+	w.sb:RegisterForClicks("LeftButtonUp")
+	w.sb:EnableMouseWheel(true)
+	w.sb:SetScript("OnMouseWheel", wheel)
+	w.sb:SetScript("OnClick", sbClick)
+	w.sbTrack = w.sb:CreateTexture(nil, "BACKGROUND")
+	w.sbTrack:SetTexture(T.tex.white)
+	w.sbTrack:SetAllPoints(w.sb)
+	w.sbThumb = w.sb:CreateTexture(nil, "ARTWORK")
+	w.sbThumb:SetTexture(T.tex.white)
+	w.sbThumb:SetWidth(M.SBW)
+	w.sb:Hide()
+	tinsert(w.ctl, w.sb)
 	for r = 1, M.PREROWS do w.rows[r] = M.BuildRow(w, r) end
 	M.win[i] = w
 	M.SyncLevels(w)
@@ -1789,11 +1829,16 @@ function M.ApplyWindow(w)
 	w.tbtn:SetHeight(hdr)
 	w.title:SetWidth(mmax(width - 146, 20))
 	M.SetFont(w.title, c.fontsize)
+	local rw = width - 4 - (c.scrollbar and (M.SBW + 2) or 0)     -- la barre de defilement prend la marge de droite
+	w.sb:ClearAllPoints()
+	w.sb:SetPoint("TOPRIGHT", f, "TOPRIGHT", -2, -hdr)
+	w.sb:SetHeight(mmax(height - hdr - M.FOOT, 4))
+	w.sbk = nil
 	for r = 1, getn(w.rows) do
 		local b = w.rows[r]
-		b:SetWidth(width - 4)
+		b:SetWidth(rw)
 		b:SetHeight(rh)
-		b.bar:SetWidth(width - 4)
+		b.bar:SetWidth(rw)
 		b.bar:SetHeight(rh)
 		b.lookOpts.height = rh
 		SUI.Look.ApplyBar(b.bar, "meter", b.lookOpts)
@@ -1817,6 +1862,7 @@ function M.PaintWindow(w)
 	local view, sel = c.view[i], c.seg[i]
 	local seg = M.Segment(sel)
 	if w.tview ~= view or w.tsel ~= sel or w.tseg ~= seg or (seg and w.tname ~= seg.name) or w.tloc ~= SUI.locale then
+		if w.tview ~= view or w.tsel ~= sel or w.tseg ~= seg then w.off = 0 end     -- autre vue / segment : retour en haut du classement
 		w.tview, w.tsel, w.tseg, w.tname, w.tloc = view, sel, seg, seg and seg.name, SUI.locale
 		w.title:SetText(L("choice.meter.view." .. view) .. " - " .. M.SegLabel(sel, seg))
 	end
@@ -1824,10 +1870,23 @@ function M.PaintWindow(w)
 	local rows = w.nrows or c.rows
 	local maxoff = mmax(n - rows, 0)
 	if w.off > maxoff then w.off = maxoff end
+	-- Ma ligne reste visible : si je suis hors de la fenetre de lecture, elle prend la premiere (je suis au-dessus) ou la derniere ligne.
+	local pin, pinrow = nil, nil
+	if c.pinme and rows >= 3 and view ~= "deaths" and M.player and n > rows then
+		local list = M.list
+		for k = 1, n do
+			if list[k].name == M.player then
+				if k <= w.off then pin, pinrow = k, 1 elseif k > w.off + rows then pin, pinrow = k, rows end
+				break
+			end
+		end
+	end
 	for r = 1, getn(w.rows) do
 		local b = w.rows[r]
 		local e = nil
-		if r <= rows then e = M.list[w.off + r] end
+		if r <= rows then
+			if r == pinrow then e = M.list[pin] else e = M.list[w.off + r] end
+		end
 		if e then
 			if not b.vis then b.vis = true b:Show() end
 			b.entry = e
@@ -1841,9 +1900,10 @@ function M.PaintWindow(w)
 				b.bar:SetStatusBarColor(cr, cg, cb, 1)
 			end
 			local rank = w.off + r
-			if b.lname ~= e.name or b.lrank ~= rank then
-				b.lname, b.lrank = e.name, rank
-				if c.showrank then b.name:SetText(strformat("%d. %s", rank, e.name)) else b.name:SetText(e.name) end
+			if r == pinrow then rank = pin end
+			if b.lname ~= e.name or b.lrank ~= rank or b.lpin ~= (r == pinrow) then
+				b.lname, b.lrank, b.lpin = e.name, rank, (r == pinrow)
+				if c.showrank or r == pinrow then b.name:SetText(strformat("%d. %s", rank, e.name)) else b.name:SetText(e.name) end
 			end
 			local vt = M.ValueText(view, e)
 			if b.lval ~= vt then
@@ -1858,7 +1918,42 @@ function M.PaintWindow(w)
 			end
 		end
 	end
+	M.PaintScroll(w, n, rows)
 	w.ver = M.ver
+end
+
+-- Barre de defilement : visible seulement si la liste depasse les lignes ; la poignee suit le decalage (ecrite seulement si elle change).
+function M.PaintScroll(w, n, rows)
+	local sb = w.sb
+	local c = M.cfg
+	local show = c.scrollbar and n > rows
+	if not show then
+		if w.sbshown then
+			w.sbshown = false
+			w.sbk = nil
+			sb:Hide()
+		end
+		return
+	end
+	local ar, ag, ab = T.Accent()
+	local k = n * 1000 + rows * 100000 + w.off
+	local acc = ar + ag + ab
+	if w.sbshown and w.sbk == k and w.sbacc == acc then return end
+	w.sbk, w.sbacc = k, acc
+	if not w.sbshown then
+		w.sbshown = true
+		sb:Show()
+	end
+	local th = sb:GetHeight() or 0
+	local hh = mmax(floor(th * rows / n + 0.5), 8)
+	if hh > th then hh = th end
+	local maxoff = mmax(n - rows, 1)
+	local y = floor((th - hh) * w.off / maxoff + 0.5)
+	w.sbThumb:SetHeight(hh)
+	w.sbThumb:ClearAllPoints()
+	w.sbThumb:SetPoint("TOPRIGHT", sb, "TOPRIGHT", 0, -y)
+	w.sbTrack:SetVertexColor(T.c.border[1], T.c.border[2], T.c.border[3], 0.5)
+	w.sbThumb:SetVertexColor(ar, ag, ab, 0.9)
 end
 
 function M.Paint()
@@ -2517,6 +2612,9 @@ function M.ReadConfig()
 	c.color = C.Get("meter.color")
 	c.showrank = C.Get("meter.showrank")
 	c.showpct = C.Get("meter.showpct")
+	c.pinme = C.Get("meter.pinme")
+	c.scrollbar = C.Get("meter.scrollbar")
+	c.wheelstep = C.Get("meter.wheelstep")
 	c.shortnum = C.Get("meter.shortnum")
 	c.refresh = C.Get("meter.refresh")
 	c.idle = C.Get("meter.idle")
@@ -2790,6 +2888,9 @@ SUI.RegisterModule("meter", {
 		opt("classcolor", "bool", 120, true, { simple = true, section = SD }),
 		opt("showrank", "bool", 130, true, { section = SD }),
 		opt("showpct", "bool", 140, true, { section = SD }),
+		opt("pinme", "bool", 142, true, { simple = true, section = SD }),
+		opt("scrollbar", "bool", 144, true, { section = SD }),
+		opt("wheelstep", "number", 146, 1, { min = 1, max = 10, step = 1, section = SD }),
 		opt("shortnum", "bool", 150, true, { section = SD }),
 		opt("tooltips", "bool", 160, true, { section = SD }),
 		opt("source", "choice", 170, "auto", { choices = M.SOURCES, choiceText = srcText, section = SDA }),

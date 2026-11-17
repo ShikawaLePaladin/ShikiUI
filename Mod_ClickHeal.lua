@@ -59,7 +59,8 @@ local FRNAMES = {
 		["Purifier"] = "Purify", ["Benediction de Puissance"] = "Blessing of Might", ["Benediction de Sagesse"] = "Blessing of Wisdom",
 		["Benediction de Salut"] = "Blessing of Salvation", ["Benediction des Rois"] = "Blessing of Kings",
 		["Benediction de Sacrifice"] = "Blessing of Sacrifice", ["Benediction de Protection"] = "Blessing of Protection",
-		["Benediction de Liberte"] = "Blessing of Freedom", ["Imposition des mains"] = "Lay on Hands",
+		["Benediction de Liberte"] = "Blessing of Freedom",
+		["Main de sacrifice"] = "Blessing of Sacrifice", ["Main de protection"] = "Blessing of Protection", ["Main de liberte"] = "Blessing of Freedom", ["Imposition des mains"] = "Lay on Hands",
 		["Redemption"] = "Redemption" },
 	SHAMAN = { ["Vague de soins"] = "Healing Wave", ["Vague de soins inferieurs"] = "Lesser Healing Wave",
 		["Salve de guerison"] = "Chain Heal", ["Guerison des maladies"] = "Cure Disease", ["Guerison du poison"] = "Cure Poison" },
@@ -88,6 +89,9 @@ for _, cls in pairs(FRNAMES) do
 	for fr, en in pairs(cls) do M.FRKEY[fold(fr)] = en end
 end
 
+-- Serveurs recents (Turtle / octowow) : les Benedictions de Sacrifice / Protection / Liberte s'appellent "Hand of ..." : meme sort, autre nom.
+local ALIAS = { ["Hand of Sacrifice"] = "Blessing of Sacrifice", ["Hand of Protection"] = "Blessing of Protection",
+	["Hand of Freedom"] = "Blessing of Freedom" }
 M.on = false
 M.hasWheel = false
 M.known = {}              -- nom de sort -> { max = rang max, txt = { [rang] = "Rank n" }, gen = generation }
@@ -213,7 +217,7 @@ function M.Scan()
 		M.nSpells = i
 		-- grimoire FR : le nom reel du grimoire est rattache a son nom EN canonique (cles des options) ;
 		-- l'incantation utilisera toujours le nom reel du grimoire (k.bookName)
-		local en = M.FRKEY[fold(name)] or name
+		local en = M.FRKEY[fold(name)] or ALIAS[name] or name
 		local k = M.known[en]
 		if not k then
 			k = { max = 0, txt = {}, gen = 0 }
@@ -367,6 +371,7 @@ function M.Rebuild()
 	M.hasWheel = wheel
 	M.bound = bound
 	if SUI.GroupEngine and SUI.GroupEngine.SyncWheel then SUI.GroupEngine.SyncWheel() end
+	if SUI.Units and SUI.Units.SyncWheel then SUI.Units.SyncWheel() end
 	M.MarkAll()
 end
 
@@ -471,7 +476,8 @@ function M.Run(e, unit, f)
 		return true
 	end
 	if kind == "menu" then
-		if SUI.GroupEngine and f then SUI.GroupEngine.OpenMenu(f) end
+		if f and f.g and SUI.GroupEngine then SUI.GroupEngine.OpenMenu(f)
+		elseif f and SUI.Units and SUI.Units.OpenMenu then SUI.Units.OpenMenu(f) end
 		return true
 	end
 	local spell = e.cast
@@ -501,7 +507,11 @@ function M.Run(e, unit, f)
 			M.Recheck()                       -- grimoire peut-etre perime (apres une respec) : une relecture avant de conclure
 		end
 		if not M.IsKnown(e.spell) then
-			say("msg.clickheal.unknown", e.spell)
+			M.warned = M.warned or {}
+			if not M.warned[e.spell] then          -- une seule fois par sort (sinon le message revenait a chaque clic)
+				M.warned[e.spell] = true
+				say("msg.clickheal.unknown", e.spell)
+			end
 			return false                      -- sort desappris (respec) : le clic cible quand meme au lieu d'etre avale
 		end
 		spell = e.cast
@@ -527,6 +537,25 @@ function M.Click(unit, button, f)
 	local e = M.map[(modIndex() - 1) * 5 + bi]
 	if not e then return false end
 	return M.Run(e, unit, f)
+end
+
+-- Cadres JOUEUR et CIBLE de Units.lua : memes liaisons, options clickheal.self / clickheal.target. Cible hostile : clic normal.
+function M.SoloOn(unit)
+	if unit == "player" then return C.Get("clickheal.self") and true or false end
+	if unit == "target" then return C.Get("clickheal.target") and true or false end
+	return false
+end
+
+function M.ClickSolo(unit, button, f)
+	if not M.on or not M.SoloOn(unit) then return false end
+	if unit == "target" and not (UnitExists("target") and UnitIsFriend("player", "target")) then return false end
+	return M.Click(unit, button, f)
+end
+
+function M.WheelSolo(unit, delta, f)
+	if not M.SoloOn(unit) then return false end
+	if unit == "target" and not (UnitExists("target") and UnitIsFriend("player", "target")) then return false end
+	return M.Wheel(unit, delta, f)
 end
 
 function M.Wheel(unit, delta, f)
@@ -695,7 +724,7 @@ function M.MarkButton(b)
 	if M.on and C.Get("clickheal.mark") then
 		name = M.BookSpellName(b)
 		if name then
-			local en = M.FRKEY[fold(name)] or name   -- grimoire FR : le nom reel est rattache a sa cle EN
+			local en = M.FRKEY[fold(name)] or ALIAS[name] or name   -- grimoire FR : le nom reel est rattache a sa cle EN
 			if not M.bound[en] then name = nil end
 		end
 	end
@@ -821,6 +850,7 @@ function M.Disable()
 	M.bookTask = nil
 	M.SetChoices(nil)
 	if SUI.GroupEngine and SUI.GroupEngine.SyncWheel then SUI.GroupEngine.SyncWheel() end
+	if SUI.Units and SUI.Units.SyncWheel then SUI.Units.SyncWheel() end
 	if M.bLvlTask then SUI.Cancel(M.bLvlTask) end
 	M.bLvlTask = nil
 	M.markPending = false
@@ -920,6 +950,8 @@ tinsert(options, opt("method", "choice", 100, "auto", { choices = { "auto", "swa
 tinsert(options, opt("autores", "bool", 110, true, { simple = true }))
 tinsert(options, opt("retarget", "bool", 120, true))
 tinsert(options, opt("hints", "bool", 130, true))
+tinsert(options, opt("self", "bool", 131, true, { simple = true }))
+tinsert(options, opt("target", "bool", 132, true, { simple = true }))
 tinsert(options, opt("btn", "bool", 140, true, { simple = true }))
 tinsert(options, opt("mark", "bool", 141, true, { simple = true }))
 tinsert(options, opt("btnpos", "choice", 142, "top", { choices = { "top", "bottom", "side" } }))

@@ -90,6 +90,8 @@ Locale_ClickHeal.lua
 Mod_ClickHeal.lua
 Locale_Cooldowns.lua
 Mod_Cooldowns.lua
+Locale_Cursor.lua
+Mod_Cursor.lua
 Locale_Datatext.lua
 Mod_Datatext.lua
 Locale_Esport.lua
@@ -98,6 +100,8 @@ Locale_Finder.lua
 Mod_Finder.lua
 Locale_Group.lua
 Mod_Group.lua
+Locale_GroupFx.lua
+Mod_GroupFx.lua
 Locale_Items.lua
 Mod_Items.lua
 Locale_Loot.lua
