@@ -33,7 +33,8 @@ local TICK = 0.5
 local WATCH = 2                 -- periode (s) de la surveillance des enfants de la minimap
 local WATCH_FULL = 15           -- une recherche complete au moins toutes les 15 surveillances (30 s)
 local HOVER_TICK = 0.25
-local HOVER_GRACE = 0.4
+local HOVER_GRACE = 0.6
+local HOVER_GAP = 6            -- trou (px) couvert entre minimap et tiroir
 local MAXSZ = 45
 local ROWS = 12
 local COORD_FMT = { "%.0f, %.0f", "%.1f, %.1f", "%.2f, %.2f" }
@@ -855,13 +856,18 @@ end
 function M.HoverTick()
 	local d = M.drawer
 	if not d or not M.on or type(MouseIsOver) ~= "function" then return end
-	local over = MouseIsOver(M.holder)
-	if not over and d:IsShown() then over = MouseIsOver(d) end
+	-- marges : le trou entre la minimap et le tiroir est couvert (sinon le tiroir se referme en le traversant)
+	local over = MouseIsOver(M.holder, 4, -(HOVER_GAP + 4), -4, 4)
+	if not over and d:IsShown() then over = MouseIsOver(d, HOVER_GAP + 4, -4, -4, 4) end
 	if over then
 		M.leaveAt = nil
-		if not d:IsShown() and M.ngrp > 0 then
-			d:Show()
-			M.hoverOpen = true
+		if not d:IsShown() then
+			if not SUI.InCombat() then M.Scan() end   -- boutons crees apres le demarrage (comme au clic)
+			M.Arrange()
+			if M.ngrp > 0 then
+				d:Show()
+				M.hoverOpen = true
+			end
 		end
 	elseif d:IsShown() and M.hoverOpen then
 		local now = GetTime()

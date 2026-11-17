@@ -12,6 +12,7 @@ Core.lua
 Locale.lua
 Locale_Mode.lua
 Locale_Target.lua
+Locale_Units.lua
 Locale_Style.lua
 Locale_Layout.lua
 Locale_Menu.lua
