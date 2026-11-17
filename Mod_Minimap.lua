@@ -267,7 +267,7 @@ end
 -- qui repond au clic (Button, ou Frame avec OnMouseUp / OnMouseDown) ; un Button sans nom n'est retenu que s'il a un OnClick.
 -- Jamais : decors et icones du client, cadres ShikiUI, reperes de carte, cadres deja pris en charge.
 function M.IsAddonButton(f)
-	if f.suiGrouped or f.suiBliz or f.suiHid then return false end
+	if f.suiGrouped or f.suiBliz or f.suiHid or f.suiOwn then return false end   -- suiOwn : bouton ShikiUI pose sur la minimap (LFG) : jamais range
 	if f == M.holder or f == M.drawer or f == M.toggle or f == M.win then return false end
 	local name = f:GetName()
 	if name == "" then name = nil end

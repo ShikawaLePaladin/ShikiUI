@@ -2926,6 +2926,7 @@ function M.BuildAccess()
 	local mm = getglobal("Minimap")
 	if mm and not M.mbtn then
 		M.mbtn = M.MakeAccess(mm, 40)
+		M.mbtn.suiOwn = true
 		M.mbtn:SetHeight(22)
 		M.mbtn:SetFrameStrata("HIGH")
 		M.mbtn:SetFrameLevel((mm:GetFrameLevel() or 0) + 12)   -- au-dessus des cadres de Mod_Minimap (+5..+7) et du tiroir
