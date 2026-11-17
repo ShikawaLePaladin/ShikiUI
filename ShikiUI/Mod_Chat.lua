@@ -600,7 +600,45 @@ function M.OnItemRef(link, text, button)
 		M.ShowCopy(strsub(link, 5), L("msg.chat.urltitle"))
 		return
 	end
+	if M.on and type(link) == "string" and strsub(link, 1, 8) == "channel:" and not IsShiftKeyDown() then
+		local r = M.origItemRef(link, text, button)
+		local ok, err = pcall(M.OnChannelLink, link)
+		if not ok then SUI.Report("chat channel link", err) end
+		return r
+	end
 	return M.origItemRef(link, text, button)
+end
+
+-- Clic sur un nom de canal ([2. World]) : la zone de saisie vise CE canal et la fenetre qui le montre est selectionnee
+-- (le client laissait la saisie sur le canal precedent et la fenetre sur General).
+function M.OnChannelLink(link)
+	local arg = strsub(link, 9)
+	local gcn = getglobal("GetChannelName")
+	if arg == "" or type(gcn) ~= "function" then return end
+	local idx, name = gcn(tonumber(arg) or arg)
+	if type(idx) ~= "number" or idx <= 0 then return end
+	M.FocusChannel(idx, name)
+end
+
+function M.FocusChannel(idx, name)
+	local frame
+	if SUI.ChatTabs and SUI.ChatTabs.FrameForChannel then frame = SUI.ChatTabs.FrameForChannel(name) end
+	if frame then
+		FCF_SelectDockFrame(frame)
+		M.selected = getglobal("SELECTED_CHAT_FRAME") or frame
+		local id = frame.GetID and frame:GetID()
+		if id and M.unread then M.unread[id] = 0 end
+		M.dirty = true
+	end
+	local eb = getglobal("ChatFrameEditBox")
+	if eb then
+		eb.chatType = "CHANNEL"
+		eb.channelTarget = idx
+		eb.stickyType = "CHANNEL"
+		if frame then eb.chatFrame = frame end
+		local upd = getglobal("ChatEdit_UpdateHeader")
+		if type(upd) == "function" then upd(eb) end
+	end
 end
 
 function M.HookItemRef()

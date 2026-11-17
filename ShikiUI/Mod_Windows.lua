@@ -54,6 +54,15 @@ local DEFS = {
 	{ id = "tabard", frame = "TabardFrame" },
 	{ id = "help", frame = "HelpFrame" },
 	{ id = "keybind", frame = "KeyBindingFrame" },
+	{ id = "lft", frame = "LFTFrame" },
+	{ id = "stable", frame = "PetStableFrame" },
+	{ id = "score", frame = "WorldStateScoreFrame" },
+	{ id = "options", frame = "OptionsFrame" },
+	{ id = "soundoptions", frame = "SoundOptionsFrame" },
+	{ id = "uioptions", frame = "UIOptionsFrame" },
+	{ id = "repdetail", frame = "ReputationDetailFrame" },
+	{ id = "guildinfo", frame = "GuildInfoFrame" },
+	{ id = "raidinfo", frame = "RaidInfoFrame" },
 	-- sacs du jeu (si l'utilisateur ne remplace pas les sacs par ceux de ShikiUI/pfUI)
 	{ id = "bag1", frame = "ContainerFrame1" },
 	{ id = "bag2", frame = "ContainerFrame2" },
@@ -212,9 +221,14 @@ end
 
 -- ---------------------------------------------------------------- chainage des scripts du cadre (this / arg1 globaux)
 local function onShow()
-	local o = this.suiWinOS
-	if o then o() end
-	M.Place(this)
+	local f = this
+	-- anti-boucle : Mod_Skin enveloppe aussi OnShow ; les deux chainent l'ancien script et pouvaient se rappeler sans fin (stack overflow)
+	if f.suiWinInShow then return end
+	f.suiWinInShow = true
+	local o = f.suiWinOS
+	if o then pcall(o) end
+	f.suiWinInShow = nil
+	M.Place(f)
 end
 
 local function onDown()

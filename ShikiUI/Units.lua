@@ -340,6 +340,8 @@ end
 local function onClick()
 	local f = this
 	local unit = f.unit
+	local ch = SUI.ClickHeal
+	if ch and ch.on and ch.ClickSolo and ch.ClickSolo(unit, arg1, f) then return end   -- soins au clic sur soi / la cible (Mod_ClickHeal)
 	if arg1 == "RightButton" then
 		U.OpenMenu(f)
 		return
@@ -361,12 +363,28 @@ function U.OpenMenu(f)
 	end
 end
 
+local function onWheel()
+	local ch = SUI.ClickHeal
+	if ch and ch.on and ch.WheelSolo then ch.WheelSolo(this.unit, arg1, this) end
+end
+
+-- Roulette : activee seulement si une liaison de clic-soin en utilise (appelee par Mod_ClickHeal).
+function U.SyncWheel()
+	local ch = SUI.ClickHeal
+	local on = (ch and ch.on and ch.hasWheel) and true or false
+	local p, t = U.frames.player, U.frames.target
+	if p then p:EnableMouseWheel((on and ch.SoloOn("player")) and true or false) end
+	if t then t:EnableMouseWheel((on and ch.SoloOn("target")) and true or false) end
+end
+
 local function onEnter()
 	local f = this
 	SUI.Api.SetMouseover(f.unit)
 	if GameTooltip and UnitExists(f.unit) then
 		GameTooltip:SetOwner(f, "ANCHOR_RIGHT")
 		GameTooltip:SetUnit(f.unit)
+		local ch = SUI.ClickHeal
+		if ch and ch.on and ch.AddHints and ch.SoloOn(f.unit) then ch.AddHints(GameTooltip, f) end
 		GameTooltip:Show()
 	end
 end
@@ -403,6 +421,7 @@ function U.Create(unit)
 		f.rangeText:SetPoint("BOTTOMRIGHT", f, "TOPRIGHT", 0, 2)
 	end
 	f:SetScript("OnClick", onClick)
+	f:SetScript("OnMouseWheel", onWheel)
 	f:SetScript("OnEnter", onEnter)
 	f:SetScript("OnLeave", onLeave)
 	f.dAll = true

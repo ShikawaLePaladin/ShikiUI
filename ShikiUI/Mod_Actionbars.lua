@@ -223,9 +223,9 @@ function M.TintColor(st)
 	elseif st == 4 then          -- mauvaise posture : plus sombre que "inutilisable"
 		local c = T.c.dim
 		return c[1] * 0.85, c[2] * 0.85, c[3] * 0.85
-	elseif st == 5 then          -- forme non active (barre de formes) : legere attenuation
+	elseif st == 5 then          -- forme non active (barre de formes) : nette attenuation
 		local c = T.c.dim
-		return (NO_TINT + c[1]) / 2, (NO_TINT + c[2]) / 2, (NO_TINT + c[3]) / 2
+		return c[1] * 0.6, c[2] * 0.6, c[3] * 0.6   -- nettement plus sombre : une icone naturellement lumineuse ne doit pas passer pour la forme active
 	end
 	return NO_TINT, NO_TINT, NO_TINT
 end
@@ -1435,6 +1435,15 @@ local EVENTS = { "ACTIONBAR_SLOT_CHANGED", "ACTIONBAR_UPDATE_STATE", "ACTIONBAR_
 	"PET_BAR_UPDATE_COOLDOWN", "UNIT_PET", "UPDATE_BINDINGS", "ACTIONBAR_SHOWGRID", "ACTIONBAR_HIDEGRID", "PLAYER_REGEN_DISABLED",
 	"PLAYER_REGEN_ENABLED", "PLAYER_TARGET_CHANGED", "PLAYER_ENTERING_WORLD", "UNIT_HEALTH", "PLAYER_AURAS_CHANGED" }
 
+-- Relecture differee de l'etat des boutons de forme (l'aura / la forme active n'est parfois a jour que quelques dixiemes de seconde apres l'evenement).
+function M.LateState()
+	if M.lateTask then return end
+	M.lateTask = SUI.After(0.4, function()
+		M.lateTask = nil
+		M.dState = true
+	end, "actionbars.late")
+end
+
 function M.OnEvent(ev, a1)
 	if ev == "ACTIONBAR_SLOT_CHANGED" then
 		if a1 and a1 ~= 0 then M.dSlot[a1] = true else M.dAll = true end
@@ -1448,6 +1457,7 @@ function M.OnEvent(ev, a1)
 		M.dBase = true
 	elseif ev == "UPDATE_SHAPESHIFT_FORM" or ev == "UPDATE_SHAPESHIFT_FORMS" then
 		M.dBase, M.dAll, M.dVis = true, true, true
+		M.LateState()
 	elseif ev == "PET_BAR_UPDATE" or (ev == "UNIT_PET" and a1 == "player") then
 		M.dBase, M.dAll, M.dVis = true, true, true
 	elseif ev == "UPDATE_BINDINGS" then
@@ -1463,6 +1473,11 @@ function M.OnEvent(ev, a1)
 		M.dVis = true
 	elseif ev == "PLAYER_AURAS_CHANGED" then
 		if M.auraPosture then M.dPost = true end
+		-- paladin : les auras sont des "formes" ; le client met l'aura active a jour APRES l'evenement -> etat des boutons relu tout de suite puis un peu plus tard
+		if M.class == "PALADIN" and (M.nforms or 0) > 0 then
+			M.dState = true
+			M.LateState()
+		end
 	elseif ev == "PLAYER_REGEN_ENABLED" then
 		M.combat = false
 		M.dVis = true

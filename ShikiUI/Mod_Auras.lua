@@ -304,8 +304,28 @@ function M.MarkAll()
 	M.dirtyT = true
 end
 
+-- Verification legere a chaque tick : le jeu n'envoie pas toujours PLAYER_AURAS_CHANGED (changement d'aura de paladin, mort,
+-- esprit libere). On compare indice + texture de chaque buff / debuff lu a ce qui est affiche ; une difference force la relecture.
+function M.PlayerChanged(g, filter, limit)
+	if type(getglobal("GetPlayerBuff")) ~= "function" then return false end
+	local n = 0
+	for i = 0, limit - 1 do
+		local idx = GetPlayerBuff(i, filter)
+		if not idx or idx < 0 then break end
+		n = n + 1
+		local b = g.btns[n]
+		if n > g.shown or b.idx ~= idx or b.lastTex ~= GetPlayerBuffTexture(idx) then return true end
+	end
+	return n ~= g.shown
+end
+
 function M.Tick()
 	if not M.built then return end
+	if not M.dirtyP then
+		local c = M.cfg
+		if c.player and c.buffs and M.PlayerChanged(M.groups.pb, "HELPFUL", c.maxbuffs) then M.dirtyP = true
+		elseif c.player and c.debuffs and M.PlayerChanged(M.groups.pd, "HARMFUL", 16) then M.dirtyP = true end
+	end
 	if M.dirtyP then
 		M.dirtyP = false
 		M.RefreshGroup("pb")
@@ -329,7 +349,16 @@ function M.OnPlayerAuras()
 end
 
 function M.OnUnitAura(ev, unit)
-	if unit == "target" then M.dirtyT = true end
+	if unit == "target" then M.dirtyT = true
+	elseif unit == "player" then M.dirtyP = true end
+end
+
+-- Mort, resurrection, liberation de l'esprit, entree en jeu : le client retire / remet les auras APRES l'evenement,
+-- donc relecture immediate puis deux relectures differees.
+function M.OnLife()
+	M.MarkAll()
+	SUI.After(0.5, function() if M.active then M.MarkAll() end end, "auras.life1")
+	SUI.After(1.5, function() if M.active then M.MarkAll() end end, "auras.life2")
 end
 
 function M.OnTarget()
@@ -513,6 +542,10 @@ function M.Activate()
 	SUI.On("UNIT_AURA", M.OnUnitAura)
 	SUI.On("PLAYER_TARGET_CHANGED", M.OnTarget)
 	SUI.On("UNIT_INVENTORY_CHANGED", M.OnInventory)
+	SUI.On("PLAYER_DEAD", M.OnLife)
+	SUI.On("PLAYER_ALIVE", M.OnLife)
+	SUI.On("PLAYER_UNGHOST", M.OnLife)
+	SUI.On("PLAYER_ENTERING_WORLD", M.OnLife)
 	M.task = SUI.Every(M.cfg.tick, M.Tick, "auras.tick", true)
 	M.MarkAll()
 end
@@ -524,6 +557,10 @@ function M.Deactivate()
 	SUI.Off("UNIT_AURA", M.OnUnitAura)
 	SUI.Off("PLAYER_TARGET_CHANGED", M.OnTarget)
 	SUI.Off("UNIT_INVENTORY_CHANGED", M.OnInventory)
+	SUI.Off("PLAYER_DEAD", M.OnLife)
+	SUI.Off("PLAYER_ALIVE", M.OnLife)
+	SUI.Off("PLAYER_UNGHOST", M.OnLife)
+	SUI.Off("PLAYER_ENTERING_WORLD", M.OnLife)
 	SUI.Cancel(M.task)
 	M.task = nil
 end

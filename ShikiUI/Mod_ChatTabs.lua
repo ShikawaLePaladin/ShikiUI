@@ -1246,6 +1246,7 @@ function M.AutoRestore()
 	if not did then
 		if C.Get("chattabs.autosetup") then M.AutoSetup() else M.Hint() end
 	end
+	M.FlushDedicated()
 end
 
 local function plainCount()
@@ -1275,6 +1276,172 @@ function M.Hint()
 	C.SetGlobal(key, 1)
 	SUI.Print(L("msg.chattabs.hint"))
 	return true
+end
+
+-- ---------------------------------------------------------------- canaux dedies (un canal personnalise = un onglet)
+-- Option chattabs.dedicated : quand on rejoint un canal personnalise (World...), ShikiUI l'attache a UN onglet du meme nom (cree au besoin)
+-- et le retire des autres (General en tete) : les messages n'apparaissent plus que dans cet onglet. Memorise par personnage
+-- (cle globale chattabs.dedic.<perso> = "canal=onglet;..."). Les canaux de base (General, Commerce, Recherche de groupe, Defense) sont laisses.
+function M.BaseName(s)
+	s = tostring(s or "")
+	s = strgsub(s, "^%s*%d+%.%s*", "")
+	return cleanName(s)
+end
+
+local function dedicKey()
+	return "chattabs.dedic." .. C.CharKey()
+end
+
+function M.DedicMap()
+	local map = {}
+	local s = C.GetGlobal(dedicKey())
+	if type(s) ~= "string" then return map end
+	local recs = split(s, ";")
+	for i = 1, getn(recs) do
+		local a = strfind(recs[i], "=", 1, true)
+		if a then
+			local k, v = strsub(recs[i], 1, a - 1), strsub(recs[i], a + 1)
+			if k ~= "" and v ~= "" and strlen(k) <= 40 then map[k] = v end
+		end
+	end
+	return map
+end
+
+function M.DedicSave(map)
+	local parts, n = {}, 0
+	for k, v in pairs(map) do
+		n = n + 1
+		if n <= 20 then tinsert(parts, k .. "=" .. strgsub(v, "=", " ")) end
+	end
+	table.sort(parts)
+	C.SetGlobal(dedicKey(), table.concat(parts, ";"))
+end
+
+-- Un canal est "dedicable" s'il est personnalise (World compris).
+function M.Dedicable(name)
+	local cl = M.ChanClass(name)
+	return cl == "world" or cl == "custom"
+end
+
+local function windowByName(name)
+	local low = strlower(name)
+	local list = M.Shown()
+	for i = 1, getn(list) do
+		if not list[i].combat and strlower(list[i].name) == low then return list[i] end
+	end
+	return nil
+end
+
+-- Attache le canal a l'onglet "tab" (cree si absent) et le retire des autres fenetres. Retourne ok|false, cle ou "a-change".
+function M.Dedicate(chan, tab)
+	local ok, key = M.CanAct()
+	if not ok then return false, key end
+	chan = M.BaseName(chan)
+	tab = M.BaseName(tab or chan)
+	if chan == "" or tab == "" then return false, "msg.chattabs.badname" end
+	local keepSel = getglobal("SELECTED_CHAT_FRAME")
+	local changed = false
+	local w = windowByName(tab)
+	local id
+	if w then
+		id = w.id
+	else
+		local nid, k2 = M.Create(tab)
+		if not nid then return false, k2 end
+		id = nid
+		changed = true
+		-- la creation selectionne le nouvel onglet : on rend la main a celui que le joueur regardait
+		if keepSel then selectDock(keepSel) end
+	end
+	local frame = frameOf(id)
+	if not M.ChannelOn(frame, chan) then changed = true end
+	M.SetChannel(frame, chan, true)
+	local list = M.Shown()
+	for i = 1, getn(list) do
+		if list[i].id ~= id and not list[i].combat then
+			local f = frameOf(list[i].id)
+			if M.ChannelOn(f, chan) then
+				M.SetChannel(f, chan, false)
+				changed = true
+			end
+		end
+	end
+	local map = M.DedicMap()
+	if map[strlower(chan)] ~= tab then
+		map[strlower(chan)] = tab
+		M.DedicSave(map)
+	end
+	M.Touch()
+	return true, changed
+end
+
+-- Annule : le canal revient dans la fenetre principale et n'est plus memorise.
+function M.Undedicate(chan)
+	local ok, key = M.CanAct()
+	if not ok then return false, key end
+	chan = M.BaseName(chan)
+	local map = M.DedicMap()
+	local tab = map[strlower(chan)]
+	if not tab then return false, "msg.chattabs.dedicnone" end
+	map[strlower(chan)] = nil
+	M.DedicSave(map)
+	local w = windowByName(tab)
+	if w and w.id ~= 1 then M.SetChannel(frameOf(w.id), chan, false) end
+	M.SetChannel(frameOf(1), chan, true)
+	M.Touch()
+	return true
+end
+
+M.dedicPending = {}
+
+local function dedicRun(chan)
+	local tab = M.DedicMap()[strlower(chan)] or chan
+	SUI.WhenSafe(function()
+		if not M.on or not C.Get("chattabs.dedicated") then return end
+		local ok, changed = M.Dedicate(chan, tab)
+		if ok and changed then SUI.Print(L("msg.chattabs.dedic", chan, tab)) end
+	end)
+end
+
+-- Mise en place des canaux deja rejoints : ceux memorises ou en attente (ou tous les canaux personnalises si all).
+function M.FlushDedicated(all)
+	if not M.on or not C.Get("chattabs.dedicated") then return end
+	local map = M.DedicMap()
+	local chans = M.JoinedChannels()
+	for i = 1, getn(chans) do
+		local low = strlower(chans[i])
+		if M.Dedicable(chans[i]) and (all or map[low] or M.dedicPending[low]) then dedicRun(chans[i]) end
+	end
+	M.dedicPending = {}
+end
+
+-- CHAT_MSG_CHANNEL_NOTICE : arg1 = YOU_JOINED / YOU_CHANGED, arg4 = "2. World".
+function M.OnNotice(ev, a1, a2, a3, a4)
+	if not M.on or not C.Get("chattabs.dedicated") then return end
+	if a1 ~= "YOU_JOINED" and a1 ~= "YOU_CHANGED" then return end
+	local name = M.BaseName(a4)
+	if name == "" or not M.Dedicable(name) then return end
+	if not M.restored then
+		M.dedicPending[strlower(name)] = true     -- l'arrangement sauvegarde n'est pas encore rejoue : on attend
+		return
+	end
+	-- le client ajoute lui-meme le canal a la fenetre principale a l'arrivee de la notice : on passe apres lui
+	SUI.After(0.5, function() dedicRun(name) end, "chattabs.dedic." .. strlower(name))
+end
+
+-- Fenetre a afficher quand le joueur clique un canal : nil si la fenetre courante le montre deja (ou si aucune ne le montre).
+function M.FrameForChannel(name)
+	if not M.on or not name or name == "" then return nil end
+	local cur = getglobal("SELECTED_CHAT_FRAME")
+	if cur and M.ChannelOn(cur, name) then return nil end
+	local list = M.Ordered()
+	for i = 1, getn(list) do
+		if not list[i].combat then
+			local f = frameOf(list[i].id)
+			if f and M.ChannelOn(f, name) then return f end
+		end
+	end
+	return nil
 end
 
 -- Etat BRUT de toutes les fenetres de chat (diagnostic) : une ligne par fenetre, rangee dans les variables sauvegardees
@@ -1892,6 +2059,7 @@ end
 
 -- ---------------------------------------------------------------- cycle de vie
 function M.OnKey(key, value)
+	if key == "chattabs.dedicated" and value and M.on and M.restored then M.FlushDedicated(true) end
 	if M.on and SUI.Chat then
 		if C.Get("chattabs.menu") then SUI.Chat.tabMenu = M.TabMenu else SUI.Chat.tabMenu = nil end
 	end
@@ -1906,6 +2074,7 @@ function M.Enable()
 		M.PushOrder()
 	end
 	SUI.On("PLAYER_ENTERING_WORLD", M.OnEnter)
+	SUI.On("CHAT_MSG_CHANNEL_NOTICE", M.OnNotice)
 	if not M.watching then
 		M.watching = true
 		C.Watch("chattabs.", M.OnKey)
@@ -1916,6 +2085,7 @@ end
 function M.Disable()
 	M.on = false
 	SUI.Off("PLAYER_ENTERING_WORLD", M.OnEnter)
+	SUI.Off("CHAT_MSG_CHANNEL_NOTICE", M.OnNotice)
 	SUI.Cancel(M.restoreTask)
 	M.restoreTask = nil
 	if SUI.Chat then
@@ -2067,6 +2237,17 @@ function M.Command(rest)
 		if ok then SUI.Print(L("msg.chattabs.restored", a)) else say(ok, a) end
 	elseif word == "reset" then
 		if say(M.Reset()) then SUI.Print(L("msg.chattabs.reset")) end
+	elseif word == "chan" then
+		local _, _, chan, tab = strfind(arg, "^(%S+)%s*(.-)$")
+		if not chan then
+			SUI.Print(L("msg.chattabs.usage"))
+		elseif strlower(tab) == "off" then
+			if say(M.Undedicate(chan)) then SUI.Print(L("msg.chattabs.dedicoff", M.BaseName(chan))) end
+		else
+			if tab == "" then tab = chan end
+			local ok, ch = M.Dedicate(chan, tab)
+			if say(ok, ch) then SUI.Print(L("msg.chattabs.dedic", M.BaseName(chan), M.BaseName(tab))) end
+		end
 	else
 		SUI.Print(L("msg.chattabs.usage"))
 	end
@@ -2085,6 +2266,8 @@ SUI.RegisterModule("chattabs", {
 			default = true, simple = true, order = 20 },
 		{ key = "chattabs.autosetup", type = "bool", cat = "chattabs", label = "opt.chattabs.autosetup", tip = "tip.chattabs.autosetup",
 			default = false, simple = true, order = 15 },
+		{ key = "chattabs.dedicated", type = "bool", cat = "chattabs", label = "opt.chattabs.dedicated", tip = "tip.chattabs.dedicated",
+			default = true, simple = true, order = 25 },
 		{ key = "chattabs.autosave", type = "bool", cat = "chattabs", label = "opt.chattabs.autosave", tip = "tip.chattabs.autosave",
 			default = true, order = 30 },
 	},

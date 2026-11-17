@@ -1754,7 +1754,13 @@ B.defs = {
 	{ key = "bossmods.bwbars", mod = "BigWigsBars", pick = "anchor", label = "mod.bossmods.bw.anchor.bars", point = "TOP", x = 0, y = -120 },
 	{ key = "bossmods.bwemph", mod = "BigWigsBars", pick = "emphasizeAnchor", label = "mod.bossmods.bw.anchor.emph", point = "TOP", x = 0, y = -260 },
 	{ key = "bossmods.bwmsg", mod = "BigWigsMessages", pick = "anchor", label = "mod.bossmods.bw.anchor.msg", point = "CENTER", x = 0, y = 100 },
+	-- grosse icone d'avertissement (plugin WarningSign : BigWigs_ShowWarningSign, 113 modules de boss l'utilisent) : sa position
+	-- par defaut est en pixels absolus (800, 645), souvent hors de vue : on impose le centre (fixed) ; plugin absent = ignore (optional)
+	{ key = "bossmods.bwsign", mod = "BigWigsWarningSign", pick = "anchor", label = "mod.bossmods.bw.anchor.sign", point = "CENTER", x = 0, y = 100, fixed = true, optional = true },
 }
+B.FALLBACK_ICON = "Interface\\Icons\\INV_Misc_QuestionMark"   -- texture du jeu, de repli si celle de BigWigs est absente
+B.signHooked = false
+B.signSeen = 0         -- compteur de diagnostic : signes remis a l'ecran
 
 local function gt(name)
 	local v = getglobal(name)
@@ -1844,6 +1850,7 @@ end
 
 -- Retire nos enveloppes. Si un autre addon est passe par-dessus, la notre reste dans la chaine mais ne fait plus rien.
 function B.UnhookAll()
+	B.signHooked = false
 	local i
 	for i = getn(B.hooks), 1, -1 do
 		local rec = B.hooks[i]
@@ -1863,6 +1870,37 @@ function B.HookAll()
 	B.Wrap(bars, "RestorePosition", B.PostRestore)
 	B.Wrap(msgs, "ResetAnchor", B.PostReset)
 	B.Wrap(msgs, "RestorePosition", B.PostRestore)
+end
+
+-- Plugin WarningSign : enveloppes posees des qu'il existe (il peut se charger apres le pont).
+function B.HookSign()
+	if B.signHooked then return end
+	local m = gt("BigWigsWarningSign")
+	if not m then return end
+	local a = B.Wrap(m, "BigWigs_ShowWarningSign", B.SignCheck)
+	local b = B.Wrap(m, "ResetPosition", B.PostReset)
+	if a and b then B.signHooked = true end
+end
+
+-- Le signe est-il visible ? Au premier plan (option) et dans l'ecran ; sinon l'ancre revient au centre.
+function B.SignCheck()
+	local m = gt("BigWigsWarningSign")
+	local fr = m and m.frames
+	local sg = type(fr) == "table" and fr.sign or nil
+	if type(sg) ~= "table" or type(sg.IsShown) ~= "function" or not sg:IsShown() then return end
+	if B.Opt("signtop") ~= false and sg:GetFrameStrata() ~= "FULLSCREEN_DIALOG" then pcall(sg.SetFrameStrata, sg, "FULLSCREEN_DIALOG") end
+	local l, r, t, b = sg:GetLeft(), sg:GetRight(), sg:GetTop(), sg:GetBottom()
+	if not l or not r or not t or not b then return end
+	local k = sg:GetEffectiveScale() / (UIParent:GetEffectiveScale() or 1)
+	local W, H = UIParent:GetWidth(), UIParent:GetHeight()
+	if r * k > 0 and l * k < W and t * k > 0 and b * k < H then return end
+	B.signSeen = B.signSeen + 1
+	if B.anchors["bossmods.bwsign"] and SUI.Mover and SUI.Mover.Reset then
+		SUI.Mover.Reset("bossmods.bwsign")
+	elseif type(fr.anchor) == "table" then
+		fr.anchor:ClearAllPoints()
+		fr.anchor:SetPoint("CENTER", UIParent, "CENTER", 0, 100)
+	end
 end
 
 function B.PostStart(self, name)
@@ -1906,6 +1944,7 @@ end
 
 -- Position actuelle de BigWigs, reprise comme position par defaut (premiere fois) : point, x, y relatifs a UIParent.
 function B.DefaultPoint(f, def)
+	if def.fixed then return def.point, def.x, def.y end
 	local ok, p, rel, rp, x, y = pcall(f.GetPoint, f, 1)
 	if ok and p and type(x) == "number" and type(y) == "number" and (rel == nil or rel == UIParent) then
 		if rp == nil or rp == p then return p, x, y end
@@ -1929,13 +1968,26 @@ function B.Attach(def)
 	return ok
 end
 
+-- Le plugin WarningSign ne cree ses cadres qu'au premier signe : on les fait creer (hors combat) pour que l'ancre soit deplacable
+-- des le depart. Sous pcall : l'API de BigWigs peut changer.
+function B.EnsureSign()
+	local m = gt("BigWigsWarningSign")
+	if not m then return end
+	if type(m.frames) == "table" and m.frames.anchor then return end
+	if type(m.db) ~= "table" or type(m.SetupFrames) ~= "function" or SUI.InCombat() then return end
+	pcall(m.SetupFrames, m)
+end
+
 function B.AttachAll()
 	local want = B.Opt("anchors") ~= false
 	local all = true
 	local i
 	for i = 1, getn(B.defs) do
 		local def = B.defs[i]
-		if want then
+		if def.optional and not gt(def.mod) then
+			-- plugin absent : rien a accrocher, et pas de reessai a chaque balayage
+		elseif want then
+			if def.optional then B.EnsureSign() end
 			if not B.Attach(def) then all = false end
 		elseif B.anchors[def.key] then
 			B.Forget(def)
@@ -1994,7 +2046,7 @@ function B.HideDeco(f)
 end
 
 -- Lisere du corps de la barre et de l'icone : de simples textures posees SOUS les sous-cadres de la barre (aucun cadre cree).
-function B.Deco(f)
+function B.Deco(f, hasIcon)
 	local d = f.suiDeco
 	if not d then
 		if SUI.InCombat() then
@@ -2028,7 +2080,7 @@ function B.Deco(f)
 	d.bar:SetVertexColor(c[1], c[2], c[3], c[4] or 1)
 	d.icon:SetVertexColor(c[1], c[2], c[3], c[4] or 1)
 	d.bar:Show()
-	d.icon:Show()
+	if hasIcon == false then d.icon:Hide() else d.icon:Show() end   -- pas d'icone : pas de cadre vide a cote de la barre
 end
 
 -- Couleur "accent" ou "alerte" d'une barre (modes accent / urgent).
@@ -2043,6 +2095,32 @@ function B.Tint(h, f, mode)
 		end
 	end
 	f.statusbar:SetStatusBarColor(r, g, b, 0.95)
+end
+
+-- Icone d'une barre : CandyBar la pose par SetNormalTexture au demarrage ; si elle manque (texture non lue, cadre recycle sans icone),
+-- on la repose depuis le chemin memorise (h.icon), puis texture de repli. Retourne vrai si la barre a une icone a entourer.
+function B.FixIcon(f, h)
+	local ic = f.icon
+	local want = h.icon
+	if type(ic) ~= "table" or type(want) ~= "string" or want == EMPTY then return false end
+	if type(ic.IsShown) == "function" and not ic:IsShown() then pcall(ic.Show, ic) end
+	if type(ic.GetNormalTexture) ~= "function" or type(ic.SetNormalTexture) ~= "function" then return true end
+	local function cur()
+		local nt = ic:GetNormalTexture()
+		if type(nt) == "table" and type(nt.GetTexture) == "function" then
+			local tx = nt:GetTexture()
+			if type(tx) == "string" and tx ~= EMPTY then return tx end
+		end
+		return nil
+	end
+	if not cur() then
+		pcall(ic.SetNormalTexture, ic, want)
+		if not cur() then
+			pcall(ic.SetNormalTexture, ic, B.FALLBACK_ICON)
+			B.iconFallback = (B.iconFallback or 0) + 1
+		end
+	end
+	return true
 end
 
 -- Habille UNE barre. Memorise ce qu'il faut pour la restaurer (h.suiOrig).
@@ -2097,6 +2175,7 @@ function B.StyleBar(name, h)
 	local flags = T.outline or EMPTY
 	B.SetFont(f.text, path, size, flags)
 	B.SetFont(f.timertext, path, size, flags)
+	local hasIcon = B.FixIcon(f, h)
 	if type(f.icon) == "table" then
 		if type(f.icon.text) == "table" then B.SetFont(f.icon.text, path, size * 1.5, "OUTLINE") end
 		if type(f.icon.GetNormalTexture) == "function" then
@@ -2107,7 +2186,7 @@ function B.StyleBar(name, h)
 	if type(f.spark) == "table" then
 		if B.Opt("spark") then f.spark:Show() else f.spark:Hide() end
 	end
-	B.Deco(f)
+	B.Deco(f, hasIcon)
 	h.suiStamp = h.starttime or 0
 	h.suiGen = B.gen
 	B.styled = B.styled + 1
@@ -2243,7 +2322,13 @@ end
 -- lisere a refaire hors combat, couleur d'alerte qui suit le temps restant.
 function B.Sweep()
 	if not B.on then return end
+	-- le plugin WarningSign peut se charger apres le pont : on l'accroche des qu'il apparait
+	if not B.signHooked then
+		B.HookSign()
+		if B.signHooked then B.allAttached = false end
+	end
 	if not B.allAttached then B.AttachAll() end
+	B.SignCheck()
 	-- le cadre de messages de BigWigs n'est cree qu'a son premier message : habillage des qu'il existe
 	if not B.msgStyled and B.Opt("msgskin") ~= false then B.StyleMsg() end
 	if not B.lib then B.lib = B.Lib() end
@@ -2321,8 +2406,16 @@ function B.OpenOptions(anchor)
 	return false
 end
 
+-- Montre 3 s la grosse icone d'avertissement (comme un boss) : permet de verifier qu'on la voit et ou elle est.
+function B.TestSign()
+	local m = gt("BigWigsWarningSign")
+	if not m or type(m.BigWigs_ShowWarningSign) ~= "function" then return false end
+	return pcall(m.BigWigs_ShowWarningSign, m, "Interface\\Icons\\Spell_Fire_Fireball02", 3, true, "TEST") and true or false
+end
+
 function B.Test()
 	local m = gt("BigWigsBars") or gt("BigWigs")
+	B.TestSign()
 	if m and type(m.TriggerEvent) == "function" and pcall(m.TriggerEvent, m, "BigWigs_Test") then return true end
 	SUI.Print(L("msg.bossmods.bw.noapi"))
 	return false
@@ -2414,6 +2507,7 @@ local OPTIONS = {
 	opt("bw.height", "number", 230, 0, { min = 0, max = 40, step = 1 }),
 	opt("bw.spark", "bool", 240, true),
 	opt("bw.anchors", "bool", 250, true),
+	opt("bw.signtop", "bool", 255, true),
 	opt("bw.msgskin", "bool", 260, true),
 	opt("bw.msgsize", "number", 270, 0, { min = 0, max = 40, step = 1 }),
 }

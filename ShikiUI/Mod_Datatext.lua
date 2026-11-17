@@ -33,7 +33,14 @@ M.BLOCKS = {
 		local gf = getglobal("GetInventoryItemDurability")
 		for slot = 1, 16 do
 			local c, m
-			if gf then c, m = gf("player", slot) end   -- pas de "and f() or nil" : ca tronquerait les multi-retours
+			if gf then
+				-- le client Turtle/OctoWow definit GetInventoryItemDurability(invSlot) : UN seul argument (l'appel (unit, slot) leve une erreur d'usage)
+				local ok, r1, r2 = pcall(gf, slot)
+				if (not ok) or r1 == nil then
+					ok, r1, r2 = pcall(gf, "player", slot)
+				end
+				if ok then c, m = r1, r2 end
+			end   -- pas de "and f() or nil" : ca tronquerait les multi-retours
 			if c and m then cur = cur + c ; mx = mx + m end
 		end
 		if mx <= 0 then return "-" end

@@ -43,7 +43,7 @@ local posText = nil   -- texte x, y pose sur la carte ; M.posText = reference pu
 local function ensureText(f)
 	if posText then return posText end
 	posText = f:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-	posText:SetShadowColor(0, 0, 0, 1)
+	posText:SetShadowColor(0, 0, 0, 1) -- style:ok ombre noire de texte du jeu
 	posText:SetShadowOffset(1, -1)
 	posText:SetHeight(12)
 	posText:SetWidth(200)

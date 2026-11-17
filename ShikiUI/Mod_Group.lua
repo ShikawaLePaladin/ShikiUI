@@ -83,7 +83,11 @@ E.PRIO_KEY = { magic = "Magic", curse = "Curse", poison = "Poison", disease = "D
 -- HoT / boucliers suivis sur les allies : nom du sort -> duree de base en secondes ([memoire] : Rejuvenation 12, Regrowth 21, Renew 15,
 -- Power Word: Shield 30, Abolish 8 ; seul le texte de duree en depend, l'icone vient de l'aura reelle).
 E.HOTS = { ["Rejuvenation"] = 12, ["Regrowth"] = 21, ["Renew"] = 15, ["Power Word: Shield"] = 30, ["Abolish Poison"] = 8,
-	["Abolish Disease"] = 8 }
+	["Abolish Disease"] = 8,
+	-- cooldowns defensifs / utilitaires poses sur un allie (surtout le tank), meme suivi que les HoT [memoire] : Blessing of Protection 10,
+	-- Blessing of Freedom 16, Blessing of Sacrifice 30, Power Infusion 15, Innervate 20 (Lay on Hands ne laisse pas de buff : non suivi)
+	["Blessing of Protection"] = 10, ["Blessing of Freedom"] = 16, ["Blessing of Sacrifice"] = 30, ["Power Infusion"] = 15,
+	["Innervate"] = 20 }
 -- Resurrections par nom de sort (releve dans HealPredict.lua de Puppeteer).
 E.RES = { ["Resurrection"] = true, ["Redemption"] = true, ["Ancestral Spirit"] = true, ["Rebirth"] = true, ["Revive Champion"] = true }
 E.CLASS_RANK = { WARRIOR = 1, PALADIN = 2, DRUID = 3, PRIEST = 4, SHAMAN = 5, ROGUE = 6, HUNTER = 7, MAGE = 8, WARLOCK = 9 }
@@ -119,7 +123,26 @@ E.CFGKEYS = { solo = false, hideinraid = true, pets = false, maxgroup = 8, width
 	rangeyd = 40, outalpha = 0.45, debuffs = 3, buffs = 0, iconsize = 12, dispelmode = "known", dispelonly = false, aggro = true,
 	incoming = true, incsrc = "all", roletag = true, leader = true, marks = true, target = true, tooltip = true, alerts = true, alertsound = "none",
 	alertlist = "", roles = "", roleguess = "none", budget = 10, slowstep = 10, hots = 0, hotall = false, dispelstyle = "both",
-	dispelprio = "magic", resinfo = true, manabar = "all", manahunter = false, manatext = false }
+	dispelprio = "magic", resinfo = true, manabar = "all", manahunter = false, manatext = false, dispelbig = false, dispelsize = 20,
+	dispelpos = "center", tankhots = 0, hotwarn = 0, lowhp = 0,
+	-- 4e passe : pseudo place librement, icones de dissipation multiples, contour decoupe, effets de boss et aggro (SUI.GroupFx)
+	nameanchor = "left", nameicons = "off", dispelbigmax = 1, dispelsmall = false, dispelsmallpos = "bottomleft", dispelsmallsize = 9,
+	dispelthick = 2, fxframes = true, fxsize = 20, fxpos = "left", fxmax = 2, aggroframes = true }
+
+-- Types de debuff : indice stable (les tables par cadre sont indexees 1..4), ordre de base = E.PRIO_BASE.
+E.TYPES = { "Magic", "Curse", "Poison", "Disease" }
+E.TIDX = { Magic = 1, Curse = 2, Poison = 3, Disease = 4 }
+-- Place du pseudo : { point d'ancrage sur la barre de vie, justification, signe horizontal, decalage vertical }.
+E.NAME_AT = {
+	topleft = { "TOPLEFT", "LEFT", 1, -2 }, topcenter = { "TOP", "CENTER", 0, -2 }, topright = { "TOPRIGHT", "RIGHT", -1, -2 },
+	left = { "LEFT", "LEFT", 1, 0 }, center = { "CENTER", "CENTER", 0, 0 }, right = { "RIGHT", "RIGHT", -1, 0 },
+	bottomleft = { "BOTTOMLEFT", "LEFT", 1, 2 }, bottomcenter = { "BOTTOM", "CENTER", 0, 2 }, bottomright = { "BOTTOMRIGHT", "RIGHT", -1, 2 },
+}
+E.NUMM = {}                  -- "0m".."99m" precalcules (minuteurs longs des effets de boss)
+for i = 0, 99 do E.NUMM[i] = i .. "m" end
+E.SPLITMAX = 8               -- segments du contour decoupe (4 types : 7 au plus)
+E.FXMAX = 3                  -- grosses icones d'effets de boss par cadre
+E.BIGMAX = 3                 -- grosses icones de dissipation par cadre
 
 E.alertHooks = {}         -- fonctions fn(instance, unite, fragment, texture) : point d'entree du futur DebuffAlert configurable
 E.cure = {}               -- type de debuff -> true : ce que le joueur sait dissiper (grimoire)
@@ -229,6 +252,14 @@ function E.New(def)
 		if a1 and g.byUnit[a1] then g.hUnit(ev, a1) else g.rosterDirty = true end
 	end
 	g.fnHot = function() E.TickHots(g) end
+	-- SUI.GroupFx previent quand les effets de boss ou l'aggro d'une unite changent : on ne redessine que ce cadre
+	g.hFx = function(unit, what)
+		local f = g.byUnit[unit]
+		if not f or not f.vis then return end
+		f.dF = true
+		if not f.inq then E.Push(g, f) end
+		if not g.tHot and g.active then E.SyncHots(g) end
+	end
 	g.hSpells = function()
 		E.ScanCures()
 		if E.wantInc then E.ScanHeals() end
@@ -252,6 +283,17 @@ E.EVFLAG = { UNIT_HEALTH = "dH", UNIT_MAXHEALTH = "dH", UNIT_MANA = "dP", UNIT_M
 	UNIT_NAME_UPDATE = "dI", UNIT_FLAGS = "dI", PARTY_MEMBER_ENABLE = "dH", PARTY_MEMBER_DISABLE = "dH" }
 
 -- Lit les reglages "<prefixe>cle" (repli : E.CFGKEYS) et prepare les listes derivees (alertes, roles, textes de role).
+-- Oublie ce qui a ete peint (couleurs, libelles) pour que le prochain dessin le refasse : changement de style / de langue / de reglage.
+function E.ResetPaint(f)
+	f.bigPaint = nil
+	for k = 1, 4 do f.smI[k] = 0 end
+	for k = 1, 3 do
+		f.bigKT[k] = 0
+		f.nicKey[k] = false
+	end
+	f.splitSig = nil
+end
+
 function E.ReadConfig(g)
 	local cfg = g.cfg
 	for k, d in pairs(E.CFGKEYS) do
@@ -259,6 +301,7 @@ function E.ReadConfig(g)
 		if C.meta[key] ~= nil then cfg[k] = C.Get(key) else cfg[k] = d end
 	end
 	if g.after then g.after(g) end
+	cfg.hotany = (cfg.tankhots > cfg.hots) and cfg.tankhots or cfg.hots   -- icones de HoT voulues sur au moins un cadre
 	if cfg.alertlist ~= g.alertRaw then
 		g.alertRaw = cfg.alertlist
 		g.nAlerts = E.ParseList(cfg.alertlist, g.alerts)
@@ -271,6 +314,12 @@ function E.ReadConfig(g)
 	g.tags.H = L("msg." .. g.name .. ".role.h")
 	g.tags.D = ""
 	g.tags.R = L("msg." .. g.name .. ".res")
+	g.dtl = g.dtl or {}
+	g.dtl.Magic = L("msg." .. g.name .. ".dt.magic")
+	g.dtl.Curse = L("msg." .. g.name .. ".dt.curse")
+	g.dtl.Poison = L("msg." .. g.name .. ".dt.poison")
+	g.dtl.Disease = L("msg." .. g.name .. ".dt.disease")
+	for i = 1, getn(g.frames) do E.ResetPaint(g.frames[i]) end
 	-- priorite des types a dissiper : le type choisi d'abord, puis l'ordre de base (table reutilisee)
 	local first = E.PRIO_KEY[cfg.dispelprio] or "Magic"
 	local rk = 1
@@ -282,6 +331,13 @@ function E.ReadConfig(g)
 			g.dprio[ty] = rk
 		end
 	end
+	-- ordre des types par priorite (indices E.TYPES) : sert aux listes de types presents sur un cadre
+	g.dord = g.dord or { 1, 2, 3, 4 }
+	for ty, rk2 in pairs(g.dprio) do g.dord[rk2] = E.TIDX[ty] end
+	if cfg.dispelbigmax > E.BIGMAX then cfg.dispelbigmax = E.BIGMAX end
+	if cfg.dispelbigmax < 1 then cfg.dispelbigmax = 1 end
+	if cfg.fxmax > E.FXMAX then cfg.fxmax = E.FXMAX end
+	if cfg.fxmax < 1 then cfg.fxmax = 1 end
 	E.ResolveSources(g)
 end
 
@@ -368,6 +424,7 @@ function E.UpdateName(g, f)
 	if nm ~= f.nameShown then
 		f.nameShown = nm
 		f.nameText:SetText(nm)
+		f.nicPlaced = false                       -- les petites icones a cote du pseudo suivent sa largeur
 	end
 	local tag = ""
 	if cfg.roletag and f.role then tag = g.tags[f.role] or "" end
@@ -377,6 +434,7 @@ function E.UpdateName(g, f)
 	if tag ~= f.tagShown then
 		f.tagShown = tag
 		f.tagText:SetText(tag)
+		E.PlaceName(g, f)
 	end
 end
 
@@ -386,6 +444,7 @@ function E.UpdateMark(g, f)
 	if g.cfg.marks and g.kind ~= "pins" then idx = GetRaidTargetIndex(f.unit) end
 	if idx ~= f.markIdx then
 		f.markIdx = idx
+		E.PlaceName(g, f)
 		if idx then
 			local fn = getglobal("SetRaidTargetIconTexture")
 			if fn then fn(mk, idx) end
@@ -441,7 +500,10 @@ function E.PaintState(g, f)
 	local cfg = g.cfg
 	local r, gg, b, a
 	local kind = 0
-	if f.alertTex then
+	if f.agFrame then
+		kind = 4                                  -- aggro sur un non-tank (SUI.GroupFx.Aggro) : rouge, prioritaire
+		r, gg, b, a = T.c.bad[1], T.c.bad[2], T.c.bad[3], 0.45
+	elseif f.alertTex then
 		kind = 3
 		r, gg, b, a = T.c.bad[1], T.c.bad[2], T.c.bad[3], 0.35
 	elseif f.aggro and cfg.aggro then
@@ -477,6 +539,14 @@ function E.PaintFixed(g)
 		f.dispelTx:SetVertexColor(d[1], d[2], d[3], 1)
 		f.dispelType = nil
 		f.dispelStyle = nil
+		f.bigPaint = nil
+		f.lowShown = nil
+		f.splitSig = nil                      -- couleurs relues au prochain dessin (changement de style)
+		for k = 1, 4 do f.smI[k] = 0 end
+		for k = 1, 3 do f.nicKey[k] = false end
+		for k = 1, E.FXMAX do f.fxKey[k] = false end
+		f.fxTintKey = false
+		f.agPaint = false
 	end
 end
 
@@ -530,6 +600,12 @@ function E.UpdateHealth(g, f)
 	if hpTxt ~= f.hpShown then
 		f.hpShown = hpTxt
 		f.hpText:SetText(hpTxt)
+	end
+	local low = (state == 0 and cfg.lowhp > 0 and ratio * 100 < cfg.lowhp) and true or false
+	if low ~= f.lowShown then
+		f.lowShown = low
+		local lc = low and T.c.bad or T.c.text
+		f.hpText:SetTextColor(lc[1], lc[2], lc[3], lc[4] or 1)
 	end
 	if isRes ~= f.resShown then
 		f.resShown = isRes
@@ -637,6 +713,462 @@ local function edgeColor(f, k, dt)
 	end
 end
 
+-- Grosse icone du debuff a dissiper (option dispelbig) : icone de l'aura prioritaire, bord colore du type, abreviation du type, et
+-- bordure du cadre (sauf style "lisere"). dtype nil = rien a dissiper. Aucun objet cree : champs et textures existants.
+function E.UpdateBigDispel(g, f, wantBorder, wantIcon, dtype, tex)
+	local icon = (wantIcon and dtype and tex) and true or false
+	local border = (wantBorder and dtype) and true or false
+	local col = dtype and E.DEBUFF_COL[dtype]
+	if not col then
+		icon, border = false, false
+	end
+	if dtype ~= f.bigType then
+		f.bigType = dtype
+		f.bigPaint = nil
+	end
+	if (icon or border) and not f.bigPaint then
+		f.bigPaint = true
+		f.dispelEdge:SetVertexColor(col[1], col[2], col[3], 1)
+		for k = 1, 4 do f.dispelBd[k]:SetVertexColor(col[1], col[2], col[3], 1) end
+		local lb = g.dtl[dtype] or ""
+		f.dispelLbl:SetText(lb)
+	end
+	if icon then
+		if tex ~= f.bigTex then
+			f.bigTex = tex
+			f.dispelIcon:SetTexture(tex)
+			f.dispelIcon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+		end
+	end
+	if icon ~= f.bigIcon then
+		f.bigIcon = icon
+		if icon then
+			f.dispelEdge:Show()
+			f.dispelIcon:Show()
+			f.dispelLbl:Show()
+		else
+			f.dispelEdge:Hide()
+			f.dispelIcon:Hide()
+			f.dispelLbl:Hide()
+		end
+	end
+	if border ~= f.bigBd then
+		f.bigBd = border
+		for k = 1, 4 do
+			if border then f.dispelBd[k]:Show() else f.dispelBd[k]:Hide() end
+		end
+	end
+end
+
+-- ---------------------------------------------------------------- contour decoupe (dispelstyle = "split")
+-- Decoupe le contour (epaisseur th) d'un cadre w x h en n parts EGALES : 1 type = 1 couleur, 2 types = 50 % / 50 %, 3 types = 3 x 33 %,
+-- 4 types = 4 x 25 %. Parcours : haut (gauche -> droite), droite (haut -> bas), bas (droite -> gauche), gauche (bas -> haut). Remplit
+-- out[1..m] = { k = part (1..n), x, y, w, h } (depuis le coin haut gauche) et renvoie m (n + 3 au plus). out doit deja contenir
+-- E.SPLITMAX tables : aucune allocation. Fonction PURE : le cadre reel et l'apercu du menu s'en servent tous les deux.
+function E.SplitLayout(w, h, th, n, out)
+	if n < 1 or w <= 0 or h <= 0 then return 0 end
+	if th * 2 > h then th = h / 2 end
+	if th * 2 > w then th = w / 2 end
+	local l1, l2, l3, l4 = w, h - th, w - th, h - 2 * th
+	local total = l1 + l2 + l3 + l4
+	local m = 0
+	local o = 0
+	for e = 1, 4 do
+		local len = l4
+		if e == 1 then len = l1 elseif e == 2 then len = l2 elseif e == 3 then len = l3 end
+		for k = 1, n do
+			local lo, hi = (k - 1) * total / n, k * total / n
+			if lo < o then lo = o end
+			if hi > o + len then hi = o + len end
+			if hi - lo > 0.01 and m < E.SPLITMAX then
+				m = m + 1
+				local r = out[m]
+				local t1 = hi - o
+				r.k = k
+				if e == 1 then
+					r.x, r.y, r.w, r.h = lo - o, 0, hi - lo, th
+				elseif e == 2 then
+					r.x, r.y, r.w, r.h = w - th, th + (lo - o), th, hi - lo
+				elseif e == 3 then
+					r.x, r.y, r.w, r.h = (w - th) - t1, h - th, hi - lo, th
+				else
+					r.x, r.y, r.w, r.h = 0, (h - th) - t1, th, hi - lo
+				end
+			end
+		end
+		o = o + len
+	end
+	return m
+end
+
+-- Dessine le contour decoupe d'un cadre (on = style "split" voulu). Ne se repeint que si les types presents (ou la taille) changent.
+function E.PaintSplit(g, f, on)
+	local n = on and f.oN or 0
+	local sig = n * 1000 + f.oI[1] + 5 * f.oI[2] + 25 * f.oI[3] + 125 * f.oI[4]
+	if sig == f.splitSig then return end
+	f.splitSig = sig
+	local m = 0
+	if n > 0 then
+		m = E.SplitLayout(f:GetWidth(), f:GetHeight(), g.cfg.dispelthick, n, f.splitR)
+		for i = 1, m do
+			local r, tx = f.splitR[i], f.splitTx[i]
+			local col = E.DEBUFF_COL[f.oT[r.k]]
+			tx:SetVertexColor(col[1], col[2], col[3], 1)
+			tx:ClearAllPoints()
+			tx:SetPoint("TOPLEFT", f, "TOPLEFT", r.x, -r.y)
+			tx:SetWidth(r.w)
+			tx:SetHeight(r.h)
+			tx:Show()
+		end
+	end
+	for i = m + 1, f.splitN do f.splitTx[i]:Hide() end
+	f.splitN = m
+end
+
+-- ---------------------------------------------------------------- grosses icones de dissipation (1 a 3, une par type)
+-- Ancre les grosses icones : cnt = nombre affiche (sert au centrage). La 1re (f.dispelEdge...) est celle du type prioritaire.
+function E.PlaceBig(g, f, cnt)
+	local cfg = g.cfg
+	local bsz = cfg.dispelsize
+	local fh = f:GetHeight()
+	if bsz > fh - 2 then bsz = fh - 2 end
+	if bsz < 8 then bsz = 8 end
+	local gap = bsz + 3
+	local pos = cfg.dispelpos
+	for k = 1, E.BIGMAX do
+		local ed, ic, lb = f.bigE[k], f.bigI[k], f.bigL[k]
+		ed:ClearAllPoints()
+		if pos == "right" then
+			ed:SetPoint("RIGHT", f, "RIGHT", -2 - (k - 1) * gap, 0)
+		elseif pos == "left" then
+			ed:SetPoint("LEFT", f, "LEFT", 4 + (k - 1) * gap, 0)
+		else
+			ed:SetPoint("CENTER", f, "CENTER", (k - (cnt + 1) / 2) * gap, 0)
+		end
+		ed:SetWidth(bsz + 2)
+		ed:SetHeight(bsz + 2)
+		ic:ClearAllPoints()
+		ic:SetPoint("CENTER", ed, "CENTER", 0, 0)
+		ic:SetWidth(bsz)
+		ic:SetHeight(bsz)
+		lb:ClearAllPoints()
+		lb:SetPoint("BOTTOM", ic, "BOTTOM", 0, 0)
+		lb:SetWidth(bsz + 8)
+		lb:SetHeight(10)
+	end
+	f.bigPlaced = cnt
+end
+
+-- Grosses icones 2 et 3 (la 1re est geree par E.UpdateBigDispel) : type, texture et affichage ne changent que si besoin.
+function E.UpdateBigMore(g, f)
+	local cfg = g.cfg
+	local cnt = 0
+	if cfg.dispelbig then
+		cnt = f.oN
+		if cnt > cfg.dispelbigmax then cnt = cfg.dispelbigmax end
+	end
+	if cnt > 0 and cnt ~= f.bigPlaced then E.PlaceBig(g, f, cnt) end
+	for k = 2, E.BIGMAX do
+		if k <= cnt then
+			local ti, tex = f.oI[k], f.oX[k]
+			if f.bigKT[k] ~= ti then
+				f.bigKT[k] = ti
+				local col = E.DEBUFF_COL[f.oT[k]]
+				f.bigE[k]:SetVertexColor(col[1], col[2], col[3], 1)
+				f.bigL[k]:SetText(g.dtl[f.oT[k]] or "")
+			end
+			if tex ~= f.bigKX[k] then
+				f.bigKX[k] = tex
+				f.bigI[k]:SetTexture(tex)
+				f.bigI[k]:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+			end
+			if not f.bigOn[k] then
+				f.bigOn[k] = true
+				f.bigE[k]:Show()
+				f.bigI[k]:Show()
+				f.bigL[k]:Show()
+			end
+		elseif f.bigOn[k] then
+			f.bigOn[k] = false
+			f.bigE[k]:Hide()
+			f.bigI[k]:Hide()
+			f.bigL[k]:Hide()
+		end
+	end
+end
+
+-- ---------------------------------------------------------------- petites icones de dissipation (en ligne, dans un coin)
+function E.UpdateSmall(g, f)
+	local n = g.cfg.dispelsmall and f.oN or 0
+	for k = 1, 4 do
+		if k <= n then
+			local ti, tex = f.oI[k], f.oX[k]
+			if f.smI[k] ~= ti then
+				f.smI[k] = ti
+				local col = E.DEBUFF_COL[f.oT[k]]
+				f.smE[k]:SetVertexColor(col[1], col[2], col[3], 1)
+			end
+			if f.smX[k] ~= tex then
+				f.smX[k] = tex
+				f.smP[k]:SetTexture(tex)
+				f.smP[k]:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+			end
+			if not f.smOn[k] then
+				f.smOn[k] = true
+				f.smE[k]:Show()
+				f.smP[k]:Show()
+			end
+		elseif f.smOn[k] then
+			f.smOn[k] = false
+			f.smE[k]:Hide()
+			f.smP[k]:Hide()
+		end
+	end
+end
+
+-- ---------------------------------------------------------------- pseudo place librement + petites icones sur la meme ligne
+function E.PlaceName(g, f)
+	local cfg = g.cfg
+	local at = E.NAME_AT[cfg.nameanchor] or E.NAME_AT.left
+	local dx = at[3] * 3
+	if cfg.nameanchor == "topleft" and f.markIdx then dx = dx + cfg.iconsize + 2 end        -- sous le marqueur de raid
+	if cfg.nameanchor == "topright" and f.tagShown and f.tagShown ~= "" then dx = dx - 12 end  -- a gauche du role / chef
+	if f.namePt == at[1] and f.nameDx == dx and f.nameDy == at[4] then return end
+	f.namePt, f.nameDx, f.nameDy = at[1], dx, at[4]
+	f.nameText:ClearAllPoints()
+	f.nameText:SetPoint(at[1], f.hp, at[1], dx, at[4])
+	f.nameText:SetJustifyH(at[2])
+	f.nicPlaced = false
+end
+
+function E.PlaceNameIcons(g, f)
+	f.nicPlaced = true
+	local cfg = g.cfg
+	local at = E.NAME_AT[cfg.nameanchor] or E.NAME_AT.left
+	local sz = cfg.dispelsmallsize
+	local sw = f.nameText:GetStringWidth() or 0
+	local maxw = f.nameText:GetWidth() or 60
+	if sw > maxw then sw = maxw end
+	local just = at[2]
+	for k = 1, f.nicN do
+		local ic = f.nicI[k]
+		local off = (k - 1) * (sz + 1)
+		ic:ClearAllPoints()
+		if just == "LEFT" then
+			ic:SetPoint("LEFT", f.nameText, "LEFT", sw + 2 + off, 0)
+		elseif just == "RIGHT" then
+			ic:SetPoint("RIGHT", f.nameText, "RIGHT", -(sw + 2 + off), 0)
+		else
+			ic:SetPoint("LEFT", f.nameText, "CENTER", sw / 2 + 2 + off, 0)
+		end
+		ic:SetWidth(sz)
+		ic:SetHeight(sz)
+	end
+end
+
+local function setNameIcon(f, k, key, tex, tname)
+	if f.nicKey[k] == key then return end
+	f.nicKey[k] = key
+	local ic = f.nicI[k]
+	if tex then
+		ic:SetTexture(tex)
+		ic:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+		ic:SetVertexColor(1, 1, 1, 1)    -- style:ok teinte neutre : icone de sort non teintee
+	else
+		local col = E.DEBUFF_COL[tname]
+		ic:SetTexture(T.tex.white)
+		ic:SetTexCoord(0, 1, 0, 1)
+		ic:SetVertexColor(col[1], col[2], col[3], 1)
+	end
+end
+
+-- Petites icones a cote du pseudo (option nameicons) : types de dissipation (carres colores) puis effets de boss (leur icone), 3 au plus.
+function E.UpdateNameIcons(g, f)
+	local mode = g.cfg.nameicons
+	local k = 0
+	if mode ~= "off" then
+		if mode == "dispel" or mode == "both" then
+			for i = 1, f.oN do
+				if k < 3 then
+					k = k + 1
+					setNameIcon(f, k, -f.oI[i], nil, f.oT[i])
+				end
+			end
+		end
+		if mode == "fx" or mode == "both" then
+			for i = 1, f.fxN do
+				if k < 3 then
+					k = k + 1
+					setNameIcon(f, k, f.fxTex[i], f.fxTex[i], nil)
+				end
+			end
+		end
+	end
+	if k ~= f.nicN then
+		for i = k + 1, f.nicN do f.nicI[i]:Hide() end
+		for i = f.nicN + 1, k do f.nicI[i]:Show() end
+		f.nicN = k
+		f.nicPlaced = false
+	end
+	if k > 0 and not f.nicPlaced then E.PlaceNameIcons(g, f) end
+end
+
+-- ---------------------------------------------------------------- effets de boss (SUI.GroupFx.Effects) : grosses icones + minuteur + teinte
+function E.PlaceFx(g, f, cnt)
+	local cfg = g.cfg
+	local sz = cfg.fxsize
+	local fh = f:GetHeight()
+	if sz > fh - 2 then sz = fh - 2 end
+	if sz < 10 then sz = 10 end
+	local gap = sz + 3
+	local pos = cfg.fxpos
+	for k = 1, E.FXMAX do
+		local ed, ic, tt = f.fxE[k], f.fxI[k], f.fxT[k]
+		ed:ClearAllPoints()
+		if pos == "right" then
+			ed:SetPoint("RIGHT", f, "RIGHT", -2 - (k - 1) * gap, 0)
+		elseif pos == "center" then
+			ed:SetPoint("CENTER", f, "CENTER", (k - (cnt + 1) / 2) * gap, 0)
+		else
+			ed:SetPoint("LEFT", f, "LEFT", 2 + (k - 1) * gap, 0)
+		end
+		ed:SetWidth(sz + 2)
+		ed:SetHeight(sz + 2)
+		ic:ClearAllPoints()
+		ic:SetPoint("CENTER", ed, "CENTER", 0, 0)
+		ic:SetWidth(sz)
+		ic:SetHeight(sz)
+		tt:ClearAllPoints()
+		tt:SetPoint("CENTER", ic, "CENTER", 0, 0)
+		tt:SetWidth(sz + 8)
+		tt:SetHeight(12)
+	end
+	f.fxPlaced = cnt
+end
+
+-- Redessine les effets de boss ET l'aggro d'un cadre. Tout est garde par une comparaison : relancer ne coute presque rien (le minuteur
+-- de TickHots s'en sert). Pose f.dB si l'etat rouge du cadre change (le fond est repeint par PaintState).
+function E.UpdateFx(g, f)
+	local cfg = g.cfg
+	local G = SUI.GroupFx
+	local list, n = nil, 0
+	local wI, wT, wM = false, false, false
+	if G and cfg.fxframes and g.kind ~= "pins" and f.unit then
+		list, n = G.Effects(f.unit)
+		if n > 0 then
+			if n > cfg.fxmax then n = cfg.fxmax end
+			wI, wT, wM = G.Want("icon"), G.Want("tint"), G.Want("timer")
+		end
+	end
+	if not (wI or wT) then n = 0 end
+	local nIcon = wI and n or 0
+	if nIcon > 0 and nIcon ~= f.fxPlaced then E.PlaceFx(g, f, nIcon) end
+	for k = 1, E.FXMAX do
+		if k <= nIcon then
+			local r = list[k]
+			if f.fxTex[k] ~= r.texture then
+				f.fxTex[k] = r.texture
+				f.fxI[k]:SetTexture(r.texture)
+				f.fxI[k]:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+			end
+			if f.fxKey[k] ~= r.key then
+				f.fxKey[k] = r.key
+				local cr, cg, cb = G.Color(r)
+				f.fxE[k]:SetVertexColor(cr, cg, cb, 1)
+			end
+			if not f.fxOn[k] then
+				f.fxOn[k] = true
+				f.fxE[k]:Show()
+				f.fxI[k]:Show()
+				f.fxT[k]:Show()
+			end
+			local s = -1
+			if wM and r.left > 0 then s = ceil(r.left) end
+			if s ~= f.fxSec[k] then
+				f.fxSec[k] = s
+				local txt = ""
+				if s >= 100 then
+					local mn = floor(s / 60)
+					if mn > 99 then mn = 99 end
+					txt = E.NUMM[mn]
+				elseif s >= 0 then
+					txt = E.NUM[s]
+				end
+				f.fxT[k]:SetText(txt)
+				local warn = (s >= 0 and s <= 3)
+				if warn ~= f.fxWarn[k] then
+					f.fxWarn[k] = warn
+					local wc = warn and T.c.bad or T.c.text
+					f.fxT[k]:SetTextColor(wc[1], wc[2], wc[3], wc[4] or 1)
+				end
+			end
+		elseif f.fxOn[k] then
+			f.fxOn[k] = false
+			f.fxSec[k] = -2
+			f.fxE[k]:Hide()
+			f.fxI[k]:Hide()
+			f.fxT[k]:Hide()
+		end
+	end
+	f.fxN = nIcon
+	f.fxTick = (wM and nIcon > 0) and true or false
+	if wT and n > 0 then
+		local r = list[1]
+		if f.fxTintKey ~= r.key then
+			f.fxTintKey = r.key
+			local cr, cg, cb = G.Color(r)
+			f.fxHl:SetVertexColor(cr, cg, cb, 0.30)
+		end
+		if not f.fxTintOn then
+			f.fxTintOn = true
+			f.fxHl:Show()
+		end
+	elseif f.fxTintOn then
+		f.fxTintOn = false
+		f.fxTintKey = false
+		f.fxHl:Hide()
+	end
+	E.UpdateAggroFx(g, f)
+	E.UpdateNameIcons(g, f)
+end
+
+-- Aggro de SUI.GroupFx : cadre rouge + icone "!" si un non-tank a l'aggro (alerte), fine barre discrete si c'est un tank (option aggrotank).
+function E.UpdateAggroFx(g, f)
+	local cfg = g.cfg
+	local G = SUI.GroupFx
+	local st = "none"
+	if G and cfg.aggroframes and g.kind ~= "pins" and f.unit then st = G.Aggro(f.unit) end
+	local off = (st == "offrole")
+	local wFrame = (off and G.Want("aggroframe")) and true or false
+	local wIcon = (off and G.Want("aggroicon")) and true or false
+	local wTank = (st == "tank" and G.Want("aggrotank")) and true or false
+	if wFrame ~= f.agFrame then
+		f.agFrame = wFrame
+		f.dB = true
+	end
+	if (wIcon or wTank) and not f.agPaint then
+		f.agPaint = true
+		local bc = T.c.bad
+		f.agIc:SetVertexColor(bc[1], bc[2], bc[3], 1)
+		local ar, ag2, ab = T.Accent()
+		f.agBar:SetVertexColor(ar, ag2, ab, 0.8)
+	end
+	if wIcon ~= f.agIcOn then
+		f.agIcOn = wIcon
+		if wIcon then
+			f.agIc:Show()
+			f.agTx:Show()
+		else
+			f.agIc:Hide()
+			f.agTx:Hide()
+		end
+	end
+	if wTank ~= f.agBarOn then
+		f.agBarOn = wTank
+		if wTank then f.agBar:Show() else f.agBar:Hide() end
+	end
+end
+
 -- Debuffs (cure / alertes / icones) puis buffs. Aucune table : seulement des champs existants.
 function E.UpdateAuras(g, f)
 	local cfg = g.cfg
@@ -645,8 +1177,10 @@ function E.UpdateAuras(g, f)
 	local mode = cfg.dispelmode
 	local nd = 0
 	local dtype, alertTex, alertFrag = nil, nil, nil
-	local bestRank = 99
+	local bestTex = nil
 	local useAlerts = cfg.alerts and g.nAlerts > 0
+	local tp, tx = f.tp, f.tx                 -- types presents (1..4 = E.TYPES) et texture du 1er debuff de chaque type
+	for k = 1, 4 do tp[k] = false end
 	if wantD > 0 or mode ~= "off" or useAlerts then
 		for i = 1, MAXAUR do
 			local tex, count, dt = UnitDebuff(unit, i)
@@ -655,10 +1189,10 @@ function E.UpdateAuras(g, f)
 			if dt and dt ~= "" then
 				if mode == "all" then cureOk = true elseif mode == "known" then cureOk = E.cure[dt] and true or false end
 				if cureOk then
-					local rk = g.dprio[dt] or 9
-					if rk < bestRank then
-						bestRank = rk
-						dtype = dt
+					local ti = E.TIDX[dt]
+					if ti and not tp[ti] then
+						tp[ti] = true
+						tx[ti] = tex
 					end
 				end
 			end
@@ -698,7 +1232,28 @@ function E.UpdateAuras(g, f)
 		end
 		f.dN = nd
 	end
-	-- types de debuff a dissiper : lisere colore a gauche
+	-- types presents, du plus prioritaire au moins prioritaire (f.oI = indice de type, f.oT = nom, f.oX = texture)
+	local no = 0
+	for r = 1, 4 do
+		local ti = g.dord[r]
+		if tp[ti] then
+			no = no + 1
+			f.oI[no] = ti
+			f.oT[no] = E.TYPES[ti]
+			f.oX[no] = tx[ti]
+		end
+	end
+	for k = no + 1, 4 do
+		f.oI[k] = 0
+		f.oT[k] = false
+		f.oX[k] = false
+	end
+	f.oN = no
+	if no > 0 then
+		dtype = f.oT[1]
+		bestTex = f.oX[1]
+	end
+	-- types de debuff a dissiper : lisere colore a gauche et/ou voile (le contour decoupe est gere a part, voir E.PaintSplit)
 	local dstyle = cfg.dispelstyle
 	if dtype ~= f.dispelType or dstyle ~= f.dispelStyle then
 		f.dispelType = dtype
@@ -709,13 +1264,18 @@ function E.UpdateAuras(g, f)
 				f.dispelTx:SetVertexColor(col[1], col[2], col[3], 1)
 				f.dispelHl:SetVertexColor(col[1], col[2], col[3], 0.32)
 			end
-			if dstyle ~= "frame" then f.dispelTx:Show() else f.dispelTx:Hide() end
-			if dstyle ~= "stripe" then f.dispelHl:Show() else f.dispelHl:Hide() end
+			if dstyle == "stripe" or dstyle == "both" then f.dispelTx:Show() else f.dispelTx:Hide() end
+			if dstyle == "frame" or dstyle == "both" then f.dispelHl:Show() else f.dispelHl:Hide() end
 		else
 			f.dispelTx:Hide()
 			f.dispelHl:Hide()
 		end
 	end
+	E.UpdateBigDispel(g, f, cfg.dispelbig and (dstyle == "frame" or dstyle == "both") and true or false, cfg.dispelbig, dtype, bestTex)
+	E.UpdateBigMore(g, f)
+	E.PaintSplit(g, f, dstyle == "split")
+	E.UpdateSmall(g, f)
+	E.UpdateNameIcons(g, f)
 	-- alerte
 	if alertTex ~= f.alertTex then
 		local isNew = (alertTex ~= nil and f.alertTex == nil)
@@ -776,7 +1336,7 @@ function E.NoteHot(name, spell)
 	rec[name] = GetTime() + d
 	for i = 1, getn(E.instances) do
 		local g = E.instances[i]
-		if g.active and g.built and g.cfg.hots > 0 then
+		if g.active and g.built and g.cfg.hotany > 0 then
 			local f = g.names[name]
 			if f then
 				f.dA = true
@@ -790,6 +1350,8 @@ end
 function E.UpdateHots(g, f)
 	local cfg = g.cfg
 	local want = cfg.hots
+	local isTank = (f.role == "T") and true or false
+	if isTank and cfg.tankhots > want then want = cfg.tankhots end
 	if want > g.maxHot then want = g.maxHot end
 	local nh = 0
 	if want > 0 then
@@ -806,7 +1368,7 @@ function E.UpdateHots(g, f)
 					local left = E.PlayerLeft(tex)
 					if left and left > 0 then ex = now + left end
 				end
-				if ex or cfg.hotall then
+				if ex or cfg.hotall or isTank then
 					nh = nh + 1
 					if f.hTex[nh] ~= tex then
 						f.hTex[nh] = tex
@@ -832,6 +1394,7 @@ function E.UpdateHots(g, f)
 				f.hTime[k]:Hide()
 				f.hTime[k]:SetText("")
 				f.hSec[k] = nil
+				f.hWarn[k] = nil
 			end
 		end
 		f.hN = nh
@@ -852,6 +1415,12 @@ function E.TickFrameHots(g, f, now)
 				s = -1
 			end
 		end
+		local warn = (s >= 0 and s <= g.cfg.hotwarn) and true or false
+		if warn ~= f.hWarn[k] then
+			f.hWarn[k] = warn
+			local wc = warn and T.c.bad or T.c.text
+			f.hTime[k]:SetTextColor(wc[1], wc[2], wc[3], wc[4] or 1)
+		end
 		if s ~= f.hSec[k] then
 			f.hSec[k] = s
 			local txt = ""
@@ -871,12 +1440,17 @@ function E.TickHots(g)
 	for i = 1, g.nOrder do
 		local f = g.order[i]
 		if f.hN > 0 then E.TickFrameHots(g, f, now) end
+		if f.fxTick then          -- minuteur des effets de boss
+			E.UpdateFx(g, f)
+			if f.dB then E.Push(g, f) end
+		end
 	end
 end
 
 -- Minuterie des durees : seulement si des HoT sont demandes.
 function E.SyncHots(g)
-	local need = g.active and g.maxHot > 0 and g.cfg.hots > 0
+	local G = SUI.GroupFx
+	local need = g.active and ((g.maxHot > 0 and g.cfg.hotany > 0) or (g.kind ~= "pins" and g.cfg.fxframes and G and G.on)) and true or false
 	if need and not g.tHot then
 		g.tHot = SUI.Every(0.5, g.fnHot, g.title .. ".hot", true)
 	elseif not need and g.tHot then
@@ -1234,7 +1808,7 @@ function E.OnCastEvent(ev, a1, a2, a3, a4)
 			if not tgt or tgt == "" then tgt = a1 end
 			for i = 1, getn(E.instances) do
 				local g = E.instances[i]
-				if g.active and g.built and g.cfg.hots > 0 then
+				if g.active and g.built and g.cfg.hotany > 0 then
 					for k = 1, g.nOrder do
 						local f = g.order[k]
 						if f.guid == tgt then E.NoteHot(f.name, nm) end
@@ -1290,7 +1864,7 @@ function E.SyncCast()
 	for i = 1, getn(E.instances) do
 		local g = E.instances[i]
 		if g.active and g.kind ~= "pins" then
-			if g.cfg.hots > 0 and g.maxHot > 0 then hots = true end
+			if g.cfg.hotany > 0 and g.maxHot > 0 then hots = true end
 			if g.cfg.resinfo then res = true end
 			if g.cfg.incoming then inc = true end
 		end
@@ -1344,7 +1918,7 @@ end
 
 function E.UpdateFrame(g, f)
 	if not f.vis then
-		f.dI, f.dH, f.dP, f.dA, f.dB = false, false, false, false, false
+		f.dI, f.dH, f.dP, f.dA, f.dB, f.dF = false, false, false, false, false, false
 		return
 	end
 	if f.dI then
@@ -1352,7 +1926,7 @@ function E.UpdateFrame(g, f)
 		E.Info(g, f)
 		E.UpdateName(g, f)
 		E.UpdateMark(g, f)
-		f.dH, f.dP, f.dA, f.dB = true, true, true, true
+		f.dH, f.dP, f.dA, f.dB, f.dF = true, true, true, true, true
 		f.isTarget = (UnitIsUnit(f.unit, "target") and true) or false
 	end
 	if f.dH then
@@ -1366,6 +1940,10 @@ function E.UpdateFrame(g, f)
 	if f.dA then
 		f.dA = false
 		E.UpdateAuras(g, f)
+	end
+	if f.dF then
+		f.dF = false
+		E.UpdateFx(g, f)
 	end
 	if f.dB then
 		f.dB = false
@@ -1484,6 +2062,11 @@ end
 function E.Slow(g)
 	if not g.active or not g.built then return end
 	local cfg = g.cfg
+	if g.fxDirty then          -- un reglage de groupfx.* a change (icone, teinte, minuteur, aggro...) : tout redessiner
+		g.fxDirty = false
+		E.SyncHots(g)
+		E.MarkAll(g, "dF")
+	end
 	if E.mine.name and GetTime() > E.mine.endAt then E.ClearMine() end
 	local n = g.nOrder
 	if n == 0 then return end
@@ -1788,7 +2371,7 @@ function E.CreateUnitFrame(g, i)
 	f.dN, f.bN, f.hN = 0, 0, 0
 	f.dTex, f.dType, f.bTex = {}, {}, {}
 	f.dIcon, f.dEdge, f.bIcon = {}, {}, {}
-	f.hTex, f.hIcon, f.hTime, f.hExp, f.hSec = {}, {}, {}, {}, {}
+	f.hTex, f.hIcon, f.hTime, f.hExp, f.hSec, f.hWarn = {}, {}, {}, {}, {}, {}
 	f:SetFrameStrata("LOW")
 	f:EnableMouse(true)
 	f:RegisterForClicks("LeftButtonUp", "RightButtonUp", "MiddleButtonUp")
@@ -1816,6 +2399,97 @@ function E.CreateUnitFrame(g, i)
 	f.dispelTx = f.ov:CreateTexture(nil, "OVERLAY")
 	f.dispelTx:SetTexture(T.tex.white)
 	f.dispelTx:Hide()
+	-- debuff a dissiper en GRAND : bordure du cadre + grosse icone (couleur du type) + abreviation du type (lisible sans la couleur)
+	f.dispelBd = {}
+	for k = 1, 4 do
+		local bd = f.ov:CreateTexture(nil, "OVERLAY")
+		bd:SetTexture(T.tex.white)
+		bd:Hide()
+		f.dispelBd[k] = bd
+	end
+	-- grosses icones de dissipation (1 a 3, une par type) : la 1re garde ses anciens noms (dispelEdge / dispelIcon / dispelLbl)
+	f.bigE, f.bigI, f.bigL = {}, {}, {}
+	f.bigKT, f.bigKX, f.bigOn = { 0, 0, 0 }, { false, false, false }, { false, false, false }
+	for k = 1, E.BIGMAX do
+		local ed = f.ov:CreateTexture(nil, "OVERLAY")
+		ed:SetTexture(T.tex.white)
+		ed:Hide()
+		f.bigE[k] = ed
+		local ic = f.ov:CreateTexture(nil, "OVERLAY")
+		ic:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+		ic:Hide()
+		f.bigI[k] = ic
+		local lb = T.Text(f.ov, 8, T.c.text, "CENTER", true)
+		lb:Hide()
+		f.bigL[k] = lb
+	end
+	f.dispelEdge, f.dispelIcon, f.dispelLbl = f.bigE[1], f.bigI[1], f.bigL[1]
+	-- types de debuff presents (ordre de priorite) : f.oI indice de type, f.oT nom, f.oX texture ; f.tp / f.tx = lecture brute par type
+	f.oN = 0
+	f.oI, f.oT, f.oX = { 0, 0, 0, 0 }, { false, false, false, false }, { false, false, false, false }
+	f.tp, f.tx = { false, false, false, false }, { false, false, false, false }
+	-- contour decoupe (4 bords en segments de la couleur de chaque type)
+	f.splitTx, f.splitR, f.splitN = {}, {}, 0
+	for k = 1, E.SPLITMAX do
+		local sx = f.ov:CreateTexture(nil, "OVERLAY")
+		sx:SetTexture(T.tex.white)
+		sx:Hide()
+		f.splitTx[k] = sx
+		f.splitR[k] = { k = 0, x = 0, y = 0, w = 0, h = 0 }
+	end
+	-- petites icones de dissipation en ligne (dans un coin) et petites icones a cote du pseudo
+	f.smE, f.smP, f.smI, f.smX, f.smOn = {}, {}, { 0, 0, 0, 0 }, { false, false, false, false }, { false, false, false, false }
+	for k = 1, 4 do
+		local e = f.ov:CreateTexture(nil, "ARTWORK")
+		e:SetTexture(T.tex.white)
+		e:Hide()
+		f.smE[k] = e
+		local ic = f.ov:CreateTexture(nil, "OVERLAY")
+		ic:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+		ic:Hide()
+		f.smP[k] = ic
+	end
+	f.nicI, f.nicKey, f.nicN, f.nicPlaced = {}, { false, false, false }, 0, false
+	for k = 1, 3 do
+		local ic = f.ov:CreateTexture(nil, "OVERLAY")
+		ic:SetTexture(T.tex.white)
+		ic:Hide()
+		f.nicI[k] = ic
+	end
+	-- effets de boss et aggro (SUI.GroupFx) : couche au-dessus des icones de dissipation
+	f.ov2 = CreateFrame("Frame", nil, f)
+	f.ov2:SetFrameLevel(f:GetFrameLevel() + 8)
+	f.ov2:SetAllPoints(f)
+	f.fxHl = f.ov2:CreateTexture(nil, "BACKGROUND")
+	f.fxHl:SetTexture(T.tex.white)
+	f.fxHl:SetAllPoints(f)
+	f.fxHl:Hide()
+	f.fxE, f.fxI, f.fxT = {}, {}, {}
+	f.fxTex, f.fxKey, f.fxOn, f.fxSec, f.fxWarn = { false, false, false }, { false, false, false }, { false, false, false }, { -2, -2, -2 }, { false, false, false }
+	f.fxN, f.fxTick, f.fxTintOn, f.fxTintKey, f.fxPlaced = 0, false, false, false, 0
+	for k = 1, E.FXMAX do
+		local ed = f.ov2:CreateTexture(nil, "ARTWORK")
+		ed:SetTexture(T.tex.white)
+		ed:Hide()
+		f.fxE[k] = ed
+		local ic = f.ov2:CreateTexture(nil, "OVERLAY")
+		ic:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+		ic:Hide()
+		f.fxI[k] = ic
+		local tt = T.Text(f.ov2, 10, T.c.text, "CENTER", true)
+		tt:Hide()
+		f.fxT[k] = tt
+	end
+	f.agFrame, f.agIcOn, f.agBarOn, f.agPaint = false, false, false, false
+	f.agIc = f.ov2:CreateTexture(nil, "ARTWORK")
+	f.agIc:SetTexture(T.tex.white)
+	f.agIc:Hide()
+	f.agTx = T.Text(f.ov2, 10, T.c.text, "CENTER", true)
+	f.agTx:SetText("!")
+	f.agTx:Hide()
+	f.agBar = f.ov2:CreateTexture(nil, "OVERLAY")
+	f.agBar:SetTexture(T.tex.white)
+	f.agBar:Hide()
 	f.alertIcon = f.ov:CreateTexture(nil, "OVERLAY")
 	f.alertIcon:Hide()
 	f.mark = f.ov:CreateTexture(nil, "OVERLAY")
@@ -1888,9 +2562,17 @@ end
 function E.ApplyGeometry(g)
 	local cfg = g.cfg
 	local w, h, ph, isz = cfg.width, cfg.height, cfg.powerheight, cfg.iconsize
-	local nhot = cfg.hots
+	local nhot = cfg.hotany
 	if nhot > g.maxHot then nhot = g.maxHot end
-	local sig = w .. "|" .. h .. "|" .. ph .. "|" .. isz .. "|" .. nhot
+	local dsz, dpos = cfg.dispelsize, cfg.dispelpos
+	local ssz, spos = cfg.dispelsmallsize, cfg.dispelsmallpos
+	local tagres = (cfg.roletag or cfg.leader) and 12 or 0                 -- place du role / chef en haut a droite
+	local agres = cfg.aggroframes and 14 or 0                             -- place de l'icone d'aggro, a gauche du role
+	local resL = (cfg.dispelsmall and spos == "bottomleft") and 2 * (ssz + 3) or 0    -- petites icones : place reservee dans la rangee
+	local resR = (cfg.dispelsmall and spos == "bottomright") and 2 * (ssz + 3) or 0
+	local sig = w .. "|" .. h .. "|" .. ph .. "|" .. isz .. "|" .. nhot .. "|" .. dsz .. "|" .. dpos .. "|" .. cfg.nameanchor .. "|" ..
+		cfg.dispelthick .. "|" .. ssz .. "|" .. spos .. "|" .. tostring(cfg.dispelsmall) .. "|" .. tagres .. "|" .. agres .. "|" ..
+		cfg.fxsize .. "|" .. cfg.fxpos .. "|" .. tostring(cfg.marks)
 	if sig == g.sig then return end
 	g.sig = sig
 	for i = 1, getn(g.frames) do
@@ -1908,10 +2590,10 @@ function E.ApplyGeometry(g)
 		f.pwText:SetPoint("CENTER", f.pw, "CENTER", 0, 0)
 		f.pwText:SetHeight(10)
 		f.pwTxt = nil
-		f.nameText:ClearAllPoints()
-		f.nameText:SetPoint("LEFT", f.hp, "LEFT", 3, 0)
 		f.nameText:SetWidth(floor(w * 0.62))
 		f.nameText:SetHeight(12)
+		f.namePt = nil
+		E.PlaceName(g, f)
 		f.hpText:ClearAllPoints()
 		f.hpText:SetPoint("RIGHT", f.hp, "RIGHT", -3, 0)
 		f.hpText:SetHeight(12)
@@ -1928,6 +2610,26 @@ function E.ApplyGeometry(g)
 		f.dispelTx:SetPoint("TOPLEFT", f, "TOPLEFT", 0, 0)
 		f.dispelTx:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", 0, 0)
 		f.dispelTx:SetWidth(3)
+		-- grosses icones de dissipation : jamais plus hautes que le cadre (E.PlaceBig), recalees selon leur nombre au dessin suivant
+		E.PlaceBig(g, f, 1)
+		local bd = f.dispelBd
+		bd[1]:ClearAllPoints()
+		bd[1]:SetPoint("TOPLEFT", f, "TOPLEFT", 0, 0)
+		bd[1]:SetPoint("TOPRIGHT", f, "TOPRIGHT", 0, 0)
+		bd[1]:SetHeight(2)
+		bd[2]:ClearAllPoints()
+		bd[2]:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", 0, 0)
+		bd[2]:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", 0, 0)
+		bd[2]:SetHeight(2)
+		bd[3]:ClearAllPoints()
+		bd[3]:SetPoint("TOPLEFT", f, "TOPLEFT", 0, -2)
+		bd[3]:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", 0, 2)
+		bd[3]:SetWidth(2)
+		bd[4]:ClearAllPoints()
+		bd[4]:SetPoint("TOPRIGHT", f, "TOPRIGHT", 0, -2)
+		bd[4]:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", 0, 2)
+		bd[4]:SetWidth(2)
+		f.bigPaint = nil
 		local asz = h - 6
 		if asz > 28 then asz = 28 end
 		f.alertIcon:ClearAllPoints()
@@ -1935,10 +2637,44 @@ function E.ApplyGeometry(g)
 		f.alertIcon:SetWidth(asz)
 		f.alertIcon:SetHeight(asz)
 		local base = 2 + ((ph > 0) and (ph + 1) or 0)
+		-- aggro (SUI.GroupFx) : icone "!" en haut a droite, barre fine du tank en haut
+		f.agIc:ClearAllPoints()
+		f.agIc:SetPoint("TOPRIGHT", f, "TOPRIGHT", -(2 + tagres), -2)
+		f.agIc:SetWidth(12)
+		f.agIc:SetHeight(12)
+		f.agTx:ClearAllPoints()
+		f.agTx:SetPoint("CENTER", f.agIc, "CENTER", 0, 0)
+		f.agTx:SetWidth(12)
+		f.agTx:SetHeight(12)
+		f.agBar:ClearAllPoints()
+		f.agBar:SetPoint("TOPLEFT", f, "TOPLEFT", 1, -1)
+		f.agBar:SetPoint("TOPRIGHT", f, "TOPRIGHT", -1, -1)
+		f.agBar:SetHeight(2)
+		-- petites icones de dissipation en ligne : coin choisi (bas gauche / bas droite / haut droite)
+		for k = 1, 4 do
+			local e, ic = f.smE[k], f.smP[k]
+			e:ClearAllPoints()
+			if spos == "bottomright" then
+				e:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -2 - (k - 1) * (ssz + 3), base - 1)
+			elseif spos == "topright" then
+				e:SetPoint("TOPRIGHT", f, "TOPRIGHT", -(2 + tagres + agres) - (k - 1) * (ssz + 3), -2)
+			else
+				e:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", 2 + (k - 1) * (ssz + 3), base - 1)
+			end
+			e:SetWidth(ssz + 2)
+			e:SetHeight(ssz + 2)
+			ic:ClearAllPoints()
+			ic:SetPoint("CENTER", e, "CENTER", 0, 0)
+			ic:SetWidth(ssz)
+			ic:SetHeight(ssz)
+		end
+		f.fxPlaced = 0
+		f.splitSig = nil
+		f.nicPlaced = false
 		for k = 1, g.maxDeb do
 			local ic, e = f.dIcon[k], f.dEdge[k]
 			e:ClearAllPoints()
-			e:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", 2 + (k - 1) * (isz + 3), base - 1)
+			e:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", 2 + resL + (k - 1) * (isz + 3), base - 1)
 			e:SetWidth(isz + 2)
 			e:SetHeight(isz + 2)
 			ic:ClearAllPoints()
@@ -1949,14 +2685,14 @@ function E.ApplyGeometry(g)
 		for k = 1, g.maxBuf do
 			local ic = f.bIcon[k]
 			ic:ClearAllPoints()
-			ic:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -2 - (nhot + k - 1) * (isz + 1), base)
+			ic:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -2 - resR - (nhot + k - 1) * (isz + 1), base)
 			ic:SetWidth(isz)
 			ic:SetHeight(isz)
 		end
 		for k = 1, g.maxHot do
 			local ic, tt = f.hIcon[k], f.hTime[k]
 			ic:ClearAllPoints()
-			ic:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -2 - (k - 1) * (isz + 1), base)
+			ic:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -2 - resR - (k - 1) * (isz + 1), base)
 			ic:SetWidth(isz)
 			ic:SetHeight(isz)
 			tt:ClearAllPoints()
@@ -2014,8 +2750,10 @@ function E.Build(g)
 	T.OnAccent(function()
 		if g.active then
 			E.PaintFixed(g)
+			E.MarkAll(g, "dH")
 			E.MarkAll(g, "dB")
 			E.MarkAll(g, "dA")
+			E.MarkAll(g, "dF")
 		end
 	end)
 	E.PaintFixed(g)
@@ -2042,7 +2780,7 @@ local function want(g, ev)
 		return cfg.manabar == "all" or MANA_EV[ev] == true     -- hors "all" : la rage / l'energie ne servent a rien
 	end
 	if ev == "UNIT_AURA" then
-		return cfg.debuffs > 0 or cfg.buffs > 0 or cfg.dispelmode ~= "off" or (cfg.alerts and g.nAlerts > 0) or cfg.hots > 0
+		return cfg.debuffs > 0 or cfg.buffs > 0 or cfg.dispelmode ~= "off" or (cfg.alerts and g.nAlerts > 0) or cfg.hotany > 0
 	end
 	if ev == "UNIT_PET" then return g.kind == "party" and cfg.pets end
 	return true
@@ -2083,6 +2821,8 @@ function E.Activate(g)
 	g.tSlow = SUI.Every(g.slowInterval, g.fnSlow, g.title .. ".slow", true)
 	E.SyncHots(g)
 	E.SyncCast()
+	if g.kind ~= "pins" and SUI.GroupFx then SUI.GroupFx.OnChange(g.hFx) end
+	E.WatchFx()
 	g.rosterDirty = true
 	if g.built then
 		g.container:Show()
@@ -2101,6 +2841,7 @@ function E.Deactivate(g)
 	g.tFlush, g.tSlow = nil, nil
 	E.SyncHots(g)
 	E.SyncCast()
+	if g.kind ~= "pins" and SUI.GroupFx then SUI.GroupFx.OffChange(g.hFx) end
 	if g.built then
 		for i = 1, getn(g.frames) do setVisible(g, g.frames[i], false) end
 		for i = 1, g.cap do g.q[i] = false end
@@ -2109,6 +2850,18 @@ function E.Deactivate(g)
 		g.container:Hide()
 		g.handle:Hide()
 	end
+end
+
+-- Les reglages d'affichage de SUI.GroupFx (groupfx.fx.icon / tint / timer, groupfx.aggro.frame...) ne produisent aucun evenement d'unite :
+-- chaque instance active est marquee, et le prochain tour lent redessine ses cadres (apres que GroupFx ait relu ses propres reglages).
+function E.OnFxKey()
+	for i = 1, getn(E.instances) do E.instances[i].fxDirty = true end
+end
+
+function E.WatchFx()
+	if E.fxWatching then return end
+	E.fxWatching = true
+	C.Watch("groupfx.", E.OnFxKey)
 end
 
 -- Reglage modifie : relire, retailler, reorganiser, tout redessiner.
@@ -2234,6 +2987,71 @@ function E.CmdRole(g, w)
 	if setList(g, "roles", tmp) then SUI.Print(L("msg." .. g.name .. ".roleset", name, r)) end
 end
 
+-- ---------------------------------------------------------------- preset "Soigneur"
+-- Valeurs lisibles pour soigner : HoT et cooldowns sur tous (3) et sur les tanks, gros debuffs a dissiper, barre de mana des soigneurs,
+-- soins entrants, aggro, role repere, rez, vie critique en rouge. 'dispelonly' depend de la classe : vrai si le grimoire contient une
+-- dissipation. Une valeur DEJA modifiee par le joueur (couche courante) n'est jamais ecrasee, sauf force. Meme jeu pour group.* et raid.*.
+E.HEAL_PRESET = { hots = 3, tankhots = 3, hotwarn = 3, debuffs = 3, iconsize = 16, dispelbig = true, dispelsize = 22, dispelmode = "known",
+	dispelstyle = "both", manabar = "healers", powerheight = 4, incoming = true, incsrc = "all", aggro = true, roletag = true,
+	resinfo = true, range = true, lowhp = 35 }
+E.HEAL_PREFIXES = { "group.", "raid." }
+
+-- Applique le preset ; renvoie (nombre de cles ecrites, nombre de cles conservees car deja choisies par le joueur).
+function E.HealPreset(force)
+	local done, kept = 0, 0
+	local canCure = false
+	E.ScanCures()
+	for _ in pairs(E.cure) do canCure = true end
+	for i = 1, getn(E.HEAL_PREFIXES) do
+		local pre = E.HEAL_PREFIXES[i]
+		for k, v in pairs(E.HEAL_PRESET) do
+			local key = pre .. k
+			if C.meta[key] then
+				if not force and C.IsModified(key) then
+					kept = kept + 1
+				elseif C.Set(key, v) then
+					done = done + 1
+				end
+			end
+		end
+		local key = pre .. "dispelonly"
+		if C.meta[key] then
+			if not force and C.IsModified(key) then kept = kept + 1 elseif C.Set(key, canCure) then done = done + 1 end
+		end
+	end
+	return done, kept
+end
+
+-- Retire les ecarts du joueur sur les cles du preset (retour aux defauts / presets de mode).
+function E.HealPresetReset()
+	local n = 0
+	for i = 1, getn(E.HEAL_PREFIXES) do
+		local pre = E.HEAL_PREFIXES[i]
+		for k in pairs(E.HEAL_PRESET) do
+			if C.meta[pre .. k] and C.Reset(pre .. k) then n = n + 1 end
+		end
+		if C.meta[pre .. "dispelonly"] and C.Reset(pre .. "dispelonly") then n = n + 1 end
+	end
+	return n
+end
+
+-- Marque (ou demarque) un joueur comme tank dans le groupe ET le raid ; sans nom : la cible amie.
+function E.HealTank(name, on)
+	if not name or name == "" then
+		if UnitExists("target") and UnitIsPlayer("target") and UnitIsFriend("player", "target") then name = UnitName("target") end
+	end
+	if not name or name == "" then
+		SUI.Print(L("msg.group.heal.tankusage"))
+		return false
+	end
+	local r = on and "t" or "none"
+	E.CmdRole(M.party, { "role", name, r })
+	local R = SUI.Raid
+	local rg = R and R.Instance and R.Instance()
+	if rg then E.CmdRole(rg, { "role", name, r }) end
+	return true
+end
+
 -- ================================================================ module "group"
 M.on = false
 M.party = nil
@@ -2260,9 +3078,18 @@ M.enemies = E.New({ name = "group", title = "GroupEnemies", prefix = "group.", k
 		g.cfg.marks = false
 		g.cfg.dispelmode = "off"
 		g.cfg.hots = 0
+		g.cfg.tankhots = 0
+		g.cfg.dispelbig = false
+		g.cfg.lowhp = 0
+		g.cfg.hotwarn = 0
 		g.cfg.resinfo = false
 		g.cfg.alerts = false
 		g.cfg.roletag = false
+		g.cfg.nameanchor = "left"       -- les ennemis epingles gardent leur mise en page d'origine
+		g.cfg.nameicons = "off"
+		g.cfg.dispelsmall = false
+		g.cfg.fxframes = false
+		g.cfg.aggroframes = false
 	end })
 
 local BLIZZ_PARTY = { "PartyMemberFrame1", "PartyMemberFrame2", "PartyMemberFrame3", "PartyMemberFrame4" }
@@ -2430,6 +3257,8 @@ SUI.RegisterModule("group", {
 		opt("hpcolor", "choice", 100, "class", { choices = { "class", "health", "style" }, simple = true }),
 		opt("hptext", "choice", 110, "percent", { choices = { "none", "percent", "value", "deficit", "both" }, simple = true }),
 		opt("namelen", "number", 120, 10, { min = 4, max = 16, step = 1 }),
+		opt("nameanchor", "choice", 121, "topleft", { choices = { "topleft", "topcenter", "topright", "left", "center", "right", "bottomleft", "bottomcenter", "bottomright" }, simple = true }),
+		opt("nameicons", "choice", 122, "dispel", { choices = { "off", "dispel", "fx", "both" } }),
 		opt("range", "bool", 130, true, { simple = true }),
 		opt("rangeyd", "number", 140, 40, { min = 10, max = 60, step = 5 }),
 		opt("outalpha", "number", 150, 0.45, { min = 0.2, max = 1, step = 0.05 }),
@@ -2440,8 +3269,25 @@ SUI.RegisterModule("group", {
 		opt("iconsize", "number", 180, 12, { min = 8, max = 20, step = 1 }),
 		opt("dispelmode", "choice", 190, "known", { choices = { "known", "all", "off" }, simple = true }),
 		opt("dispelonly", "bool", 200, false),
-		opt("dispelstyle", "choice", 202, "both", { choices = { "stripe", "frame", "both" } }),
+		opt("dispelstyle", "choice", 202, "both", { choices = { "split", "stripe", "frame", "both", "none" }, simple = true }),
 		opt("dispelprio", "choice", 204, "magic", { choices = { "magic", "curse", "poison", "disease" } }),
+		opt("dispelbig", "bool", 205, true, { simple = true }),
+		opt("dispelsize", "number", 206, 20, { min = 10, max = 32, step = 1 }),
+		opt("dispelpos", "choice", 207, "center", { choices = { "center", "right", "left" } }),
+		opt("dispelbigmax", "number", 207.1, 1, { min = 1, max = 3, step = 1 }),
+		opt("dispelsmall", "bool", 207.2, false, { simple = true }),
+		opt("dispelsmallpos", "choice", 207.3, "bottomleft", { choices = { "bottomleft", "bottomright", "topright" } }),
+		opt("dispelsmallsize", "number", 207.4, 9, { min = 6, max = 14, step = 1 }),
+		opt("dispelthick", "number", 207.5, 2, { min = 1, max = 4, step = 1 }),
+		opt("fxframes", "bool", 211, true, { simple = true }),
+		opt("fxsize", "number", 212, 22, { min = 12, max = 32, step = 1 }),
+		opt("fxpos", "choice", 213, "left", { choices = { "left", "center", "right" } }),
+		opt("fxmax", "number", 214, 2, { min = 1, max = 3, step = 1 }),
+		opt("aggroframes", "bool", 215, true, { simple = true }),
+		opt("tankhots", "number", 173, 0, { min = 0, max = 4, step = 1 }),
+		opt("hotwarn", "number", 175, 3, { min = 0, max = 10, step = 1 }),
+		opt("lowhp", "number", 112, 0, { min = 0, max = 80, step = 5 }),
+		opt("healpreset", "choice", 5, "off", { choices = { "off", "apply" }, simple = true }),
 		opt("aggro", "bool", 210, true),
 		opt("incoming", "bool", 220, true),
 		opt("incsrc", "choice", 221, "all", { choices = { "me", "all" } }),
@@ -2474,6 +3320,32 @@ if SUI.Migrate and SUI.Migrate.MAP and not SUI.Migrate.MAP.group then SUI.Migrat
 -- Mode Raid (groupe de 5 dans un raid / donjon difficile) : plus compact, pas de buffs, debuffs a dissiper seulement.
 SUI.Config.AddPreset("raid", "*", { ["group.buffs"] = 0, ["group.debuffs"] = 2, ["group.dispelonly"] = true, ["group.width"] = 90,
 	["group.height"] = 30, ["group.budget"] = 12 })
+
+-- Reglage "Appliquer le preset Soigneur" du menu : une valeur "apply" declenche le preset puis revient seule a "off".
+C.Watch("group.healpreset", function(key, value)
+	if value ~= "apply" then return end
+	local n, kept = E.HealPreset(false)
+	SUI.Print(L("msg.group.heal.applied", n, kept))
+	C.Set("group.healpreset", "off")
+end)
+
+-- /sui heal [force|reset|tank [Nom]|untank [Nom]]
+SUI.RegisterCommand("heal", function(rest)
+	local w = words(rest)
+	local sub = w[1]
+	if sub == "reset" then
+		SUI.Print(L("msg.group.heal.reset", E.HealPresetReset()))
+	elseif sub == "tank" then
+		E.HealTank(w[2], true)
+	elseif sub == "untank" then
+		E.HealTank(w[2], false)
+	elseif sub == nil or sub == "" or sub == "force" or sub == "apply" then
+		local n, kept = E.HealPreset(sub == "force")
+		SUI.Print(L("msg.group.heal.applied", n, kept))
+	else
+		SUI.Print(L("msg.group.heal.usage"))
+	end
+end, "help.group.heal")
 
 SUI.RegisterCommand("group", function(rest)
 	local w = words(rest)
