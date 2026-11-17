@@ -1112,7 +1112,9 @@ function M.Restack(fr, strata, delta, seen)
 	if not fr or seen[fr] then return end
 	seen[fr] = true
 	fr:SetFrameStrata(strata)
-	fr:SetFrameLevel(fr:GetFrameLevel() + delta)
+	local lv = fr:GetFrameLevel() + delta
+	if lv < 0 then lv = 0 end
+	fr:SetFrameLevel(lv)
 	if fr.GetChildren then
 		local kids = { fr:GetChildren() }
 		for i = 1, getn(kids) do
