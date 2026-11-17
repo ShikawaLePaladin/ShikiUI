@@ -1626,6 +1626,27 @@ function M.PlaceBagSlots(win)
 	end
 end
 
+-- Le cadre d'origine (texture normale 64x64 decentree) donne des crochets etires une fois le bouton sorti de la barre : on le remplace par
+-- le meme fond que les cases du sac, icone remplissant la case.
+function M.StyleBagSlot(b, rec)
+	local n = b.GetNormalTexture and b:GetNormalTexture()
+	if n and n.GetTexture then rec.normal = n:GetTexture() end
+	if b.SetNormalTexture then b:SetNormalTexture("") end
+	b:SetWidth(30)
+	b:SetHeight(30)
+	local nm = b.GetName and b:GetName()
+	local ic = nm and getglobal(nm .. "IconTexture")
+	if ic and ic.SetTexCoord then
+		ic:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+		ic:ClearAllPoints()
+		ic:SetAllPoints(b)
+	end
+	if not rec.styled and T.Backdrop then
+		rec.styled = true
+		T.Backdrop(b, T.c.inset, T.c.border)
+	end
+end
+
 function M.AttachBagSlots(win)
 	if win.key ~= "bag" or (win.slots and getn(win.slots) > 0) then return end
 	win.slots = {}
@@ -1642,6 +1663,7 @@ function M.AttachBagSlots(win)
 				b:SetParent(win.frame)
 				b:SetFrameLevel(win.frame:GetFrameLevel() + 3)
 				b:SetScale(SLOTSCALE)
+				pcall(M.StyleBagSlot, b, rec)
 				b:Show()
 			end
 		end
@@ -1655,6 +1677,7 @@ function M.DetachBagSlots(win)
 		local rec = win.slots[i]
 		local b = rec.btn
 		if rec.parent then b:SetParent(rec.parent) end
+		if rec.normal and b.SetNormalTexture then pcall(b.SetNormalTexture, b, rec.normal) end
 		b:SetScale(rec.scale or 1)
 		b:ClearAllPoints()
 		if rec.pt then b:SetPoint(rec.pt, rec.rel, rec.rpt, rec.x, rec.y) end
