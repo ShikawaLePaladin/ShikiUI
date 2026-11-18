@@ -63,7 +63,7 @@ local UNITS = {
 	{ id = "tott", cn = "tott", uk = "targettargettarget", name = "Kaelith", lvl = "60", hpr = 0.6, class = "MAGE", pt = 0, friend = true, small = true },
 	{ id = "focus", cn = "focus", uk = "focus", name = "Ragnaros", lvl = "63", hpr = 0.8, class = "WARRIOR", pt = 1, friend = false },
 }
-local UZ = { "frame", "hp", "hptext", "power", "edgeh", "port", "mark", "ind", "auras" }
+local UZ = { "frame", "hp", "name", "hptext", "power", "pwt", "edgeh", "port", "mark", "pvp", "lead", "loot", "comb", "debuffs", "buffs", "fsr" }
 local IKEYS = { "pvp", "lead", "loot", "comb" }
 local ICOL = { T.c.bad, T.c.warn, T.c.good, T.c.text }       -- jetons vivants : repeints avec le style
 
@@ -81,8 +81,10 @@ local function newUnit(parent)
 	c.aur = {}
 	for i = 1, 5 do c.aur[i] = box(c, "OVERLAY") end
 	c.o = {}
-	c.rc = { frame = { 0, 0, 0, 0 }, hp = { 0, 0, 0, 0 }, hptext = { 0, 0, 0, 0 }, power = { 0, 0, 0, 0 }, edgeh = { 0, 0, 0, 0 },
-		port = { 0, 0, 0, 0 }, mark = { 0, 0, 0, 0 }, ind = { 0, 0, 0, 0 }, auras = { 0, 0, 0, 0 } }
+	c.gd = { n = 0, xoff = 0, row = 0, v = "bottom", h = "LEFT" }          -- groupe de malefices / de benefices (place par les reglages)
+	c.gb = { n = 0, xoff = 0, row = 0, v = "bottom", h = "LEFT" }
+	c.rc = {}
+	for k = 1, getn(UZ) do c.rc[UZ[k]] = { 0, 0, 0, 0 } end
 	return c
 end
 
@@ -132,6 +134,53 @@ end
 -- Reglages d'un cadre (taille, textes, portrait, indicateurs, effets) lus dans c.o ; g = reglages communs.
 local function unitCk(cn, k) return "units." .. cn .. "." .. k end
 
+-- Reglage de placement d'un element (pseudo, effets) : le premier reglage existant parmi les noms possibles, nil s'il n'y en a pas.
+local UPLACE = {
+	name = { "nameanchor", "namepos", "nameplace", "namepoint" },
+	buffs = { "buffanchor", "buffpos", "buffsanchor", "buffspos", "buffplace" },
+	debuffs = { "debuffanchor", "debuffpos", "debuffsanchor", "debuffspos", "debuffplace" },
+}
+local NPOS = {
+	topleft = { "LEFT", "top" }, top = { "CENTER", "top" }, topcenter = { "CENTER", "top" }, topright = { "RIGHT", "top" },
+	left = { "LEFT", "mid" }, center = { "CENTER", "mid" }, right = { "RIGHT", "mid" },
+	bottomleft = { "LEFT", "bottom" }, bottom = { "CENTER", "bottom" }, bottomcenter = { "CENTER", "bottom" }, bottomright = { "RIGHT", "bottom" },
+}
+
+-- Cle du reglage de placement de l'element "what" du cadre cn ("units.<cn>.<nom>"), nil si ce reglage n'existe pas.
+local function unitPlaceKey(cn, what)
+	local names = UPLACE[what]
+	for i = 1, getn(names) do
+		local k = "units." .. cn .. "." .. names[i]
+		if P.FindOption(k) then return k end
+	end
+	return nil
+end
+
+local function unitPlace(cn, what)
+	local k = unitPlaceKey(cn, what)
+	if not k then return nil end
+	local v = C.Get(k)
+	if type(v) ~= "string" or v == "" or v == "default" then return nil end
+	return v
+end
+
+-- Place un groupe d'icones d'effets : n icones, cote (haut / bas) et alignement lus dans la valeur du reglage (nil = sous le cadre, a gauche).
+local function auraPlace(g, n, pos)
+	g.n = n
+	g.v, g.h = "bottom", "LEFT"
+	if not pos then return end
+	if pos == "off" or pos == "hidden" or pos == "none" then
+		g.n = 0
+		return
+	end
+	if string.find(pos, "top", 1, true) or string.find(pos, "above", 1, true) then g.v = "top" end
+	if string.find(pos, "right", 1, true) then
+		g.h = "RIGHT"
+	elseif string.find(pos, "center", 1, true) or pos == "top" or pos == "bottom" or pos == "above" or pos == "below" then
+		g.h = "CENTER"
+	end
+end
+
 local function unitResolve(c, u, g)
 	local o = c.o
 	local cn = u.cn
@@ -160,11 +209,61 @@ local function unitResolve(c, u, g)
 	o.on = flag(unitCk(cn, "enabled"), true)
 	o.hpcol, o.cc, o.hr, o.hg, o.hb = g.hpcol, g.cc, g.hr, g.hg, g.hb
 	o.isz, o.asz, o.amax = g.isz, g.asz, g.amax
+	o.modau = false
+	if not caps.auras and (cn == "player" or cn == "target") then
+		-- joueur et cible : leurs effets viennent du module Effets (cadres libres, places par le deplacement) ; l'apercu les montre sous le cadre
+		local am = SUI.modules and SUI.modules.auras
+		local b, d, sz = false, false, 28
+		if am and am.enabled then
+			if cn == "player" and flag("auras.player", true) then
+				b, d, sz = flag("auras.buffs", true), flag("auras.debuffs", true), num("auras.size", 28)
+			elseif cn == "target" then
+				b, d, sz = flag("auras.targetbuffs", true), flag("auras.targetdebuffs", true), num("auras.tsize", 22)
+			end
+		end
+		if b and d then o.au = "both" elseif b then o.au = "buffs" elseif d then o.au = "debuffs" end
+		if o.au ~= "off" then
+			o.modau = true
+			o.amax = 5
+			o.asz = math.max(10, math.min(20, floor(sz * 0.6)))
+		end
+	end
 	-- marges autour du cadre (portrait, indicateurs, effets), a l'echelle 1
 	o.lx = (o.port ~= "off" and o.side ~= "right") and (o.h + 2) or 0
 	o.rx = (o.port ~= "off" and o.side == "right") and (o.h + 2) or 0
 	if o.lead or o.loot or o.pvp or o.comb then o.top = o.isz + 2 elseif o.mark then o.top = floor(o.isz / 2) else o.top = 0 end
-	o.bot = (o.au ~= "off") and (o.asz + 4) or 0
+	o.itop = o.top
+	-- pseudo et effets places par les reglages (nil = comportement d'origine)
+	o.nameat = unitPlace(cn, "name")
+	o.debat, o.bufat = unitPlace(cn, "debuffs"), unitPlace(cn, "buffs")
+	local na = (o.au ~= "off") and math.min(o.amax, 5) or 0
+	local nd, nb = 0, 0
+	if o.au == "debuffs" then nd = na elseif o.au == "buffs" then nb = na elseif o.au == "both" then nd = math.min(2, na) nb = na - nd end
+	auraPlace(c.gd, nd, o.debat)
+	auraPlace(c.gb, nb, o.bufat)
+	local rt, rb = 0, 0
+	if o.debat == nil and o.bufat == nil then
+		-- origine : une seule rangee sous le cadre
+		c.gd.row, c.gb.row, c.gd.xoff, c.gb.xoff = 0, 0, 0, c.gd.n
+		if na > 0 then rb = 1 end
+	else
+		local gl = { c.gd, c.gb }
+		for k = 1, 2 do
+			local g = gl[k]
+			g.xoff = 0
+			if g.n > 0 then
+				if g.v == "top" then
+					g.row = rt
+					rt = rt + 1
+				else
+					g.row = rb
+					rb = rb + 1
+				end
+			end
+		end
+	end
+	o.top = o.top + rt * (o.asz + 2)
+	o.bot = (rb > 0) and (rb * (o.asz + 2) + 2) or 0
 end
 
 local function paintUnit(c, u, s)
@@ -211,9 +310,27 @@ local function paintUnit(c, u, s)
 		else
 			hx, hw, hj, nx, nw, nj = w * 0.45, w * 0.5, "RIGHT", 4, w * 0.55, "LEFT"
 		end
-		putText(c.name, c, nx, ty, fs, u.name)
-		c.name:SetWidth(floor(nw))
-		c.name:SetJustifyH(nj)
+		local np = o.nameat and NPOS[o.nameat]
+		if o.nameat == "off" then
+			np = nil
+			c.name:Hide()
+		elseif np then
+			-- pseudo place par le reglage : 9 positions dans le cadre
+			nx, nw, nj = 4, w - 8, np[1]
+			if np[2] == "top" then ty = 2 elseif np[2] == "bottom" then ty = h - 2 - fs end
+		end
+		if o.nameat ~= "off" then
+			putText(c.name, c, nx, ty, fs, u.name)
+			c.name:SetWidth(floor(nw))
+			c.name:SetJustifyH(nj)
+			local sw = c.name:GetStringWidth()
+			if sw <= 0 or sw > nw then sw = nw end
+			local zx = nx
+			if nj == "RIGHT" then zx = nx + nw - sw elseif nj == "CENTER" then zx = nx + (nw - sw) / 2 end
+			setrc(c, "name", zx, ty, sw, fs + 2)
+		else
+			setrc(c, "name", 0, 0, 0, 0)
+		end
 		if str ~= "" then
 			putText(c.hpt, c, hx, ty, fs, str)
 			c.hpt:SetWidth(floor(hw))
@@ -226,6 +343,7 @@ local function paintUnit(c, u, s)
 	else
 		c.name:Hide()
 		c.hpt:Hide()
+		setrc(c, "name", 4, 1, w * 0.4, hpH)
 		setrc(c, "hptext", w * 0.45, 1, w * 0.5, hpH)
 	end
 	-- texte de ressource, centre sur la barre de ressource
@@ -234,15 +352,19 @@ local function paintUnit(c, u, s)
 		putText(c.pwt, c, 1, h - 1 - pw + (pw - pf) / 2, pf, (o.ptm == "percent") and "80%" or ((o.ptm == "both") and "2.4k | 80%" or "2.4k"))
 		c.pwt:SetWidth(w - 2)
 		c.pwt:Show()
+		setrc(c, "pwt", 1, h - 1 - pw, w - 2, pw)
 	else
 		c.pwt:Hide()
+		setrc(c, "pwt", 0, 0, 0, 0)
 	end
 	-- etincelle de tick de mana (regle des 5 secondes) sur la barre de ressource
 	if o.fsr and pw > 0 then
 		P.Fill(c.spark, T.c.good, 1)
 		P.Box(c.spark, c, (w - 2) * 0.4, h - 2 - pw, 2, pw + 2)
+		setrc(c, "fsr", (w - 2) * 0.4, h - 2 - pw, 2, pw + 2)
 	else
 		c.spark:Hide()
+		setrc(c, "fsr", 0, 0, 0, 0)
 	end
 	-- portrait a cote du cadre : silhouette (2D) ou initiale de classe sur sa couleur
 	local p = c.port
@@ -291,27 +413,47 @@ local function paintUnit(c, u, s)
 		if o[IKEYS[k]] then
 			P.Fill(t, ICOL[k], 1)
 			P.Box(t, c, x, -(isz + 2), isz, isz)
+			setrc(c, IKEYS[k], x, -(isz + 2), isz, isz)
 			x = x + isz + 1
 		else
 			t:Hide()
+			setrc(c, IKEYS[k], 0, 0, 0, 0)
 		end
 	end
-	if x > 0 then setrc(c, "ind", 0, -(isz + 2), x, isz) else setrc(c, "ind", 0, 0, 0, 0) end
-	-- effets sous le cadre : malefices (rouge) puis benefices
-	local na = 0
-	if o.au ~= "off" then na = math.min(o.amax, 5) end
+	-- effets : malefices (couleur de danger) puis benefices, en une rangee sous le cadre ou en groupes places par les reglages
 	local asz = floor(o.asz * s + 0.5)
+	local itop = floor(o.itop * s + 0.5)
 	for k = 1, 5 do
 		local t = c.aur[k]
-		if k <= na then
-			local debuff = (o.au == "debuffs") or (o.au == "both" and k <= 2)
-			P.Fill(t, debuff and T.c.bad or T.c.dim, 1)
-			P.Box(t, c, (k - 1) * (asz + 2), h + 2, asz, asz)
+		local g = (k <= c.gd.n) and c.gd or c.gb
+		local j = (g == c.gd) and k or (k - c.gd.n)
+		if k <= c.gd.n + c.gb.n then
+			P.Fill(t, (g == c.gd) and T.c.bad or T.c.dim, 1)
+			local gwid = (g.xoff + g.n) * (asz + 2) - 2
+			local x0 = 0
+			if g.h == "RIGHT" then x0 = w - gwid elseif g.h == "CENTER" then x0 = floor((w - gwid) / 2) end
+			local yy = h + 2 + g.row * (asz + 2)
+			if g.v == "top" then yy = -itop - (g.row + 1) * (asz + 2) end
+			P.Box(t, c, x0 + (g.xoff + j - 1) * (asz + 2), yy, asz, asz)
 		else
 			t:Hide()
 		end
 	end
-	if na > 0 then setrc(c, "auras", 0, h + 2, na * (asz + 2), asz) else setrc(c, "auras", 0, 0, 0, 0) end
+	local gl = { c.gd, c.gb }
+	for k = 1, 2 do
+		local g = gl[k]
+		local rk = (k == 1) and "debuffs" or "buffs"
+		if g.n > 0 then
+			local gwid = (g.xoff + g.n) * (asz + 2) - 2
+			local x0 = 0
+			if g.h == "RIGHT" then x0 = w - gwid elseif g.h == "CENTER" then x0 = floor((w - gwid) / 2) end
+			local yy = h + 2 + g.row * (asz + 2)
+			if g.v == "top" then yy = -itop - (g.row + 1) * (asz + 2) end
+			setrc(c, rk, x0 + g.xoff * (asz + 2), yy, g.n * (asz + 2) - 2, asz)
+		else
+			setrc(c, rk, 0, 0, 0, 0)
+		end
+	end
 	c:Show()
 end
 
@@ -395,6 +537,20 @@ local function unitsHasKey(key)
 	return P.FindOption(key) ~= nil
 end
 
+-- Reglage par cadre s'il existe, sinon nil.
+local function ownKey(cn, name)
+	local k = unitCk(cn, name)
+	if unitsHasKey(k) then return k end
+	return nil
+end
+
+-- Largeur / hauteur / hauteur de ressource : le reglage du cadre s'il est deja personnalise (> 0), sinon le reglage commun.
+local function ownNum(cn, name, glob)
+	local k = unitCk(cn, name)
+	if num(k, 0) > 0 and unitsHasKey(k) then return k end
+	return glob
+end
+
 local function unitsClick(zone)
 	local _, _, base, cn = string.find(zone, "^(%a+):(%a+)$")
 	if not base then
@@ -408,11 +564,9 @@ local function unitsClick(zone)
 	if base == "on" then
 		return unitCk(cn, "enabled")
 	elseif base == "frame" then
-		if num(unitCk(cn, "width"), 0) > 0 then return unitCk(cn, "width") end
-		return "units.width"
+		return ownNum(cn, "width", "units.width")
 	elseif base == "edgeh" then
-		if num(unitCk(cn, "height"), 0) > 0 then return unitCk(cn, "height") end
-		return "units.height"
+		return ownNum(cn, "height", "units.height")
 	elseif base == "hp" then
 		if (C.Get("units.hpcolor") or "auto") ~= "auto" then return "units.hpcolor" end
 		return "units.classcolor"
@@ -420,34 +574,116 @@ local function unitsClick(zone)
 		local v = C.Get(unitCk(cn, "hptext"))
 		if v ~= nil and v ~= "default" then return unitCk(cn, "hptext") end
 		return "units.hptext"
+	elseif base == "name" then
+		return unitPlaceKey(cn, "name") or ownKey(cn, "textsize")
 	elseif base == "power" then
 		if not flag("units.showpower", true) then return "units.showpower" end
-		key = unitCk(cn, "powerheight")
-		if num(key, 0) > 0 and unitsHasKey(key) then return key end
-		return "units.powerheight"
+		return ownNum(cn, "powerheight", "units.powerheight")
+	elseif base == "pwt" then
+		key = unitCk(cn, "powertext")
 	elseif base == "port" then
 		key = unitCk(cn, "portrait")
 	elseif base == "mark" then
 		key = unitCk(cn, "mark")
-	elseif base == "auras" then
-		key = unitCk(cn, "auras")
-	elseif base == "ind" then
-		local names = { "leader", "loot", "pvp", "combat" }
-		for i = 1, getn(names) do
-			local k = unitCk(cn, names[i])
-			if unitsHasKey(k) and flag(k, false) then return k end
-		end
-		for i = 1, getn(names) do
-			local k = unitCk(cn, names[i])
-			if unitsHasKey(k) then return k end
-		end
-		return nil
+	elseif base == "pvp" then
+		key = unitCk(cn, "pvp")
+	elseif base == "lead" then
+		key = unitCk(cn, "leader")
+	elseif base == "loot" then
+		key = unitCk(cn, "loot")
+	elseif base == "comb" then
+		key = unitCk(cn, "combat")
+	elseif base == "fsr" then
+		key = unitCk(cn, "fsr")
+	elseif base == "debuffs" then
+		if cn == "player" or cn == "target" then return unitPlaceKey(cn, "debuffs") or ((cn == "player") and "auras.debuffs" or "auras.targetdebuffs") end
+		return unitPlaceKey(cn, "debuffs") or ownKey(cn, "auras")
+	elseif base == "buffs" then
+		if cn == "player" or cn == "target" then return unitPlaceKey(cn, "buffs") or ((cn == "player") and "auras.buffs" or "auras.targetbuffs") end
+		return unitPlaceKey(cn, "buffs") or ownKey(cn, "auras")
 	end
 	if key and unitsHasKey(key) then return key end
 	return nil
 end
 
-P.Register("units", { watch = { "units." }, build = unitsBuild, update = unitsUpdate, click = unitsClick })
+local ZL = {
+	frame = "mod.preview.units.z.frame", hp = "mod.preview.units.z.hp", name = "mod.preview.units.z.name", hptext = "mod.preview.units.z.hptext",
+	power = "mod.preview.units.z.power", pwt = "mod.preview.units.z.pwt", edgeh = "mod.preview.units.z.edgeh", port = "mod.preview.units.z.port",
+	mark = "mod.preview.units.z.mark", pvp = "mod.preview.units.z.pvp", lead = "mod.preview.units.z.lead", loot = "mod.preview.units.z.loot",
+	comb = "mod.preview.units.z.comb", debuffs = "mod.preview.units.z.debuffs", buffs = "mod.preview.units.z.buffs", fsr = "mod.preview.units.z.fsr",
+	on = "mod.preview.units.z.on",
+}
+local FL = {
+	player = "mod.preview.units.f.player", target = "mod.preview.units.f.target", tot = "mod.preview.units.f.tot",
+	tott = "mod.preview.units.f.tott", focus = "mod.preview.units.f.focus",
+}
+
+-- Nom de l'element au survol : "Joueur : pseudo".
+local function unitsLabel(zone)
+	local _, _, base, cn = string.find(zone, "^(%a+):(%a+)$")
+	if not base or not ZL[base] or not FL[cn] then return nil end
+	return L("mod.preview.units.zl", L(FL[cn]), L(ZL[base]))
+end
+
+local function unitsTip(zone)
+	local _, _, base = string.find(zone, "^(%a+):")
+	if base == "name" or base == "buffs" or base == "debuffs" then return "mod.preview.units.tip." .. base end
+	return nil
+end
+
+-- Mini-panneau d'un element : ses reglages, modifiables sur place.
+local function unitsPanel(zone)
+	local _, _, base, cn = string.find(zone, "^(%a+):(%a+)$")
+	if not base then return nil end
+	local k = {}
+	local function add(key) if key then tinsert(k, key) end end
+	if base == "frame" or base == "edgeh" or base == "on" then
+		add(unitCk(cn, "enabled"))
+		add(ownNum(cn, "width", "units.width"))
+		add(ownNum(cn, "height", "units.height"))
+	elseif base == "hp" then
+		add("units.hpcolor")
+		add("units.classcolor")
+		add("units.smooth")
+	elseif base == "hptext" then
+		local v = C.Get(unitCk(cn, "hptext"))
+		if v ~= nil and v ~= "default" then add(unitCk(cn, "hptext")) else add("units.hptext") end
+		add(ownKey(cn, "hpalign"))
+		add(ownKey(cn, "textsize"))
+	elseif base == "name" then
+		add(unitPlaceKey(cn, "name"))
+		add(ownKey(cn, "textsize"))
+	elseif base == "power" or base == "pwt" then
+		add("units.showpower")
+		add(ownNum(cn, "powerheight", "units.powerheight"))
+		add(ownKey(cn, "powertext"))
+	elseif base == "port" then
+		add(ownKey(cn, "portrait"))
+		add(ownKey(cn, "portraitside"))
+	elseif base == "mark" or base == "pvp" or base == "lead" or base == "loot" or base == "comb" then
+		add(unitsClick(zone))
+		add("units.indsize")
+	elseif base == "debuffs" or base == "buffs" then
+		if cn == "player" or cn == "target" then
+			add(unitPlaceKey(cn, base))
+			add((cn == "player") and "auras.player" or "auras.target")
+			add((cn == "player") and ("auras." .. base) or ("auras.target" .. base))
+			add((cn == "player") and "auras.size" or "auras.tsize")
+			add((cn == "player") and "auras.perrow" or "auras.tperrow")
+		else
+			add(ownKey(cn, "auras"))
+			add(unitPlaceKey(cn, base))
+			add("units.auramax")
+			add("units.aurasize")
+		end
+	elseif base == "fsr" then
+		add(ownKey(cn, "fsr"))
+	end
+	return { keys = k, go = unitsClick(zone) }
+end
+
+P.Register("units", { watch = { "units.", "auras." }, build = unitsBuild, update = unitsUpdate, click = unitsClick, label = unitsLabel,
+	tip = unitsTip, panel = unitsPanel })
 
 -- ================================================================ barres d'action
 local NBTN = 12
@@ -499,9 +735,68 @@ local function bFs(size, s)
 	return v
 end
 
+-- barres proposees par l'apercu : cle, boutons et boutons par ligne d'origine (memes valeurs que Mod_ActionBars)
+local BARS = {
+	{ "main", 12, 12, "mod.preview.bars.t.main" }, { "bar2", 12, 12, "mod.preview.bars.t.bar2" }, { "bar3", 12, 12, "mod.preview.bars.t.bar3" },
+	{ "bar4", 12, 1, "mod.preview.bars.t.bar4" }, { "bar5", 12, 1, "mod.preview.bars.t.bar5" },
+	{ "stance", 10, 10, "mod.preview.bars.t.stance" }, { "pet", 10, 10, "mod.preview.bars.t.pet" },
+}
+local TABH = 20              -- hauteur de la rangee d'onglets (choix de la barre) au-dessus des boutons
+local barSel = 1             -- barre montree (indice de BARS)
+
+-- Zone posee sur le texte d'un bouton (raccourci, quantite, macro) : meme coin et memes retraits que le texte dessine.
+local function textZone(root, z, i, per, bs, bsp, n, show, name, dflt, fsz, nch)
+	if not show or i > n then
+		z:Hide()
+		return
+	end
+	local row = floor((i - 1) / per)
+	local col = (i - 1) - row * per
+	local bx, by = 4 + col * (bs + bsp), 6 + TABH + row * (bs + bsp)
+	local a = BANCH[C.Get("actionbars." .. name .. "anchor")] or BANCH[dflt]
+	local xo, yo = a[2] + num("actionbars." .. name .. "x", 0), a[3] + num("actionbars." .. name .. "y", 0)
+	local tw = fsz * 0.6 * nch
+	if tw > bs - 2 then tw = bs - 2 end
+	if tw < 8 then tw = 8 end
+	local th = fsz + 2
+	local x, y
+	if a[4] == "LEFT" then x = bx + xo elseif a[4] == "RIGHT" then x = bx + bs - tw + xo else x = bx + (bs - tw) / 2 + xo end
+	if string.find(a[1], "TOP", 1, true) then
+		y = by - yo
+	elseif string.find(a[1], "BOTTOM", 1, true) then
+		y = by + bs - th - yo
+	else
+		y = by + (bs - th) / 2 - yo
+	end
+	P.PlaceZone(z, root, x, y, tw, th)
+end
+
+local function barPfx() return "actionbars." .. BARS[barSel][1] .. "." end
+
+local function barsTab()
+	local st = P.reg.actionbars and P.reg.actionbars.root and P.reg.actionbars.root.st
+	local pfx = barPfx()
+	if st then
+		for i = 1, getn(BARS) do T.SetSelected(st.tab[i], i == barSel) end
+	end
+	return pfx
+end
+
+local function pickBar(b)
+	barSel = b.bi
+	local d = P.reg.actionbars
+	if P.cur == d then P.Update(d, nil, nil) end
+end
+
 local function barsBuild(parent, w, h)
 	local root = CreateFrame("Frame", nil, parent)
-	local st = { b = {}, z = {} }
+	local st = { b = {}, z = {}, tab = {} }
+	for i = 1, getn(BARS) do
+		local tb = T.Button(root, L(BARS[i][4]), 40, 14, pickBar)
+		tb.bi = i
+		st.tab[i] = tb
+	end
+	st.zk, st.zc, st.zm = P.Zone(root, "key", 4), P.Zone(root, "cnt", 4), P.Zone(root, "mac", 4)
 	root.st = st
 	st.bgEdge, st.bg = box(root, "BACKGROUND"), box(root, "BACKGROUND")          -- bordure d'abord, fond par-dessus
 	st.gap = P.Zone(root, "gap", 1)
@@ -528,19 +823,36 @@ end
 
 local function barsUpdate(root, w, h, key, value)
 	local st = root.st
+	-- l'apercu suit la barre visee par le menu (OpenAt "actionbars.bar3." : la barre 3 est montree)
+	if key == nil then
+		local fk = M.focus or M.hlPre or M.hl
+		if type(fk) == "string" then
+			for i = 1, getn(BARS) do
+				if string.find(fk, "actionbars." .. BARS[i][1] .. ".", 1, true) == 1 then barSel = i end
+			end
+		end
+	end
+	local pfx = barsTab()
+	local bar = BARS[barSel]
 	local size = num("actionbars.size", 36)
 	local spc = num("actionbars.spacing", 3)
-	local ownSp = num("actionbars.main.spacing", -1)          -- espacement propre a la barre principale (-1 = general)
+	local ownSp = num(pfx .. "spacing", -1)          -- espacement propre a la barre (-1 = general)
 	if ownSp >= 0 then spc = ownSp end
-	local per = num("actionbars.main.perrow", 12)
-	local n = num("actionbars.main.buttons", 12)
+	local per = num(pfx .. "perrow", bar[3])
+	local n = num(pfx .. "buttons", bar[2])
 	if n > NBTN then n = NBTN end
 	if per < 1 then per = 1 end
+	local bscale = num(pfx .. "scale", 100) / 100
+	local tw = (w - 8) / getn(BARS)
+	for i = 1, getn(BARS) do
+		local tb = st.tab[i]
+		P.Place(tb, root, 4 + (i - 1) * tw, 2, tw - 2, 14)
+	end
 	-- echelle FIXE (barre de 12 boutons par defaut tenant dans la zone) : changer la taille ou l'espacement se voit ; si la ligne deborde,
 	-- l'apercu la replie (comme la zone le permet) au lieu de reduire les boutons.
 	local s = (w - 8) / (12 * 36 + 11 * 3)
 	if s > 1 then s = 1 end
-	local bs, bsp = floor(size * s + 0.5), floor(spc * s + 0.5)
+	local bs, bsp = floor(size * s * bscale + 0.5), floor(spc * s + 0.5)
 	local fit = floor((w - 8 + bsp) / (bs + bsp))
 	if fit < 1 then fit = 1 end
 	if per > fit then per = fit end
@@ -548,10 +860,9 @@ local function barsUpdate(root, w, h, key, value)
 		flag("actionbars.cooldowns", true), flag("actionbars.range", true), flag("actionbars.mana", true)
 	local showMac = flag("actionbars.macrotext", false)
 	local showEmpty = C.Get("actionbars.empty") ~= "drag"
-	local own = C.Get("actionbars.main.empty")
+	local own = C.Get(pfx .. "empty")
 	if own == "show" then showEmpty = true elseif own == "drag" then showEmpty = false end
-	showKeys, showCnt, showMac = bTri("actionbars.main.hot", showKeys), bTri("actionbars.main.cnt", showCnt),
-		bTri("actionbars.main.mac", showMac)
+	showKeys, showCnt, showMac = bTri(pfx .. "hot", showKeys), bTri(pfx .. "cnt", showCnt), bTri(pfx .. "mac", showMac)
 	local showPush = flag("actionbars.presshl", true)
 	local shade = C.Get("actionbars.cdshade")
 	if type(shade) ~= "number" then shade = 0.6 elseif shade > 1 then shade = shade / 100 end
@@ -565,7 +876,7 @@ local function barsUpdate(root, w, h, key, value)
 		if i <= n then
 			local row = floor((i - 1) / per)
 			local col = (i - 1) - row * per
-			local x, y = 4 + col * (bs + bsp), 6 + row * (bs + bsp)
+			local x, y = 4 + col * (bs + bsp), 6 + TABH + row * (bs + bsp)
 			b:SetWidth(bs)
 			b:SetHeight(bs)
 			P.Place(b, root, x, y, bs, bs)
@@ -659,25 +970,29 @@ local function barsUpdate(root, w, h, key, value)
 			z:Hide()
 		end
 	end
+	textZone(root, st.zk, 2, per, bs, bsp, n, showKeys, "hot", "topright", bFs(num("actionbars.hotsize", 9), s), 1)
+	textZone(root, st.zc, 4, per, bs, bsp, n, showCnt, "cnt", "bottomright", bFs(num("actionbars.cntsize", 10), s), 2)
+	textZone(root, st.zm, 7, per, bs, bsp, n, showMac, "mac", "bottomleft", bFs(num("actionbars.macsize", 8), s), 4)
 	local gw, gh = per * (bs + bsp), rows * (bs + bsp)
-	if C.Get("actionbars.main.bg") ~= "hide" then
-		-- fond de la barre (option actionbars.main.bg) : cadre derriere les boutons
+	if C.Get(pfx .. "bg") ~= "hide" then
+		-- fond de la barre (option actionbars.<barre>.bg) : cadre derriere les boutons
 		P.Fill(st.bgEdge, T.c.border, 1)
-		P.Box(st.bgEdge, root, 1, 3, gw - bsp + 6, gh - bsp + 6)
+		P.Box(st.bgEdge, root, 1, 3 + TABH, gw - bsp + 6, gh - bsp + 6)
 		P.Fill(st.bg, T.c.bg, 1)
-		P.Box(st.bg, root, 2, 4, gw - bsp + 4, gh - bsp + 4)
+		P.Box(st.bg, root, 2, 4 + TABH, gw - bsp + 4, gh - bsp + 4)
 	else
 		st.bgEdge:Hide()
 		st.bg:Hide()
 	end
-	P.PlaceZone(st.gap, root, 4, 6, gw, gh)
+	P.PlaceZone(st.gap, root, 4, 6 + TABH, gw, gh)
 	-- opacite de la barre hors combat (alphaout) : l'apercu l'applique, jamais sous 0.15 pour rester lisible
-	local ao = num("actionbars.alphaout", 100) / 100
+	local ao = num("actionbars.alphaout", 100) / 100 * num(pfx .. "alphaout", 100) / 100
+	if not flag(pfx .. "enabled", true) then ao = ao * 0.4 end
 	if ao < 0.15 then ao = 0.15 end
 	root:SetAlpha(1)
 	for i = 1, NBTN do st.b[i]:SetAlpha((i == NBTN and not showEmpty) and 0.15 or ao) end
 	-- barre d'experience (xpbar : fine / cachee / Blizzard) et micro-menu (micro.*) sous la barre
-	local yb = gh + 12
+	local yb = gh + 12 + TABH
 	local xm = C.Get("actionbars.xpbar")
 	if xm ~= "hide" then
 		local xh = (xm == "blizz") and 8 or 3
@@ -718,14 +1033,65 @@ local function barsUpdate(root, w, h, key, value)
 	st.hint:Show()
 end
 
+local function barsHas(key)
+	if P.FindOption(key) then return key end
+	return nil
+end
+
 local function barsClick(zone)
-	if zone == "gap" then return "actionbars.spacing" end
+	local pfx = barPfx()
+	if zone == "gap" then
+		if num(pfx .. "spacing", -1) >= 0 then return pfx .. "spacing" end
+		return "actionbars.spacing"
+	end
+	if zone == "key" then return barsHas("actionbars.hotanchor") or "actionbars.keybinds" end
+	if zone == "cnt" then return barsHas("actionbars.cntanchor") or "actionbars.counts" end
+	if zone == "mac" then return barsHas("actionbars.macanchor") or "actionbars.macrotext" end
 	local _, _, n = string.find(zone, "^b(%d+)$")
 	if n then return "actionbars." .. BKEYS[tonumber(n)] end
 	return nil
 end
 
-P.Register("actionbars", { watch = { "actionbars." }, build = barsBuild, update = barsUpdate, click = barsClick })
+local BZL = {
+	gap = "mod.preview.bars.z.gap", key = "mod.preview.bars.z.key", cnt = "mod.preview.bars.z.cnt", mac = "mod.preview.bars.z.mac",
+	b1 = "mod.preview.bars.z.b1", b2 = "mod.preview.bars.z.b2", b3 = "mod.preview.bars.z.b3", b4 = "mod.preview.bars.z.b4",
+	b5 = "mod.preview.bars.z.b5", b6 = "mod.preview.bars.z.b6", b7 = "mod.preview.bars.z.b7", b8 = "mod.preview.bars.z.b8",
+	b9 = "mod.preview.bars.z.b9", b10 = "mod.preview.bars.z.b10", b11 = "mod.preview.bars.z.b11", b12 = "mod.preview.bars.z.b12",
+}
+
+local function barsLabel(zone)
+	if not BZL[zone] then return nil end
+	return L("mod.preview.units.zl", L(BARS[barSel][4]), L(BZL[zone]))
+end
+
+-- Reglages modifiables sur place : ceux de l'element (texte, recharge, quantite...) puis ceux de la barre visee.
+local BPANEL = {
+	key = { "actionbars.hotanchor", "actionbars.hotsize", "actionbars.keybinds", "@hot" },
+	cnt = { "actionbars.cntanchor", "actionbars.cntsize", "actionbars.counts", "@cnt" },
+	mac = { "actionbars.macanchor", "actionbars.macsize", "actionbars.macrotext", "@mac" },
+	gap = { "@buttons", "@perrow", "@scale", "@spacing", "actionbars.size", "@bg", "@show" },
+	b1 = { "actionbars.stanceind" }, b2 = { "actionbars.keybinds", "@hot" },
+	b3 = { "actionbars.cooldowns", "actionbars.cdsweep", "actionbars.cdsize", "actionbars.cdcolor" },
+	b4 = { "actionbars.counts", "@cnt" }, b5 = { "actionbars.range" }, b6 = { "actionbars.mana" },
+	b7 = { "actionbars.macrotext", "@mac" }, b8 = { "actionbars.range", "actionbars.mana" }, b9 = {},
+	b10 = { "actionbars.presshl" }, b11 = { "actionbars.showgcd" }, b12 = { "@empty", "actionbars.empty" },
+}
+
+local function barsPanel(zone)
+	local src = BPANEL[zone]
+	if not src then return nil end
+	local pfx = barPfx()
+	local k = {}
+	for i = 1, getn(src) do
+		local v = src[i]
+		if string.sub(v, 1, 1) == "@" then v = pfx .. string.sub(v, 2) end
+		tinsert(k, v)
+	end
+	return { keys = k, go = barsClick(zone) }
+end
+
+P.Register("actionbars", { watch = { "actionbars." }, build = barsBuild, update = barsUpdate, click = barsClick, label = barsLabel,
+	panel = barsPanel })
 
 -- ================================================================ plaques de nom
 local function newPlate(parent)

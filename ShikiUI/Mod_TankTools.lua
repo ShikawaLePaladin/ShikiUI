@@ -187,6 +187,24 @@ function M.CheckAggro(now, combat)
 	end
 end
 
+-- Aggro pris par un allie : un monstre cible par un membre du groupe/raid vise un autre joueur que moi (meme si ce n'est pas ma cible).
+function M.CheckAllies(now, combat)
+	if not combat or not M.cfg.aggro then return end
+	local n, pre = GetNumRaidMembers(), "raid"
+	if n == 0 then n, pre = GetNumPartyMembers(), "party" end
+	for i = 1, n do
+		local u = pre .. i
+		local mob = u .. "target"
+		if UnitExists(mob) and UnitCanAttack("player", mob) and not UnitIsDead(mob) and UnitExists(mob .. "target") then
+			local h = mob .. "target"
+			if UnitIsPlayer(h) and not UnitIsUnit(h, "player") and UnitAffectingCombat(mob) then
+				M.Alert("aggro2", L("msg.tanktools.lost", UnitName(mob) or EMPTY, UnitName(h) or EMPTY), now)
+				return
+			end
+		end
+	end
+end
+
 -- Premiere defense d'urgence prete (nom) ou nil.
 function M.ReadyDefense()
 	for i = 1, M.slotn do
@@ -435,6 +453,7 @@ function M.Tick()
 	if M.dirty then M.ScanBook() end
 	if M.active then
 		M.CheckAggro(now, combat)
+		M.CheckAllies(now, combat)
 		M.CheckHealth(now, combat)
 	end
 	M.UpdateBar(now)

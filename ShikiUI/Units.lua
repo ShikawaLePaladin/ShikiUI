@@ -66,7 +66,7 @@ local SPEC = {
 	{ name = "hpalign", cap = "text", type = "choice", def = "right", choices = { "left", "center", "right" } },
 	{ name = "textsize", cap = "text", type = "number", def = 11, min = 8, max = 18, step = 1 },
 	{ name = "powertext", cap = "power", type = "choice", def = "none", choices = { "none", "value", "percent", "both" } },
-	{ name = "portrait", cap = "port", type = "choice", def = "off", choices = { "off", "2d", "class" } },
+	{ name = "portrait", cap = "port", type = "choice", def = "off", choices = { "off", "2d", "3d", "class" } },
 	{ name = "portraitside", cap = "port", type = "choice", def = "left", choices = { "left", "right" } },
 	{ name = "mark", cap = "mark", type = "bool", def = false },
 	{ name = "leader", cap = "leader", type = "bool", def = false },
@@ -381,6 +381,30 @@ function U.UpdatePortrait(f)
 	p:Show()
 	local tex = p.tex
 	local unit = f.unit
+	if mode == "3d" then
+		-- portrait 3D : modele du personnage (cree a la demande) ; repli sur le portrait 2D si le modele ne peut pas etre cree
+		if not p.model then
+			local ok, m = pcall(CreateFrame, "PlayerModel", nil, p)
+			if ok and m then
+				m:SetPoint("TOPLEFT", p, "TOPLEFT", 1, -1)
+				m:SetPoint("BOTTOMRIGHT", p, "BOTTOMRIGHT", -1, 1)
+				p.model = m
+			end
+		end
+		local m = p.model
+		if m and UnitExists(unit) and UnitIsVisible(unit) then
+			tex:Hide()
+			m:Show()
+			m:SetUnit(unit)
+			m:SetCamera(0)
+			return
+		end
+		if m then m:Hide() end
+		tex:Show()
+	elseif p.model then
+		p.model:Hide()
+		tex:Show()
+	end
 	if mode == "class" and UnitIsPlayer(unit) then
 		local _, class = UnitClass(unit)
 		local tc = class and CLASS_TC[class]

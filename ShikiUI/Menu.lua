@@ -607,6 +607,12 @@ function M.NewNavItem()
 	it.dot:SetHeight(7)
 	it.dot:SetPoint("LEFT", it, "LEFT", 10, 0)
 	it.dot:Hide()
+	it.fresh = it:CreateTexture(nil, "OVERLAY")       -- pastille "nouveau" (reglages apparus depuis la derniere fois)
+	it.fresh:SetTexture(T.tex.white)
+	it.fresh:SetWidth(6)
+	it.fresh:SetHeight(6)
+	it.fresh:SetPoint("RIGHT", it, "RIGHT", -8, 0)
+	it.fresh:Hide()
 	it.label = T.Text(it, 12, T.c.text, "LEFT")
 	it.label:SetPoint("LEFT", it, "LEFT", 24, 0)
 	it.label:SetWidth(M.G.NAVW - 12 - 30)
@@ -650,6 +656,7 @@ function M.UpdateNav()
 			it.selTex:Hide()
 			it.bar:Hide()
 			it.dot:Hide()
+			it.fresh:Hide()
 		else
 			it.label:ClearAllPoints()
 			it.label:SetPoint("LEFT", it, "LEFT", 24, 0)
@@ -670,6 +677,14 @@ function M.UpdateNav()
 				it.dot:Show()
 			else
 				it.dot:Hide()
+			end
+			local nn = 0
+			if e.kind == "cat" then nn = M.NewCount(e.id) elseif e.id == "modules" then nn = M.NewCount("modules") end
+			if nn > 0 then
+				it.fresh:SetVertexColor(accR, accG, accB, 1)
+				it.fresh:Show()
+			else
+				it.fresh:Hide()
 			end
 		end
 		it:Show()
@@ -711,7 +726,7 @@ function M.Open(page, cat)
 	if page ~= "home" and page ~= "modules" and page ~= "styles" and page ~= "addons" and page ~= "profiles" and page ~= "cat" then page = "home" end
 	M.page = page
 	if page == "cat" then M.cat = cat end
-	M.hl = nil
+	M.ClearHl()
 	M.StorePage()
 	if M.frame then
 		M.search = ""
@@ -796,6 +811,7 @@ function M.GoHit(o)
 		M.cat = o.cat
 	end
 	M.StorePage()
+	M.ClearHl()
 	M.hl = o.key
 	M.focus = o.key
 	M.search = ""
@@ -1309,6 +1325,7 @@ function M.Show(arg)
 	M.SetRaised(SUI.Mover and SUI.Mover.active)
 	M.frame:Show()
 	M.Render()
+	if type(arg) == "string" and string.find(arg, ".", 1, true) then M.OpenAt(arg) end     -- /sui menu actionbars.bar3
 end
 
 function M.Hide()
@@ -1317,6 +1334,320 @@ end
 
 function M.Toggle()
 	if M.frame and M.frame:IsShown() then M.Hide() else M.Show() end
+end
+
+-- ---------------------------------------------------------------- SAUT A UN REGLAGE (API publique)
+-- SUI.Menu.OpenAt(cle, opts) : ouvre le menu (meme ferme), va a la page, FAIT DEFILER jusqu'a la ligne puis la met en surbrillance
+--   quelques secondes (2,5 s forte, 2,5 s attenuee). "cle" accepte :
+--     - une cle de reglage        "actionbars.bar3.scale"      -> cette ligne ;
+--     - un PREFIXE de reglages    "actionbars.bar3." ou "actionbars.bar3" -> tout le groupe est surligne, defilement sur le premier ;
+--       (suffixe "*" = simple debut de nom : "group.enem*") ;
+--     - une cle de cadre du Mover "bars.bar3", "unit.player", "raid" -> convertie par SUI.Menu.OptionAnchorFor ;
+--     - une categorie ("actionbars"), "cat:<categorie>", ou une page ("home", "modules", "styles", "profiles", "addons").
+--   opts (facultatif) : { noHighlight = true } pas de surbrillance ; { preview = true } rallume le volet d'apercu 2D s'il avait ete coupe.
+--   Retour : atteint (true si un reglage OU une categorie a ete atteint ; false = cle inconnue, le menu s'est ouvert sans erreur sur
+--   l'accueil), cle du reglage cible (ou nil). Si le reglage n'existe qu'en mode Tout, le menu y passe et le dit dans le chat.
+--   Les sections ne sont jamais repliees dans ce menu : rien a deplier. Cle inconnue : on remonte "a.b.c" -> "a.b" -> "a" puis la
+--   categorie proche. Appelable depuis n'importe quel module : if SUI.Menu and SUI.Menu.OpenAt then SUI.Menu.OpenAt("meter.") end
+-- SUI.Menu.OptionAnchorFor(cleDeCadre) : prefixe de reglages d'un cadre deplacable (cle du Mover / du Layout), nil si inconnu.
+-- SUI.Menu.RegisterAnchor(cleDeCadre, prefixe) : un module declare (ou corrige) la correspondance de SES cadres. Les cles a chiffre final
+--   ("meter.win3", "powerauras.z2") retombent sur la cle sans chiffre ("meter.win"). Sans entree : premier segment = categorie ("loot." ...).
+-- SUI.Menu.RegisterTask(id, cleTexte, cleReglage, categorie) : ajoute une tache a la liste "Je veux changer..." de l'accueil.
+-- Nouveautes : SUI.Menu.IsNew(cle), NewCount(cat), NewClear(cat | nil = tout) ; le "connu" est memorise (global menuKnown).
+M.anchors = {}
+M.ANCHOR_ALIAS = { bars = "actionbars", unit = "units", pp = "pallypower", hud = "perf", lootwin = "loot", lootroll = "loot",
+	pins = "group", party = "group" }
+local UF = "unit."      -- (concatenation : le controle des traductions prendrait ces cles de cadre pour des textes)
+M.ANCHORS_DEF = {
+	"bars.main", "actionbars.main.", "bars.bar2", "actionbars.bar2.", "bars.bar3", "actionbars.bar3.", "bars.bar4", "actionbars.bar4.",
+	"bars.bar5", "actionbars.bar5.", "bars.stance", "actionbars.stance.", "bars.pet", "actionbars.pet.", "bars.micro", "actionbars.micro.",
+	"bars.xp", "actionbars.xpbar", "bars.rep", "actionbars.xpbar",
+	"unit.player", "units.player.", "unit.target", "units.target.", "unit.targettarget", "units.tot.", UF .. "targettargettarget", "units.tott.",
+	"unit.pet", "units.pet.", UF .. "pettarget", "units.pettarget.", UF .. "focus", "units.focus.",
+	"group", "group.", "group.enemies", "group.enem*", "raid", "raid.", "hud", "perf.hud", "minimap", "minimap.",
+	"castbar.player", "castbar.player", "castbar.target", "castbar.target", "castbar.focus", "castbar.focus",
+	"auras.pb", "auras.buffs", "auras.pd", "auras.debuffs", "auras.pw", "auras.weapon", "auras.tb", "auras.targetbuffs",
+	"auras.td", "auras.targetdebuffs",
+	"meter.win", "meter.", "threat.win", "threat.", "tanktools.bar", "tanktools.", "totems.bar", "totems.", "tracker", "tracker.",
+	"tracker.win", "tracker.", "marks.bar", "marks.", "buffwatch.win", "buffwatch.", "datatext.win", "datatext.",
+	"bossmods.win", "bossmods.", "bossmods.msg", "bossmods.", "esport.win", "esport.", "pp.win", "pallypower.",
+	"powerauras.z", "powerauras.", "powerauras.banner", "powerauras.", "messages.win", "messages.win*", "messages.badge", "messages.badge",
+	"messages.hist", "messages.hist*", "messages.toasts", "messages.toast*", "loot", "loot.", "lootwin", "loot.lootframe", "lootroll",
+	"loot.rollframe", "items", "items.", "mail", "mail.", "auction", "auction.", "bags.window", "bags.", "bags.bank", "bags.bankwin",
+	"finder.win", "finder.", "cursor.char", "cursor.char*", "chat.copy", "chat.",
+}
+function M.RegisterAnchor(moverKey, optionPrefix)
+	if type(moverKey) ~= "string" or moverKey == "" or type(optionPrefix) ~= "string" or optionPrefix == "" then return false end
+	M.anchors[moverKey] = optionPrefix
+	return true
+end
+for i = 1, getn(M.ANCHORS_DEF), 2 do M.RegisterAnchor(M.ANCHORS_DEF[i], M.ANCHORS_DEF[i + 1]) end
+
+function M.OptionAnchorFor(frameKey)
+	if type(frameKey) ~= "string" or frameKey == "" then return nil end
+	local a = M.anchors[frameKey]
+	if a then return a, false end
+	local base = string.gsub(frameKey, "[0-9]+$", "")
+	if base ~= frameKey and base ~= "" then
+		a = M.anchors[base]
+		if a then return a, false end
+	end
+	local _, _, seg = string.find(frameKey, "^([^.]+)")
+	if seg then
+		seg = M.ANCHOR_ALIAS[seg] or seg
+		if M.CatExists(seg) then return seg .. ".", true end
+	end
+	return nil
+end
+
+-- La cle de reglage "key" appartient-elle au groupe "pre" ? ("a.b." debut de nom ; "a.b*" debut de nom ; "a.b" = a.b ou a.b.*)
+function M.KeyMatches(key, pre)
+	local n = string.len(pre)
+	local last = string.sub(pre, n, n)
+	if last == "." then return string.sub(key, 1, n) == pre end
+	if last == "*" then return string.sub(key, 1, n - 1) == string.sub(pre, 1, n - 1) end
+	return key == pre or string.sub(key, 1, n + 1) == pre .. "."
+end
+
+function M.OptionsFor(pre)
+	local res = {}
+	for i = 1, getn(SUI.options) do
+		local o = SUI.options[i]
+		if o.type ~= "header" and M.KeyMatches(o.key, pre) then tinsert(res, o) end
+	end
+	return res
+end
+
+-- Retourne la liste des reglages, le prefixe retenu et la categorie de repli (cle inconnue : categorie proche ou nil).
+function M.ResolveAt(key)
+	local list = M.OptionsFor(key)
+	if getn(list) > 0 then return list, key, nil end
+	local a, generic = M.OptionAnchorFor(key)
+	if a and not generic then
+		list = M.OptionsFor(a)
+		if getn(list) > 0 then return list, a, nil end
+	end
+	local cur = key
+	while true do
+		local _, _, up = string.find(cur, "^(.*)%.[^.]*$")
+		if not up or not string.find(up, ".", 1, true) then break end
+		cur = up
+		list = M.OptionsFor(cur)
+		if getn(list) > 0 then return list, cur, nil end
+	end
+	local _, _, seg = string.find(a or key, "^([^.*]+)")
+	if seg then
+		seg = M.ANCHOR_ALIAS[seg] or seg
+		if M.CatExists(seg) then return list, nil, seg end
+	end
+	return list, nil, nil
+end
+
+-- Surbrillance : cle exacte (M.hl) ou groupe (M.hlPre) ; M.hlA = opacite ; M.hlTimed = surbrillance de OpenAt (s'eteint seule).
+function M.IsHl(key)
+	if M.hl == key then return true end
+	return M.hlPre ~= nil and M.KeyMatches(key, M.hlPre)
+end
+
+function M.RefreshHl()
+	local p = M.pools.cell
+	for i = 1, M.used.cell do
+		if p[i].opt then M.PaintHl(p[i], p[i].opt.key) end
+	end
+end
+
+local function hlEnd()
+	M.hlTask = nil
+	if not M.hlTimed then return end
+	M.hl, M.hlPre, M.hlTimed, M.hlA = nil, nil, nil, nil
+	if M.frame and M.frame:IsShown() then M.RefreshHl() end
+end
+
+local function hlSoft()
+	M.hlTask = nil
+	if not M.hlTimed then return end
+	M.hlA = 0.12
+	if M.frame and M.frame:IsShown() then M.RefreshHl() end
+	M.hlTask = SUI.After(2.5, hlEnd, "uxhl")
+end
+
+function M.ClearHl()
+	SUI.Cancel(M.hlTask)
+	M.hlTask, M.hl, M.hlPre, M.hlTimed, M.hlA = nil, nil, nil, nil, nil
+end
+
+local PAGES = { home = true, modules = true, styles = true, profiles = true, addons = true }
+
+function M.OpenAt(key, opts)
+	opts = opts or {}
+	if type(key) ~= "string" or key == "" then
+		M.Show()
+		return false, nil
+	end
+	if not M.frame and SUI.InCombat() then
+		SUI.Print(L("msg.combat.locked"))
+		return false, nil
+	end
+	M.Show()
+	if not M.frame then return false, nil end
+	if opts.preview and not M.PreviewWanted() then M.TogglePreview() end
+	local _, _, c0 = string.find(key, "^cat:(.+)$")
+	c0 = c0 or key
+	if PAGES[c0] then
+		M.ClearHl()
+		M.Open(c0)
+		return true, nil
+	end
+	if M.CatExists(c0) then
+		M.ClearHl()
+		M.Open("cat", c0)
+		return true, nil
+	end
+	local list, pre, cat = M.ResolveAt(key)
+	if getn(list) == 0 then
+		M.ClearHl()
+		if cat then
+			M.Open("cat", cat)
+			return true, nil
+		end
+		M.Open("home")
+		return false, nil
+	end
+	local target
+	if M.mode == "all" then
+		target = list[1]
+	else
+		for i = 1, getn(list) do
+			if list[i].simple then
+				target = list[i]
+				break
+			end
+		end
+	end
+	local adv = false
+	if not target then
+		target = list[1]
+		adv = target.cat ~= "modules"
+	end
+	if target.cat == "modules" then
+		M.page = "modules"
+		M.filter = "all"
+	else
+		if adv then
+			M.mode = "all"
+			SUI.Config.SetGlobal("menuMode", "all")
+			M.Translate()
+			SUI.Print(L("msg.menu.openat.adv"))
+		end
+		M.page = "cat"
+		M.cat = target.cat
+	end
+	M.StorePage()
+	SUI.Cancel(M.hlTask)
+	M.hlTask = nil
+	if opts.noHighlight then
+		M.hl, M.hlPre, M.hlTimed, M.hlA = nil, nil, nil, nil
+	else
+		M.hl = target.key
+		M.hlPre = getn(list) > 1 and pre or nil
+		M.hlTimed, M.hlA = true, 0.3
+		M.hlTask = SUI.After(2.5, hlSoft, "uxhl")
+	end
+	M.focus = target.key
+	M.search = ""
+	M.resSel = 0
+	M.silent = true
+	M.frame.edit:SetText("")
+	M.silent = false
+	M.frame.editHint:SetText(L("mod.menu.search"))
+	M.Render()
+	return true, target.key
+end
+
+-- ---------------------------------------------------------------- taches courantes ("Je veux changer...", page d'accueil)
+M.tasks = {}
+function M.RegisterTask(id, labelKey, optionKey, cat)
+	if type(id) ~= "string" or type(labelKey) ~= "string" or type(optionKey) ~= "string" then return false end
+	if not cat then
+		local _, _, seg = string.find(optionKey, "^([^.*]+)")
+		cat = seg and (M.ANCHOR_ALIAS[seg] or seg) or nil
+	end
+	for i = 1, getn(M.tasks) do
+		if M.tasks[i].id == id then
+			M.tasks[i].label, M.tasks[i].key, M.tasks[i].cat = labelKey, optionKey, cat
+			return true
+		end
+	end
+	tinsert(M.tasks, { id = id, label = labelKey, key = optionKey, cat = cat })
+	return true
+end
+M.RegisterTask("bar", "mod.menu.want.bar", "actionbars.main.")
+M.RegisterTask("player", "mod.menu.want.player", "units.player.")
+M.RegisterTask("target", "mod.menu.want.target", "units.target.")
+M.RegisterTask("group", "mod.menu.want.group", "group.")
+M.RegisterTask("raid", "mod.menu.want.raid", "raid.")
+M.RegisterTask("minimap", "mod.menu.want.minimap", "minimap.")
+M.RegisterTask("chat", "mod.menu.want.chat", "chat.")
+M.RegisterTask("auras", "mod.menu.want.auras", "auras.")
+M.RegisterTask("castbar", "mod.menu.want.castbar", "castbar.player")
+M.RegisterTask("bags", "mod.menu.want.bags", "bags.")
+M.RegisterTask("meter", "mod.menu.want.meter", "meter.")
+M.RegisterTask("plates", "mod.menu.want.plates", "nameplates.")
+
+-- ---------------------------------------------------------------- nouveautes (reglages apparus depuis la derniere fois)
+-- "Connu" = ensemble des cles de reglage deja presentees (global menuKnown). Premier lancement avec cette fonction : tout l'existant est
+-- connu (rien n'est signale). Ensuite toute cle absente du connu est "nouvelle" jusqu'a NewClear.
+function M.NewSnapshot(cat)
+	local C = SUI.Config
+	local known = C.GetGlobal("menuKnown")
+	if type(known) ~= "table" then known = {} end
+	local n = 0
+	for i = 1, getn(SUI.options) do
+		local o = SUI.options[i]
+		if o.type ~= "header" and (cat == nil or o.cat == cat) then
+			if not known[o.key] then n = n + 1 end
+			known[o.key] = true
+		end
+	end
+	C.SetGlobal("menuKnown", known)
+	M.newKeys, M.newCat, M.newTotal = nil, nil, nil
+	return n
+end
+
+function M.NewScan()
+	if M.newKeys then return end
+	local known = SUI.Config.GetGlobal("menuKnown")
+	if type(known) ~= "table" then M.NewSnapshot(nil) end
+	known = SUI.Config.GetGlobal("menuKnown")
+	M.newKeys, M.newCat, M.newTotal = {}, {}, 0
+	if type(known) ~= "table" then return end
+	for i = 1, getn(SUI.options) do
+		local o = SUI.options[i]
+		if o.type ~= "header" and not known[o.key] then
+			M.newKeys[o.key] = true
+			local c = o.cat or "?"
+			M.newCat[c] = (M.newCat[c] or 0) + 1
+			M.newTotal = M.newTotal + 1
+		end
+	end
+end
+
+function M.IsNew(key)
+	M.NewScan()
+	return M.newKeys[key] and true or false
+end
+
+function M.NewCount(cat)
+	M.NewScan()
+	if cat == nil then return M.newTotal end
+	return M.newCat[cat] or 0
+end
+
+-- Marque comme vu : une categorie, ou tout (cat == nil). Retourne le nombre de reglages concernes.
+function M.NewClear(cat)
+	local n = M.NewSnapshot(cat)
+	if M.frame and M.frame:IsShown() then M.Render() end
+	return n
 end
 
 -- ---------------------------------------------------------------- reactions aux changements de reglages
