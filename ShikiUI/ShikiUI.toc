@@ -4,7 +4,7 @@
 ## Notes: Interface sombre et minimaliste, moteur leger (un seul timer, un seul routeur d'evenements), menu Simple / Expert, modes Normal / Raid. Exploite SuperWoW, Nampower, UnitXP et ClassicAPI quand ils sont presents. /sui
 ## Notes-frFR: Interface sombre et minimaliste, moteur leger (un seul timer, un seul routeur d'evenements), menu Simple / Expert, modes Normal / Raid. Exploite SuperWoW, Nampower, UnitXP et ClassicAPI quand ils sont presents. /sui
 ## Author: Shikiwa
-## Version: 0.3.0
+## Version: 1.1.0
 ## SavedVariables: ShikiUIDB
 
 # -- socle (liste fixe : tools/gen_toc.js)
