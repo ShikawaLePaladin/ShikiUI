@@ -1077,12 +1077,20 @@ function M.Tick()
 	for i = M.nd, 1, -1 do
 		if M.dEnd[i] < now then M.DropDebuff(i) end
 	end
+	M.phase = (M.phase or 0) + 1 if M.phase > 2 then M.phase = 0 end
+	local heavy = M.nUsed > 24
 	for i = 1, M.nPlates do
 		local plate = M.plateList[i]
 		local s = M.slotOf[plate]
 		if plate:IsShown() then
-			if not s then s = M.Assign(plate) end
-			if s then M.UpdateSlot(s, now) end
+			local fresh = false
+			if not s then s = M.Assign(plate) fresh = true end
+			if s then
+				-- gros pull : au-dela de HEAVY plaques, chacune n'est rafraichie qu'un tick sur 3 (cible, incantation et plaque neuve : a chaque tick)
+				if fresh or not heavy or s.cbShown or (s.guid and s.guid == M.targetGuid) or (i + M.phase) - floor((i + M.phase) / 3) * 3 == 0 then
+					M.UpdateSlot(s, now)
+				end
+			end
 		elseif s then
 			M.Release(s)
 		end
