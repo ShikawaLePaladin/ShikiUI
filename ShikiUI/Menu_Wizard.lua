@@ -3,6 +3,8 @@
 --   Installation +  : Rapide + modules a activer (cartes, valeur conseillee par role), mise en page, reglages essentiels de quelques modules
 --                     (barres, cadres d'unites, groupe / raid, compteurs / menace, minimap, chat), specialites (module "specs"), sauvegardes,
 --                     suite, puis le recapitulatif "Voici ce qui va changer".
+--   Guide           : langue, role, etape Guide (reglages conseilles du role, un apercu 2D SUI.Preview par ligne, "Changer ce choix"),
+--                     recapitulatif. La page finale a des boutons "Ouvrir cette option" (SUI.Menu.OpenAt) ; /sui wizard la reprend.
 -- On change de parcours a tout moment (bouton d'en-tete ou premiere page). Chaque etape a Passer (on ignore l'etape : ses choix reviennent a
 -- l'etat d'avant) et Par defaut conseille (les valeurs conseillees pour le role), Precedent / Suivant.
 -- PRINCIPE : rien n'est ecrit dans la configuration avant le clic sur "Appliquer" (recapitulatif). Les choix sont gardes dans M.ws.sel ; seul
@@ -31,9 +33,14 @@ local CX, CY, CW = 24, -152, 672
 local WLEVEL = 400
 local PERPAGE = 10
 
-local STEP_IDS = { "welcome", "migrate", "role", "modules", "style", "layout", "essentials", "specs", "backup", "place", "summary" }
+local STEP_IDS = { "welcome", "migrate", "role", "guide", "modules", "style", "layout", "essentials", "specs", "backup", "place", "summary" }
 local QUICK = { welcome = true, migrate = true, role = true, style = true, summary = true }
-local PATHS = { "quick", "plus" }
+-- Parcours GUIDE : role, puis les reglages conseilles montres un par un avec leur apercu 2D (SUI.Preview), puis recapitulatif.
+local GUIDED = { welcome = true, migrate = true, role = true, guide = true, summary = true }
+local PATHS = { "quick", "plus", "guided" }
+local NOPEN = 4     -- boutons "Ouvrir cette option" de la page finale
+local NGUIDE = 6    -- lignes de la page Guide
+local PVW, PVH = 330, 230
 local PACKS = { "essential", "complete", "light", "tank", "heal", "pvp", "all" }
 local ESS = { "units", "actionbars", "castbar", "minimap", "tooltip", "chat", "bags", "loot", "perf" }
 local LIGHT = { "units", "actionbars", "castbar", "minimap", "tooltip", "perf" }
@@ -318,12 +325,23 @@ end
 
 function M.WizSteps()
 	local t = {}
-	local quick = M.ws and M.ws.sel.path == "quick"
+	local path = M.ws and M.ws.sel.path
+	local only = (path == "quick" and QUICK) or (path == "guided" and GUIDED) or nil
 	for i = 1, getn(STEP_IDS) do
 		local id = STEP_IDS[i]
-		if (not quick or QUICK[id]) and (not WA[id] or WA[id]()) then tinsert(t, id) end
+		if (not only or only[id]) and (not WA[id] or WA[id]()) then tinsert(t, id) end
 	end
 	return t
+end
+
+-- parcours courts (Rapide, Guide) : les reglages conseilles par role sont mis partout ou l'utilisateur n'a rien retouche
+local function isShort(p)
+	return p == "quick" or p == "guided"
+end
+
+-- l'etape Guide n'existe que dans le parcours Guide
+function WA.guide()
+	return M.ws and M.ws.sel.path == "guided" and true or false
 end
 
 function WA.migrate()
@@ -480,11 +498,11 @@ end
 -- Parcours : "quick" ou "plus". Rapide = les reglages conseilles par role sont mis partout ou l'utilisateur n'a rien retouche.
 function M.WizSetPath(p)
 	local ws = M.ws
-	if not ws or (p ~= "quick" and p ~= "plus") then return end
+	if not ws or (p ~= "quick" and p ~= "plus" and p ~= "guided") then return end
 	local sel = ws.sel
 	sel.path = p
-	if not ws.touch.place then sel.after = (p == "quick") and "menu" or "move" end
-	if p == "quick" then M.WizRecAll() end
+	if not ws.touch.place then sel.after = isShort(p) and "menu" or "move" end
+	if isShort(p) then M.WizRecAll() end
 	if M.wiz then
 		M.WizStepFix(M.wiz.stepId)
 		M.WizRender()
@@ -589,13 +607,18 @@ function WDEF.specs()
 	if ok and type(s) == "table" and s.id and s.id > 0 and sel.role then sel.spec[s.id] = sel.role end
 end
 
+function WDEF.guide()
+	M.ws.touch.essentials = nil
+	M.WizRecEs()
+end
+
 function WDEF.backup()
 end
 
 function WDEF.place()
 	local ws = M.ws
 	ws.touch.place = nil
-	ws.sel.after = (ws.sel.path == "quick") and "menu" or "move"
+	ws.sel.after = isShort(ws.sel.path) and "menu" or "move"
 end
 
 -- Passer : l'etape est ignoree, ses choix reviennent a l'etat d'avant l'assistant
@@ -628,6 +651,12 @@ function WPASS.layout()
 end
 
 function WPASS.essentials()
+	local ws = M.ws
+	ws.sel.es = copyT(ws.orig.es)
+	ws.touch.essentials = true
+end
+
+function WPASS.guide()
 	local ws = M.ws
 	ws.sel.es = copyT(ws.orig.es)
 	ws.touch.essentials = true
@@ -725,10 +754,10 @@ function WB.welcome(pg)
 	pg.pathTitle = tx(pg, 13, T.c.text, CX, CY - 62, CW, 18)
 	pg.path = {}
 	pg.pathDesc = {}
-	for i = 1, 2 do
-		pg.path[i] = btn(pg, 330, 34, CX + (i - 1) * 342, CY - 84, function(bb) M.WizSetPath(bb.pid) end)
+	for i = 1, 3 do
+		pg.path[i] = btn(pg, 216, 34, CX + (i - 1) * 228, CY - 84, function(bb) M.WizSetPath(bb.pid) end)
 		pg.path[i].pid = PATHS[i]
-		pg.pathDesc[i] = tx(pg, 11, T.c.dim, CX + (i - 1) * 342, CY - 122, 330, 50)
+		pg.pathDesc[i] = tx(pg, 10, T.c.dim, CX + (i - 1) * 228, CY - 122, 216, 54)
 	end
 	pg.detTitle = tx(pg, 13, T.c.text, CX, CY - 178, CW, 18)
 	pg.det = {}
@@ -1016,6 +1045,31 @@ function WB.specs(pg)
 	pg.note = tx(pg, 11, T.c.dim, CX, CY - 236, CW, 60)
 end
 
+-- Etape Guide : a gauche un apercu 2D (SUI.Preview, lecture seule), a droite les reglages conseilles pour le role ; cliquer une ligne
+-- montre son apercu, "Changer ce choix" passe a l'option suivante (rien n'est ecrit avant Appliquer).
+function WB.guide(pg)
+	pg.inst = {}
+	pg.msg = tx(pg, 12, T.c.dim, CX, CY, CW, 60)
+	local host = CreateFrame("Frame", nil, pg)
+	host:SetWidth(PVW)
+	host:SetHeight(PVH)
+	host:SetPoint("TOPLEFT", pg, "TOPLEFT", CX, CY - 4)
+	T.Backdrop(host, T.c.inset, T.c.border)
+	pg.pvHost = host
+	pg.nopv = tx(host, 11, T.c.dim, 12, -12, PVW - 24, 40)
+	pg.pvTitle = tx(pg, 11, T.c.dim, CX, CY - 4 - PVH - 6, PVW, 16)
+	pg.item = {}
+	for i = 1, NGUIDE do
+		local b = btn(pg, 326, 28, CX + 346, CY - 4 - (i - 1) * 34, function(bb)
+			M.ws.gi = bb.n
+			M.WizRender()
+		end)
+		b.n = i
+		pg.item[i] = b
+	end
+	pg.cycle = btn(pg, 326, 28, CX + 346, CY - 4 - NGUIDE * 34, function() M.WizGuideCycle() end)
+end
+
 function WB.backup(pg)
 	pg.explain = tx(pg, 12, T.c.text, CX, CY, CW, 62)
 	pg.now = btn(pg, 330, 30, CX, CY - 72, function()
@@ -1085,9 +1139,14 @@ function WB.summary(pg)
 end
 
 function WB.done(pg)
-	pg.lines = tx(pg, 12, T.c.text, CX, CY, CW, 230)
-	pg.reload = tx(pg, 12, T.c.warn, CX, CY - 236, CW, 32)
-	pg.hint = tx(pg, 11, T.c.dim, CX, CY - 276, CW, 60)
+	pg.lines = tx(pg, 12, T.c.text, CX, CY, CW, 196)
+	pg.openTitle = tx(pg, 12, T.c.text, CX, CY - 200, CW, 16)
+	pg.openb = {}
+	for i = 1, NOPEN do
+		pg.openb[i] = btn(pg, 330, 26, CX + SUI.Mod(i - 1, 2) * 342, CY - 218 - floor((i - 1) / 2) * 30, function(bb) M.WizOpen(bb.key) end)
+	end
+	pg.reload = tx(pg, 12, T.c.warn, CX, CY - 282, CW, 32)
+	pg.hint = tx(pg, 11, T.c.dim, CX, CY - 318, CW, 50)
 end
 
 -- ---------------------------------------------------------------- rendu
@@ -1188,7 +1247,7 @@ function WR.welcome(pg)
 	T.SetSelected(pg.l[1], sel.locale == "fr")
 	T.SetSelected(pg.l[2], sel.locale == "en")
 	pg.pathTitle:SetText(L("mod.setup.path.title"))
-	for i = 1, 2 do
+	for i = 1, 3 do
 		local b = pg.path[i]
 		T.SetButtonText(b, pathName(b.pid))
 		T.SetSelected(b, sel.path == b.pid)
@@ -1404,7 +1463,7 @@ function WR.role(pg)
 	if UnitClass then cname = UnitClass("player") end
 	pg.cls:SetText(cname and L("mod.menu.wiz.role.class", cname) or L("mod.menu.wiz.role.noclass"))
 	if sel.role then
-		local key = (sel.path == "quick") and "mod.setup.role.pack.q" or "mod.menu.wiz.role.pack"
+		local key = isShort(sel.path) and "mod.setup.role.pack.q" or "mod.menu.wiz.role.pack"
 		pg.reco:SetText(L(key, L("mod.menu.wiz.pack." .. ROLE_PACK[sel.role])))
 	else
 		pg.reco:SetText(L("mod.menu.wiz.role.keep"))
@@ -1596,6 +1655,94 @@ function WR.specs(pg)
 	pg.note:SetText(L("mod.setup.spec.note"))
 end
 
+-- lignes de l'etape Guide : reglages conseilles pour le role dont le module est present et coche dans l'assistant
+function M.WizGuideItems()
+	local sel = M.ws.sel
+	local t = {}
+	local rec = (sel.role and REC[sel.role]) or {}
+	for i = 1, getn(ES) do
+		local r = ES[i]
+		if getn(t) < NGUIDE and not r.special and rec[r.id] ~= nil and M.WizEsOn(r) then tinsert(t, r) end
+	end
+	return t
+end
+
+-- categorie d'apercu d'une ligne (premier module qui porte ses cles) ; nil si aucune
+function M.WizRowCat(r)
+	local k = esKeys(r)[1]
+	return k and modOfKey(k) or nil
+end
+
+function M.WizGuideCycle()
+	local ws = M.ws
+	local items = M.WizGuideItems()
+	local r = items[ws.gi or 1]
+	if not r then return end
+	local idx = optIndex(r, ws.sel.es[r.id]) or 0
+	M.WizEsSet(r.id, r.opts[idx + 1] or r.opts[1])
+end
+
+-- apercu 2D de la ligne : instance SUI.Preview mise en cache par categorie ; l'option choisie est passee a Update (rien n'est applique)
+function M.WizGuidePreview(pg, r)
+	local P = SUI.Preview
+	local sel = M.ws.sel
+	for _, inst in pairs(pg.inst) do inst.root:Hide() end
+	pg.pvTitle:SetText(L("mod.setup.guide.pvfor", L("mod.setup.row." .. r.id .. ".label")))
+	pg.nopv:SetText("")
+	local cat = M.WizRowCat(r)
+	if not (P and cat and P.reg and P.reg[cat] and P.Instance) then
+		pg.nopv:SetText(L("mod.setup.guide.nopv"))
+		return
+	end
+	local inst = pg.inst[cat]
+	if not inst then
+		inst = P.Instance(cat, pg.pvHost, PVW - 2, PVH - 2, false)
+		pg.inst[cat] = inst
+	end
+	if not inst then
+		pg.nopv:SetText(L("mod.setup.guide.nopv"))
+		return
+	end
+	inst.root:Show()
+	local idx = optIndex(r, sel.es[r.id])
+	local keys = esKeys(r)
+	if idx then
+		for j = 1, getn(keys) do inst.Update(keys[j], r.vals[idx]) end
+	end
+end
+
+function WR.guide(pg)
+	local ws = M.ws
+	local sel = ws.sel
+	local items = M.WizGuideItems()
+	local n = getn(items)
+	if (ws.gi or 0) < 1 or ws.gi > n then ws.gi = 1 end
+	for i = 1, NGUIDE do
+		local b, r = pg.item[i], items[i]
+		if r then
+			local o = sel.es[r.id] or REC[sel.role][r.id]
+			T.SetButtonText(b, M.Short(L("mod.setup.guide.item", L("mod.setup.row." .. r.id .. ".label"), optText(r, o)), 46))
+			T.SetSelected(b, ws.gi == i)
+			b:Show()
+		else
+			b:Hide()
+		end
+	end
+	if n == 0 then
+		pg.msg:SetText(L(sel.role and "mod.setup.guide.none" or "mod.setup.guide.norole"))
+		pg.msg:Show()
+		pg.cycle:Hide()
+		pg.pvHost:Hide()
+		pg.pvTitle:SetText("")
+		return
+	end
+	pg.msg:SetText("")
+	pg.pvHost:Show()
+	T.SetButtonText(pg.cycle, L("mod.setup.guide.change"))
+	pg.cycle:Show()
+	M.WizGuidePreview(pg, items[ws.gi])
+end
+
 function WR.backup(pg)
 	local C = SUI.Config
 	local B = SUI.Backup
@@ -1654,7 +1801,7 @@ function M.WizSummary()
 	add(head, "style", SUI.Style.Label(sel.style))
 	add(head, "size", sizeLabel(sel.scale))
 	add(head, "role", sel.role and L("role." .. sel.role) or keep)
-	if sel.path ~= "quick" then
+	if not isShort(sel.path) then
 		add(head, "layout", sel.layout and SUI.Layout.Label(sel.layout) or keep)
 		if C.meta["mode.auto"] then add(head, "mode", L(sel.modeauto and "mod.menu.wiz.mode.auto" or "mod.menu.wiz.mode.manual")) end
 	end
@@ -1744,10 +1891,71 @@ function WR.done(pg)
 	local ws = M.ws
 	local rows = ws.result or {}
 	local s = L("mod.menu.wiz.done.n", ws.count or 0) .. "\n"
-	for i = 1, getn(rows) do s = s .. rows[i][1] .. " : " .. rows[i][2] .. "\n" end
+	local maxr = 11
+	for i = 1, getn(rows) do
+		if i <= maxr then s = s .. rows[i][1] .. " : " .. rows[i][2] .. "\n" end
+	end
+	if getn(rows) > maxr then s = s .. L("mod.setup.sum.more", getn(rows) - maxr) .. "\n" end
 	pg.lines:SetText(s)
+	-- boutons "Ouvrir cette option" : vont a la bonne ligne du menu (SUI.Menu.OpenAt)
+	local tg = M.WizOpenTargets()
+	pg.openTitle:SetText(getn(tg) > 0 and L("mod.setup.done.open") or "")
+	for i = 1, NOPEN do
+		local b, e = pg.openb[i], tg[i]
+		if e then
+			b.key = e[2]
+			T.SetButtonText(b, M.Short(L("mod.setup.done.open.btn", e[1]), 44))
+			b:Show()
+		else
+			b.key = nil
+			b:Hide()
+		end
+	end
 	pg.reload:SetText(ws.reload and L("mod.menu.wiz.sum.reload") or "")
 	pg.hint:SetText(L("mod.menu.wiz.done.hint"))
+end
+
+-- Cibles des boutons "Ouvrir cette option" de la page finale : reglages essentiels changes (premiere cle), puis Styles / Modules
+function M.WizOpenTargets()
+	local ws = M.ws
+	local sel, orig = ws.sel, ws.orig
+	local es, extra, t = {}, {}, {}
+	for i = 1, getn(ES) do
+		local r = ES[i]
+		local v = sel.es[r.id]
+		if v ~= nil and v ~= "keep" and v ~= orig.es[r.id] and M.WizEsOn(r) then
+			local key
+			if r.special == "bars" then key = "actionbars."
+			elseif r.special == "chat" then key = "chat."
+			else key = esKeys(r)[1] end
+			if key then tinsert(es, { L("mod.setup.row." .. r.id .. ".label"), key }) end
+		end
+	end
+	if sel.style ~= orig.style or sel.scale ~= orig.scale then tinsert(extra, { L("mod.setup.done.open.styles"), "styles" }) end
+	for i = 1, getn(SUI.moduleOrder) do
+		local n = SUI.moduleOrder[i]
+		if sel.mods[n] ~= orig.mods[n] then
+			tinsert(extra, { L("mod.setup.done.open.modules"), "modules" })
+			break
+		end
+	end
+	for i = 1, getn(es) do
+		if getn(t) < NOPEN - getn(extra) then tinsert(t, es[i]) end
+	end
+	for i = 1, getn(extra) do tinsert(t, extra[i]) end
+	return t
+end
+
+-- Ouvre le menu a la ligne choisie. L'assistant est masque (il couvre le menu) mais sa page finale reste reprenable (/sui wizard).
+function M.WizOpen(key)
+	local f, ws = M.wiz, M.ws
+	if not key or not f or not ws then return end
+	if not M.OpenAt then return end
+	SUI.Config.SetGlobal("firstRun", false)
+	ws.parked = true
+	f:Hide()
+	M.OpenAt(key, { preview = true })
+	SUI.Print(L("msg.menu.wiz.opened"))
 end
 
 -- ---------------------------------------------------------------- application, annulation, fin
@@ -1776,7 +1984,7 @@ function M.WizApply()
 		if sel.locale ~= C.Get("ui.locale") then C.Set("ui.locale", sel.locale) end
 		put("style.name", sel.style)
 		put("ui.scale", sel.scale)
-		if sel.path ~= "quick" then put("mode.auto", sel.modeauto) end
+		if not isShort(sel.path) then put("mode.auto", sel.modeauto) end
 	end)
 	-- 2. role puis mise en page (seulement si l'utilisateur les a changes : on ne reecrase pas ses reglages sans raison)
 	guard("role", function()
@@ -1786,7 +1994,7 @@ function M.WizApply()
 		end
 	end)
 	guard("layout", function()
-		if sel.path ~= "quick" and sel.layout and sel.layout ~= orig.layout and SUI.Layout then
+		if not isShort(sel.path) and sel.layout and sel.layout ~= orig.layout and SUI.Layout then
 			local ok, _, c = SUI.Layout.ApplyPreset(sel.layout)
 			if ok then n = n + (c or 0) end
 		end
@@ -1955,6 +2163,14 @@ function M.ShowWizard(step)
 	end
 	M.BuildWizard()
 	M.WizFit()
+	-- reprise apres "Ouvrir cette option" : on revient a la page finale (Tout annuler / Terminer), une seule fois
+	if M.ws and M.ws.applied and M.ws.parked and not M.wiz:IsShown() then
+		M.ws.parked = nil
+		M.wiz.stepId = "done"
+		M.WizRender()
+		M.wiz:Show()
+		return
+	end
 	if not M.wiz:IsShown() or not M.ws then M.WizInit() end
 	M.wiz.stepId = nil
 	local steps = M.WizSteps()

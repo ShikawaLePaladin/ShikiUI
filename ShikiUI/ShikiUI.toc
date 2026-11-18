@@ -44,6 +44,8 @@ Menu_Preview.lua
 Preview_Raid.lua
 Preview_Layout.lua
 Preview_Basic.lua
+Preview_More1.lua
+Preview_More2.lua
 Menu_Wizard.lua
 Menu_Profiles.lua
 Addons.lua

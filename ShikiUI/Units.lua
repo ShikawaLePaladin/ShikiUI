@@ -75,8 +75,18 @@ local SPEC = {
 	{ name = "combat", cap = "combat", type = "bool", def = false },
 	{ name = "auras", cap = "auras", type = "choice", def = "off", choices = { "off", "buffs", "debuffs", "both" } },
 	{ name = "fsr", cap = "fsr", type = "bool", def = false },
+	{ name = "nameanchor", cap = "text", type = "choice", def = "default", choices = { "default", "topleft", "top", "topright", "left", "center", "right", "bottomleft", "bottom", "bottomright", "off" } },
+	{ name = "buffanchor", cap = "auras", type = "choice", def = "default", choices = { "default", "topleft", "topcenter", "topright", "bottomleft", "bottomcenter", "bottomright", "off" } },
+	{ name = "debuffanchor", cap = "auras", type = "choice", def = "default", choices = { "default", "topleft", "topcenter", "topright", "bottomleft", "bottomcenter", "bottomright", "off" } },
 }
 U.spec = SPEC
+
+-- Pseudo : point d'ancrage dans la barre de vie, justification, decalage vertical (le haut / bas gardent 2 px de marge).
+local NAMEAT = {
+	topleft = { "TOPLEFT", "LEFT", -2 }, top = { "TOP", "CENTER", -2 }, topright = { "TOPRIGHT", "RIGHT", -2 },
+	left = { "LEFT", "LEFT", 0 }, center = { "CENTER", "CENTER", 0 }, right = { "RIGHT", "RIGHT", 0 },
+	bottomleft = { "BOTTOMLEFT", "LEFT", 2 }, bottom = { "BOTTOM", "CENTER", 2 }, bottomright = { "BOTTOMRIGHT", "RIGHT", 2 },
+}
 
 local function specDefault(key, sp)
 	if sp.name == "mark" and key == "target" then return true end   -- le marqueur de raid de la cible est utile d'office
@@ -436,16 +446,75 @@ local function paintAura(f, i, tex, cnt, dt, bad)
 	bd:Show()
 end
 
+-- Reglage de placement d'un groupe d'effets : "default" (ou vide) = rangee d'origine sous le cadre.
+local function auraAt(v)
+	if type(v) ~= "string" or v == "" or v == "default" then return nil end
+	return v
+end
+
+-- Place les icones : les nd premieres (malefices) et les nb suivantes (benefices) selon leur reglage ; sans reglage, une seule rangee
+-- sous le cadre. Ne repositionne que si quelque chose a change (aucune creation, uniquement des points).
+local function placeAuras(f, nd, nb)
+	local cf = f.cf
+	local da, ba = auraAt(cf.debuffanchor), auraAt(cf.buffanchor)
+	local a = cfg.aurasize
+	local fw = f:GetWidth() or 0
+	local key = nd .. "," .. nb .. "," .. tostring(da) .. "," .. tostring(ba) .. "," .. a .. "," .. fw .. "," .. cfg.indsize
+	if f.auKey == key then return end
+	f.auKey = key
+	local itop = 0
+	if cf.leader or cf.loot or cf.pvp or cf.combat then itop = cfg.indsize + 2 elseif cf.mark then itop = floor(cfg.indsize / 2) end
+	local step = a + 3
+	local rt, rb = 0, 0
+	for gi = 1, 2 do
+		local n, at, first = nd, da, 0
+		if gi == 2 then n, at, first = nb, ba, nd end
+		local top, xoff, row = false, 0, 0
+		local hj = "LEFT"
+		if da == nil and ba == nil then
+			xoff = first      -- origine : une seule rangee, benefices apres les malefices
+		elseif n > 0 and at ~= nil then
+			if string.find(at, "top", 1, true) then top = true end
+			if string.find(at, "right", 1, true) then hj = "RIGHT" elseif string.find(at, "center", 1, true) then hj = "CENTER" end
+			if top then row = rt rt = rt + 1 else row = rb rb = rb + 1 end
+		elseif n > 0 then
+			row = rb       -- groupe sans reglage : sous le cadre, a gauche
+			rb = rb + 1
+		end
+		local gwid = (xoff + n) * step - 3
+		local x0 = 0
+		if hj == "RIGHT" then x0 = fw - gwid elseif hj == "CENTER" then x0 = floor((fw - gwid) / 2) end
+		for j = 1, n do
+			local i = first + j
+			local x = x0 + (xoff + j - 1) * step
+			local bd, tx = f.auBd[i], f.auTex[i]
+			bd:ClearAllPoints()
+			tx:ClearAllPoints()
+			if top then
+				local y = 2 + itop + row * step
+				bd:SetPoint("BOTTOMLEFT", f, "TOPLEFT", x, y)
+				tx:SetPoint("BOTTOMLEFT", f, "TOPLEFT", x + 1, y + 1)
+			else
+				local y = -2 - row * step
+				bd:SetPoint("TOPLEFT", f, "BOTTOMLEFT", x, y)
+				tx:SetPoint("TOPLEFT", f, "BOTTOMLEFT", x + 1, y - 1)
+			end
+		end
+	end
+end
+
 function U.UpdateAuras(f)
 	if not f.auTex then return end
 	local mode = f.cf.auras
 	local n = 0
+	local nd = 0
 	if mode ~= "off" and f.live then
 		local unit = f.unit
 		local max = cfg.auramax
 		if max > MAXA then max = MAXA end
 		local ud, ub = getglobal("UnitDebuff"), getglobal("UnitBuff")
-		if mode ~= "buffs" and ud then
+		local offD, offB = (f.cf.debuffanchor == "off"), (f.cf.buffanchor == "off")
+		if mode ~= "buffs" and ud and not offD then
 			for i = 1, 16 do
 				if n >= max then break end
 				local tex, cnt, dt = ud(unit, i)
@@ -454,7 +523,8 @@ function U.UpdateAuras(f)
 				paintAura(f, n, tex, cnt, dt, true)
 			end
 		end
-		if mode ~= "debuffs" and ub then
+		nd = n
+		if mode ~= "debuffs" and ub and not offB then
 			for i = 1, 32 do
 				if n >= max then break end
 				local tex, cnt = ub(unit, i)
@@ -464,6 +534,7 @@ function U.UpdateAuras(f)
 			end
 		end
 	end
+	placeAuras(f, nd, n - nd)
 	for i = n + 1, MAXA do
 		f.auTex[i]:Hide()
 		f.auBd[i]:Hide()
@@ -1200,6 +1271,7 @@ local function layoutOne(f, w, h, gph)
 	f.nameText:ClearAllPoints()
 	f.hpText:ClearAllPoints()
 	local al = cf.hpalign
+	local na = NAMEAT[cf.nameanchor or "default"]
 	if al == "left" then
 		f.hpText:SetPoint("LEFT", f.hp, "LEFT", 4, 0)
 		f.hpText:SetJustifyH("LEFT")
@@ -1219,6 +1291,14 @@ local function layoutOne(f, w, h, gph)
 		f.nameText:SetJustifyH("LEFT")
 		f.nameText:SetWidth(floor(fw * 0.62))
 	end
+	if na then
+		-- pseudo place par le reglage : 9 positions dans la barre de vie
+		f.nameText:ClearAllPoints()
+		f.nameText:SetPoint(na[1], f.hp, na[1], (na[2] == "LEFT") and 4 or ((na[2] == "RIGHT") and -4 or 0), na[3])
+		f.nameText:SetJustifyH(na[2])
+		f.nameText:SetWidth(fw - 8)
+	end
+	if cf.nameanchor == "off" then f.nameText:Hide() else f.nameText:Show() end
 	f.nameText:SetHeight(ts + 1)
 	f.hpText:SetHeight(ts + 1)
 	if f.pwText then
@@ -1246,20 +1326,17 @@ local function layoutOne(f, w, h, gph)
 		tx:SetWidth(sz)
 		tx:SetHeight(sz)
 	end
-	-- rangee d'effets sous le cadre
+	-- groupes d'effets (positions posees par placeAuras a la prochaine relecture des effets)
 	if f.auTex then
 		local a = cfg.aurasize
+		f.auKey = nil
+		f.dAu = true
 		for i = 1, MAXA do
-			local x = (i - 1) * (a + 3)
 			local bd, tx, ct = f.auBd[i], f.auTex[i], f.auCnt[i]
 			bd:SetWidth(a + 2)
 			bd:SetHeight(a + 2)
-			bd:ClearAllPoints()
-			bd:SetPoint("TOPLEFT", f, "BOTTOMLEFT", x, -2)
 			tx:SetWidth(a)
 			tx:SetHeight(a)
-			tx:ClearAllPoints()
-			tx:SetPoint("TOPLEFT", f, "BOTTOMLEFT", x + 1, -3)
 			ct:ClearAllPoints()
 			ct:SetPoint("BOTTOMRIGHT", tx, "BOTTOMRIGHT", 1, 0)
 			ct:SetWidth(a)
