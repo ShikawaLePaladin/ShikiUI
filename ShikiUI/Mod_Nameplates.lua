@@ -36,7 +36,7 @@ local getn = table.getn
 local floor, abs = math.floor, math.abs
 local strformat, strfind = string.format, string.find
 
-local MAXSLOT = 40
+local MAXSLOT = 80
 local MAXDEB = 6
 local POOL = 128
 local EMPTY = ""
@@ -550,7 +550,10 @@ function M.SetMark(s)
 end
 
 function M.Assign(plate)
-	if M.nFree == 0 or M.nUsed >= M.cfg.maxplates then return nil end
+	if M.nFree == 0 or M.nUsed >= M.cfg.maxplates then
+		M.Skin(plate)    -- plaque en trop (gros pull) : on masque quand meme la plaque du jeu, sinon elle double la notre
+		return nil
+	end
 	M.Skin(plate)
 	local s = M.free[M.nFree]
 	M.free[M.nFree] = nil
@@ -1234,7 +1237,7 @@ local NP_OPTIONS = {
 		opt("markersize", "number", 200, 20, { min = 12, max = 40, step = 2 }),
 		opt("distance", "choice", 210, "target", { choices = { "off", "target", "all" } }),
 		opt("friendly", "bool", 220, false),
-		opt("maxplates", "number", 230, 40, { min = 10, max = 40, step = 5 }),
+		opt("maxplates", "number", 230, 40, { min = 10, max = 80, step = 5 }),
 		opt("rate", "number", 240, 0.1, { min = 0.05, max = 0.5, step = 0.05 }),
 }
 -- Options communes du socle : texture, forme (barres de vie et d'incantation), police et taille des textes.
