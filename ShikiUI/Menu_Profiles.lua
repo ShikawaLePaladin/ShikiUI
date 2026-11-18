@@ -93,6 +93,87 @@ local function backupRow(rec)
 	end
 end
 
+-- ---------------------------------------------------------------- profil automatique par contexte (solo / groupe / raid)
+-- Memorise par personnage (ShikiUIDB.global.autoProf) ; les evenements de groupe ne sont ecoutes que si au moins un contexte a un profil.
+-- Un contexte sans profil ne change rien (le profil courant reste). Le changement attend la fin du combat.
+M.Auto = { ctx = { "solo", "party", "raid", "bg" }, events = false, last = nil }
+local A = M.Auto
+local AEVENTS = { "PLAYER_ENTERING_WORLD", "RAID_ROSTER_UPDATE", "PARTY_MEMBERS_CHANGED" }
+
+function A.Get(ctx)
+	local C = SUI.Config
+	local g = C.db and C.db.global
+	local t = g and type(g.autoProf) == "table" and g.autoProf[C.CharKey()]
+	local v = type(t) == "table" and t[ctx] or nil
+	if v and C.db.profiles[v] then return v end
+	return nil
+end
+
+function A.Set(ctx, name)
+	local C = SUI.Config
+	if not C.db then return end
+	local g = C.db.global
+	if type(g.autoProf) ~= "table" then g.autoProf = {} end
+	local k = C.CharKey()
+	if type(g.autoProf[k]) ~= "table" then g.autoProf[k] = {} end
+	g.autoProf[k][ctx] = name
+	A.Sync()
+	A.Check()
+end
+
+function A.Any()
+	for i = 1, getn(A.ctx) do
+		if A.Get(A.ctx[i]) then return true end
+	end
+	return false
+end
+
+function A.Context()
+	local isin = getglobal("IsInInstance")
+	if type(isin) == "function" then
+		local _, kind = isin()
+		if kind == "pvp" then return "bg" end
+	end
+	if GetNumRaidMembers() > 0 then return "raid" end
+	if GetNumPartyMembers() > 0 then return "party" end
+	return "solo"
+end
+
+function A.Apply()
+	local want = A.Get(A.Context())
+	if want and want ~= SUI.Config.curName then
+		local ok, key = SUI.Config.UseProfile(want)
+		if ok then SUI.Print(L("msg.menu.auto.switched", want)) end
+	end
+end
+
+local function onGroup()
+	if A.task then return end
+	A.task = SUI.After(2, function()
+		A.task = nil
+		SUI.WhenSafe(A.Apply)
+	end, "menuautoprof")
+end
+
+function A.Check()
+	if A.Any() then onGroup() end
+end
+
+-- Ecoute les evenements seulement si un profil automatique est defini.
+function A.Sync()
+	local want = A.Any()
+	if want == A.events then return end
+	A.events = want
+	for i = 1, getn(AEVENTS) do
+		if want then SUI.On(AEVENTS[i], onGroup) else SUI.Off(AEVENTS[i], onGroup) end
+	end
+end
+
+SUI.On("PLAYER_LOGIN", function()
+	A.Sync()
+	A.Check()
+end)
+
 function M.Pages.profiles()
 	local C = SUI.Config
 	local B = SUI.Backup
@@ -156,6 +237,27 @@ function M.Pages.profiles()
 	end)
 	M.GridBtn(L("mod.menu.pr.export"), 3, 208, 26, function() M.ShowTransfer("export") end)
 	M.GridBtn(L("mod.menu.pr.import"), 3, 208, 26, function() M.ShowTransfer("import") end)
+	M.EndRow(8)
+	-- ---- profil automatique par contexte
+	M.Section(L("mod.menu.auto.sec"))
+	M.Para(L("mod.menu.auto.why"), 44)
+	for i = 1, getn(A.ctx) do
+		local ctx = A.ctx[i]
+		local cur = A.Get(ctx)
+		M.GridBtn(L("mod.menu.auto." .. ctx, cur or L("mod.menu.auto.none")), 4, 153, 26, function()
+			local nxt
+			if not cur then
+				nxt = list[1]
+			else
+				nxt = nil
+				for j = 1, getn(list) do
+					if list[j] == cur then nxt = list[j + 1] end
+				end
+			end
+			A.Set(ctx, nxt)
+			M.Render()
+		end, cur ~= nil)
+	end
 	M.EndRow(8)
 	-- ---- sauvegardes
 	local bl = B.List()

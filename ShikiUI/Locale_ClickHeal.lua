@@ -307,3 +307,38 @@ SUI.AddStrings("en", {
 	["msg.clickheal.none"] = "No active binding: everything uses the frame default.",
 	["msg.clickheal.info"] = "Click healing: class %s, wheel %d, method %s. /sui clickheal list for the bindings.",
 })
+
+ShikiUI.AddStrings("fr", {
+	["opt.clickheal.clickon"] = "Clic a l appui ou au relachement",
+	["tip.clickheal.clickon"] = "Relachement (par defaut) : le soin part quand on relache le bouton. Appui : il part des que le bouton est enfonce, un peu plus vif pour les soins d urgence. Concerne les cadres de groupe et de raid.",
+	["choice.clickheal.clickon.up"] = "Au relachement",
+	["choice.clickheal.clickon.down"] = "A l appui",
+	["opt.clickheal.hintcost"] = "Cout en mana dans l'aide",
+	["tip.clickheal.hintcost"] = "Ajoute le cout en mana du sort lie (au rang choisi) apres son nom dans l'aide de l'infobulle. Lu une fois dans le grimoire puis garde jusqu'a la prochaine lecture du grimoire.",
+	["msg.clickheal.hintcost"] = "%s (%d mana)",
+	["opt.clickheal.keytarget"] = "Touches : cible amie en repli",
+	["tip.clickheal.keytarget"] = "Les touches de soin au clavier (Raccourcis > ShikiUI : soin au clic) visent le cadre survole ; sans cadre survole, elles visent la cible amie si cette option est cochee.",
+	["mod.clickheal.bind.header"] = "ShikiUI : soin au clic",
+	["mod.clickheal.bind.1"] = "Soin au clic : clic gauche",
+	["mod.clickheal.bind.2"] = "Soin au clic : clic droit",
+	["mod.clickheal.bind.3"] = "Soin au clic : clic milieu",
+	["mod.clickheal.bind.4"] = "Soin au clic : roulette haut",
+	["mod.clickheal.bind.5"] = "Soin au clic : roulette bas",
+})
+ShikiUI.AddStrings("en", {
+	["opt.clickheal.clickon"] = "Click on press or release",
+	["tip.clickheal.clickon"] = "Release (default): the heal goes off when you release the button. Press: it goes off as soon as the button goes down, a little snappier for emergency heals. Applies to group and raid frames.",
+	["choice.clickheal.clickon.up"] = "On release",
+	["choice.clickheal.clickon.down"] = "On press",
+	["opt.clickheal.hintcost"] = "Mana cost in hints",
+	["tip.clickheal.hintcost"] = "Adds the mana cost of the bound spell (at the chosen rank) after its name in the tooltip hints. Read once from the spellbook, then kept until the next spellbook scan.",
+	["msg.clickheal.hintcost"] = "%s (%d mana)",
+	["opt.clickheal.keytarget"] = "Keys: friendly target fallback",
+	["tip.clickheal.keytarget"] = "The keyboard heal keys (Key Bindings > ShikiUI: click healing) aim at the hovered frame; with no hovered frame they aim at the friendly target if this is checked.",
+	["mod.clickheal.bind.header"] = "ShikiUI: click healing",
+	["mod.clickheal.bind.1"] = "Click heal: left click",
+	["mod.clickheal.bind.2"] = "Click heal: right click",
+	["mod.clickheal.bind.3"] = "Click heal: middle click",
+	["mod.clickheal.bind.4"] = "Click heal: wheel up",
+	["mod.clickheal.bind.5"] = "Click heal: wheel down",
+})

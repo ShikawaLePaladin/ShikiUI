@@ -50,10 +50,14 @@ local KEYS = { maxgroup = 8, width = 64, height = 28, powerheight = 0, spacing =
 	iconsize = 10, dispelmode = "known", dispelonly = true, dispelstyle = "both", dispelprio = "magic", aggro = true, incoming = true,
 	resinfo = true, roletag = false, leader = true, marks = true, target = true, nameanchor = "topleft", nameicons = "dispel", dispelbig = true,
 	dispelbigmax = 1, dispelsize = 20, dispelpos = "center", dispelsmall = false, dispelsmallpos = "bottomleft", dispelsmallsize = 9,
-	dispelthick = 2, fxframes = true, fxsize = 20, fxpos = "left", fxmax = 2, aggroframes = true }
+	dispelthick = 2, fxframes = true, fxsize = 20, fxpos = "left", fxmax = 2, aggroframes = true,
+	-- 5e passe (soigneur) : memes valeurs de repli que SUI.GroupEngine.CFGKEYS
+	fill = "tl", grpperline = 8, grouptitle = false, hppos = "right", manapos = "center", manacontent = "percent", manatext = false,
+	deadalpha = 0, offalpha = 0, los = false, losalpha = 0.6, markpos = "topleft", marksize = 0, hpcustom = "", deadcolor = "", inccolor = "",
+	autosize = false, scale20 = 0.9, scale25 = 0.8, scale40 = 0.7, tagpos = "topright", tagsize = 9 }
 local ZKEY = { frame = "width", hp = "hpcolor", heal = "incoming", power = "powerheight", name = "nameanchor", hptext = "hptext", tag = "roletag",
-	mark = "marks", dispel = "dispelstyle", deb = "debuffs", hot = "hots", buf = "buffs", aggro = "aggro", far = "range", dead = "outalpha",
-	off = "outalpha", nic = "nameicons", big = "dispelbigmax", small = "dispelsmall", fx = "fxframes", agg = "aggroframes" }
+	mark = "marks", dispel = "dispelstyle", deb = "debuffs", hot = "hots", buf = "buffs", aggro = "aggro", far = "range", dead = "deadalpha",
+	off = "offalpha", nic = "nameicons", big = "dispelbigmax", small = "dispelsmall", fx = "fxframes", agg = "aggroframes" }
 local ZORDER = { "frame", "hp", "heal", "power", "name", "hptext", "tag", "mark", "dispel", "deb", "hot", "buf", "aggro", "nic", "big", "small",
 	"fx", "agg" }
 
@@ -76,6 +80,7 @@ R.roster[6].rank = 1
 R.roster[7].hpr, R.roster[7].state = 0, 1         -- un mort
 R.roster[13].state = 2                            -- un hors ligne
 R.roster[19].far, R.roster[26].far, R.roster[33].far = true, true, true     -- trois hors portee
+R.roster[8].los, R.roster[15].los, R.roster[29].los = true, true, true      -- trois a portee mais hors ligne de vue (reglage los)
 R.roster[3].aggro = true                          -- un en aggro
 R.roster[4].target = true                         -- une cible
 -- effets de boss et aggro d'exemple (indices de SUI.GroupFx.ORDER : 1 = bombe vivante, 2 = adrenaline brulante, 3 = panique) ; fxt = secondes
@@ -116,6 +121,16 @@ local function readCfg(prefix, cfg)
 		cfg[k] = v
 	end
 	cfg.ns = (prefix == "raid.") and "raid" or "group"
+	cfg.rw, cfg.rh, cfg.ri = cfg.width, cfg.height, cfg.iconsize          -- tailles reglees (la densite automatique en derive, voir layoutAll)
+	-- couleurs personnalisees, police et texture du module (memes lectures que les vrais cadres)
+	local E = SUI.GroupEngine
+	if not cfg.cHp then cfg.cHp, cfg.cDead, cfg.cInc = { 0, 0, 0 }, { 0, 0, 0 }, { 0, 0, 0 } end
+	cfg.colHp = E and E.ReadHex(cfg.cHp, cfg.hpcustom) or nil
+	cfg.colDead = E and E.ReadHex(cfg.cDead, cfg.deadcolor) or nil
+	cfg.colInc = E and E.ReadHex(cfg.cInc, cfg.inccolor) or nil
+	local look = string.sub(prefix, 1, -2)
+	cfg.fpath, cfg.fpx = T.Font(look)
+	cfg.btex = T.BarTexture(look)
 	-- reglages d'affichage de SUI.GroupFx (le module peut etre coupe : l'apercu montre quand meme ce qu'il donnerait)
 	cfg.gIcon = C.Get("groupfx.fx.on") ~= false and C.Get("groupfx.fx.icon") ~= false
 	cfg.gTint = C.Get("groupfx.fx.on") ~= false and C.Get("groupfx.fx.tint") ~= false
@@ -164,39 +179,11 @@ function R.Arrange(st, cfg, n, kind)
 		end
 		ord[j + 1] = p
 	end
-	local w, h, sp, gap = cfg.width, cfg.height, cfg.spacing, cfg.groupgap
-	local sortGroup = (cfg.sort == "group")
-	local vertical = (cfg.orient == "vertical")
-	local perline = cfg.perline
-	if perline < 1 then perline = 1 end
-	local line, pos, lastSub = 0, 0, nil
-	local maxX, maxY = 0, 0
-	for k = 1, cnt do
-		local p = ord[k]
-		if sortGroup then
-			if p.sub ~= lastSub then
-				if lastSub then line = line + 1 end
-				pos = 0
-				lastSub = p.sub
-			end
-		else
-			line = floor((k - 1) / perline)
-			pos = (k - 1) - line * perline
-		end
-		local lineGap = sortGroup and gap or sp
-		local x, y
-		if vertical then
-			x = line * (w + lineGap)
-			y = pos * (h + sp)
-		else
-			x = pos * (w + sp)
-			y = line * (h + lineGap)
-		end
-		st.px[k], st.py[k] = x, y
-		if x + w > maxX then maxX = x + w end
-		if y + h > maxY then maxY = y + h end
-		pos = pos + 1
-	end
+	-- meme fonction de geometrie que les vrais cadres (SUI.GroupEngine.Layout) : coin de depart, groupes par ligne, titres de groupe
+	local E = SUI.GroupEngine
+	if not (E and type(E.Layout) == "function") then return cnt, cfg.width, cfg.height end
+	if not st.tx then st.tx, st.ty, st.tj = {}, {}, {} end
+	local maxX, maxY = E.Layout(cfg, ord, cnt, st.px, st.py, st.tx, st.ty, st.tj)
 	return cnt, maxX, maxY
 end
 
@@ -249,6 +236,7 @@ local function newCell(parent, caps, clickable)
 	c.hpt = T.Text(c, 10, T.c.text, "RIGHT", true)
 	c.stt = T.Text(c, 10, T.c.warn, "CENTER", true)
 	c.tag = T.Text(c, 9, T.c.warn, "RIGHT", true)
+	c.pwt = T.Text(c, 8, T.c.text, "CENTER", true)
 	c.rc = {}
 	for i = 1, getn(ZORDER) do c.rc[ZORDER[i]] = { 0, 0, 0, 0 } end
 	c:Hide()
@@ -260,6 +248,12 @@ local function rect(c, key, x, y, w, h)
 	r[1], r[2], r[3], r[4] = x, y, w, h
 end
 
+-- Police du module (<module>.font) a la taille voulue ; repli : police du style.
+local function pfont(fs, size, cfg)
+	if size < 6 then size = 6 end
+	pcall(fs.SetFont, fs, cfg.fpath or T.font, size * (cfg.fpx and 1 or (T.fontScale or 1)), T.outline)
+end
+
 local function classColor(class)
 	local col = RAID_CLASS_COLORS and RAID_CLASS_COLORS[class]
 	if col then return col.r, col.g, col.b end         -- couleur de classe (donnee de jeu)
@@ -267,8 +261,12 @@ local function classColor(class)
 end
 
 local function hpColor(cfg, p, ratio)
-	if p.state ~= 0 then return T.c.dim[1], T.c.dim[2], T.c.dim[3] end
+	if p.state ~= 0 then
+		local d = cfg.colDead or T.c.dim
+		return d[1], d[2], d[3]
+	end
 	if cfg.hpcolor == "class" then return classColor(p.class) end
+	if cfg.hpcolor == "custom" and cfg.colHp then return cfg.colHp[1], cfg.colHp[2], cfg.colHp[3] end
 	if cfg.hpcolor == "health" then
 		local a, b, t
 		if ratio > 0.5 then
@@ -432,7 +430,7 @@ local function paintFx(c, p, cfg, s, w, h, base, nt)
 	if ssz < 2 then ssz = 2 end
 	local sgap = ssz + floor(3 * s + 0.5)
 	local nsm = cfg.dispelsmall and nt or 0
-	local tagres = floor(((cfg.roletag or cfg.leader) and 12 or 0) * s + 0.5)
+	local tagres = floor((((cfg.roletag or cfg.leader) and cfg.tagpos == "topright") and 12 or 0) * s + 0.5)
 	local agres = floor((cfg.aggroframes and 14 or 0) * s + 0.5)
 	local sx0, sy
 	for k = 1, 4 do
@@ -591,6 +589,9 @@ function R.Paint(c, p, cfg, s, caps)
 	local fillw = iw * ratio
 	if state == 2 then fillw = iw end
 	local r, g, b = hpColor(cfg, p, ratio)
+	c.hp:SetTexture(cfg.btex or T.tex.white)                 -- texture de barre du module (<module>.bartex)
+	c.heal:SetTexture(cfg.btex or T.tex.white)
+	c.pw:SetTexture(cfg.btex or T.tex.white)
 	c.hp:SetVertexColor(r, g, b, 1)
 	P.Box(c.hp, c, 1, 1, fillw, hpH)
 	rect(c, "hp", 1, 1, iw, hpH)
@@ -598,7 +599,7 @@ function R.Paint(c, p, cfg, s, caps)
 	if cfg.incoming and p.inc > 0 and state == 0 then
 		local hv = ratio + p.inc
 		if hv > 1 then hv = 1 end
-		P.Fill(c.heal, T.c.good, 0.45)
+		P.Fill(c.heal, cfg.colInc or T.c.good, 0.45)
 		P.Box(c.heal, c, 1, 1, iw * hv, hpH)
 		rect(c, "heal", 1 + iw * ratio, 1, iw * (hv - ratio), hpH)
 	else
@@ -611,8 +612,26 @@ function R.Paint(c, p, cfg, s, caps)
 		c.pw:SetVertexColor(pr, pg, pb, 1)
 		P.Box(c.pw, c, 1, h - 1 - phpx, iw * p.pr, phpx)
 		rect(c, "power", 1, h - 1 - phpx, iw, phpx)
+		-- texte de mana : place (manapos) et contenu (manacontent) reels, quand la barre est assez haute pour le lire
+		local E = SUI.GroupEngine
+		if cfg.manatext and state == 0 and phpx >= 7 and E and type(E.PowerText) == "function" and E.PW_AT then
+			local at = E.PW_AT[cfg.manapos] or E.PW_AT.center
+			local mfs = phpx - 1
+			if mfs > 12 then mfs = 12 end
+			pfont(c.pwt, mfs, cfg)
+			c.pwt:SetText(E.PowerText(cfg.manacontent, floor(p.pr * 3000), 3000))
+			c.pwt:ClearAllPoints()
+			c.pwt:SetPoint(at[1], c.pw, at[1], at[3], 0)
+			c.pwt:SetJustifyH(at[2])
+			c.pwt:SetWidth(floor(w * 0.5))
+			c.pwt:SetHeight(mfs + 2)
+			c.pwt:Show()
+		else
+			c.pwt:Hide()
+		end
 	else
 		c.pw:Hide()
+		c.pwt:Hide()
 		rect(c, "power", 1, h - 3, iw, 3)
 	end
 	-- aggro / cible
@@ -709,20 +728,34 @@ function R.Paint(c, p, cfg, s, caps)
 	rect(c, "buf", w - hx - (nhot + (nb > 0 and nb or 1)) * isz - (nhot + nb), h - base - isz, (nb > 0 and nb or 1) * isz, isz)
 	-- grosses / petites icones de dissipation, effets de boss et aggro d'exemple
 	paintFx(c, p, cfg, s, w, h, base, nt)
-	-- marqueur
+	-- marqueur (place markpos, taille marksize ; 0 = taille des icones)
+	local msz = (cfg.marksize > 0) and floor(cfg.marksize * s + 0.5) or isz
+	if msz < 2 then msz = 2 end
 	if cfg.marks and p.mark then
 		markCoords(c.mk, p.mark)
 		c.mk:ClearAllPoints()
-		c.mk:SetPoint("TOPLEFT", c, "TOPLEFT", floor(2 * s + 0.5), -floor(2 * s + 0.5))
-		c.mk:SetWidth(isz)
-		c.mk:SetHeight(isz)
+		if cfg.markpos == "topcenter" then
+			c.mk:SetPoint("TOP", c, "TOP", 0, -floor(2 * s + 0.5))
+		elseif cfg.markpos == "center" then
+			c.mk:SetPoint("CENTER", c, "CENTER", 0, 0)
+		else
+			c.mk:SetPoint("TOPLEFT", c, "TOPLEFT", floor(2 * s + 0.5), -floor(2 * s + 0.5))
+		end
+		c.mk:SetWidth(msz)
+		c.mk:SetHeight(msz)
 		c.mk:Show()
 	else
 		c.mk:Hide()
 	end
-	rect(c, "mark", floor(2 * s + 0.5), floor(2 * s + 0.5), isz, isz)
+	local mkx, mky = floor(2 * s + 0.5), floor(2 * s + 0.5)
+	if cfg.markpos == "topcenter" then
+		mkx = floor((w - msz) / 2)
+	elseif cfg.markpos == "center" then
+		mkx, mky = floor((w - msz) / 2), floor((h - msz) / 2)
+	end
+	rect(c, "mark", mkx, mky, msz, msz)
 	-- textes (cachees quand le cadre est trop petit pour etre lisibles)
-	local fs = 10 * s
+	local fs = (cfg.fpx or 10) * s                    -- taille du module (<module>.fontsize), 0 = taille d'origine
 	if fs > 15 then fs = 15 end
 	local textOk = (hpH >= 8 and fs >= 6.5)
 	local ty = 1 + (hpH - fs - 2) / 2
@@ -732,6 +765,11 @@ function R.Paint(c, p, cfg, s, caps)
 	-- pseudo place librement : ligne (haut / milieu / bas) et colonne (gauche / centre / droite)
 	local at = NAMEAT[cfg.nameanchor] or NAMEAT.left
 	local nw = floor(w * 0.62)
+	local tag = ""
+	if cfg.roletag then tag = M.Tx("msg." .. cfg.ns .. ".role." .. string.lower(p.role)) end
+	if cfg.leader then
+		if p.rank == 2 then tag = tag .. "*" elseif p.rank == 1 then tag = tag .. "+" end
+	end
 	local nx, ny = tx, ty
 	if at[1] == 1 then
 		ny = 1 + floor(2 * s + 0.5)
@@ -740,15 +778,16 @@ function R.Paint(c, p, cfg, s, caps)
 		if ny < 1 then ny = 1 end
 	end
 	if at[2] == 1 then
-		if at[1] == 1 and cfg.marks and p.mark then nx = nx + isz + floor(2 * s + 0.5) end      -- sous le marqueur de raid
+		if at[1] == 1 and cfg.marks and p.mark and cfg.markpos == "topleft" then nx = nx + msz + floor(2 * s + 0.5) end      -- sous le marqueur de raid
+		if tag ~= "" and ((at[1] == 1 and cfg.tagpos == "topleft") or (at[1] == 3 and cfg.tagpos == "bottomleft")) then nx = nx + floor(12 * s + 0.5) end
 	elseif at[2] == 2 then
 		nx = floor((w - nw) / 2)
 	else
 		nx = w - nw - tx
-		if at[1] == 1 and cfg.leader and p.rank > 0 then nx = nx - floor(12 * s + 0.5) end     -- a gauche du chef / role
+		if tag ~= "" and ((at[1] == 1 and cfg.tagpos == "topright") or (at[1] == 3 and cfg.tagpos == "bottomright")) then nx = nx - floor(12 * s + 0.5) end     -- a gauche du chef / role
 	end
 	if textOk then
-		P.Font(c.name, fs)
+		pfont(c.name, fs, cfg)
 		c.name:SetText(nm)
 		c.name:SetJustifyH(JUST[at[2]])
 		c.name:ClearAllPoints()
@@ -817,20 +856,41 @@ function R.Paint(c, p, cfg, s, caps)
 	rect(c, "nic", ncx, ny + (fs + 2 - nsz) / 2, nsz * (kk > 0 and kk or 1), nsz)
 	local hs = ""
 	if state == 0 then hs = hpString(cfg, floor(p.hpr * p.hpmax + 0.5), p.hpmax) end
+	-- texte de vie : neuf places (hppos), meme grille que le pseudo ; "right" = emplacement d'origine
+	local hat = NAMEAT[cfg.hppos] or NAMEAT.right
+	local hy = ty
+	if hat[1] == 1 then
+		hy = 1 + floor(2 * s + 0.5)
+	elseif hat[1] == 3 then
+		hy = 1 + hpH - fs - 2 - floor(2 * s + 0.5)
+		if hy < 1 then hy = 1 end
+	end
+	local hw = floor(w * 0.5)
+	local hx
+	if hat[2] == 1 then
+		hx = tx
+	elseif hat[2] == 2 then
+		hx = floor((w - hw) / 2)
+	else
+		hx = w - hw - tx - 1
+	end
 	if textOk and hs ~= "" and w >= 40 then
-		P.Font(c.hpt, fs)
+		pfont(c.hpt, fs, cfg)
 		c.hpt:SetText(hs)
+		c.hpt:SetJustifyH(JUST[hat[2]])
 		c.hpt:ClearAllPoints()
-		c.hpt:SetPoint("TOPRIGHT", c, "TOPRIGHT", -tx - 1, -ty)
-		c.hpt:SetWidth(floor(w * 0.5))
+		c.hpt:SetPoint("TOPLEFT", c, "TOPLEFT", hx, -hy)
+		c.hpt:SetWidth(hw)
 		c.hpt:SetHeight(fs + 2)
 		c.hpt:Show()
 	else
 		c.hpt:Hide()
 	end
-	rect(c, "hptext", w - floor(w * 0.4) - tx, ty, floor(w * 0.4), fs + 2)
+	local zw = floor(w * 0.4)
+	local zx = (hat[2] == 1) and tx or ((hat[2] == 2) and floor((w - zw) / 2) or (w - zw - tx))
+	rect(c, "hptext", zx, hy, zw, fs + 2)
 	if textOk and state ~= 0 then
-		P.Font(c.stt, fs)
+		pfont(c.stt, fs, cfg)
 		c.stt:SetText(state == 2 and L("unit.offline") or L("unit.dead"))
 		c.stt:ClearAllPoints()
 		c.stt:SetPoint("TOP", c, "TOP", 0, -ty)
@@ -840,26 +900,40 @@ function R.Paint(c, p, cfg, s, caps)
 	else
 		c.stt:Hide()
 	end
-	local tag = ""
-	if cfg.roletag then tag = M.Tx("msg." .. cfg.ns .. ".role." .. string.lower(p.role)) end
-	if cfg.leader then
-		if p.rank == 2 then tag = tag .. "*" elseif p.rank == 1 then tag = tag .. "+" end
-	end
+	local tfs = (cfg.tagsize or 9) * s
+	if tfs > 15 then tfs = 15 end
+	local tgx, tgy = floor(2 * s + 0.5), floor(2 * s + 0.5)
+	local tgw = floor(w * 0.4)
+	local tpos = cfg.tagpos or "topright"
+	local tright = (tpos == "topright" or tpos == "bottomright")
+	local tbottom = (tpos == "bottomright" or tpos == "bottomleft")
+	local tcx = tright and (w - tgw - tgx) or tgx
+	local tcy = tbottom and (h - tfs - 2 - tgy) or tgy
+	if tcy < 1 then tcy = 1 end
 	if textOk and tag ~= "" then
-		P.Font(c.tag, fs * 0.9)
+		P.Font(c.tag, tfs)
 		c.tag:SetText(tag)
+		c.tag:SetJustifyH(tright and "RIGHT" or "LEFT")
 		c.tag:ClearAllPoints()
-		c.tag:SetPoint("TOPRIGHT", c, "TOPRIGHT", -floor(2 * s + 0.5), -floor(2 * s + 0.5))
-		c.tag:SetWidth(floor(w * 0.4))
-		c.tag:SetHeight(fs + 2)
+		c.tag:SetPoint("TOPLEFT", c, "TOPLEFT", tcx, -tcy)
+		c.tag:SetWidth(tgw)
+		c.tag:SetHeight(tfs + 2)
 		c.tag:Show()
 	else
 		c.tag:Hide()
 	end
-	rect(c, "tag", w - floor(w * 0.3) - 2, 1, floor(w * 0.3), fs + 2)
+	rect(c, "tag", tright and (w - floor(w * 0.3) - 2) or 2, floor(tcy), floor(w * 0.3), floor(tfs + 2))
 	-- transparence : mort, hors ligne ou hors portee (si la portee est suivie)
 	local a = 1
-	if state ~= 0 or (cfg.range and p.far) then a = cfg.outalpha end
+	if state == 1 and cfg.deadalpha > 0 then
+		a = cfg.deadalpha
+	elseif state == 2 and cfg.offalpha > 0 then
+		a = cfg.offalpha
+	elseif state ~= 0 or (cfg.range and p.far) then
+		a = cfg.outalpha
+	elseif cfg.los and p.los then
+		a = cfg.losalpha
+	end
 	c:SetAlpha(a)
 	c:Show()
 end
@@ -877,6 +951,20 @@ local function layoutAll(root, w, h)
 	local cfg = st.cfg
 	local caps = st.caps
 	local prefix = st.prefix
+	-- densite automatique (autosize) : meme facteur que les vrais cadres pour l'effectif simule (visibles seulement)
+	local E = SUI.GroupEngine
+	local vis = 0
+	for i = 1, st.n do
+		if st.kind ~= "raid" or R.roster[i].sub <= cfg.maxgroup then vis = vis + 1 end
+	end
+	local af = (E and type(E.AutoFactor) == "function") and E.AutoFactor(cfg, vis) or 1
+	cfg.width, cfg.height, cfg.iconsize = cfg.rw, cfg.rh, cfg.ri
+	if af ~= 1 then
+		cfg.width, cfg.height, cfg.iconsize = floor(cfg.rw * af + 0.5), floor(cfg.rh * af + 0.5), floor(cfg.ri * af + 0.5)
+		if cfg.width < 24 then cfg.width = 24 end
+		if cfg.height < 10 then cfg.height = 10 end
+		if cfg.iconsize < 6 then cfg.iconsize = 6 end
+	end
 	-- selecteur
 	local x = 0
 	for i = 1, getn(st.sizes) do
@@ -963,6 +1051,28 @@ local function layoutAll(root, w, h)
 	end
 	P.Place(st.gap, root, gx + offx, gy, floor(tw * sg), floor(th * sg))
 	st.gap:Show()
+	-- titres de groupe (grouptitle, tri par groupe) : la ou les vrais cadres les posent
+	for q = 1, 8 do
+		local t = st.titles[q]
+		local tx0 = st.tx and st.tx[q]
+		if tx0 and cfg.grouptitle and cfg.sort == "group" and sg >= 0.5 then
+			pfont(t, 9 * sg, cfg)
+			t:SetText(L("msg." .. cfg.ns .. ".gtitle", q))
+			t:ClearAllPoints()
+			if st.tj[q] then
+				t:SetPoint("TOPRIGHT", root, "TOPLEFT", gx + offx + floor(tx0 * sg), -(gy + floor(st.ty[q] * sg)))
+				t:SetJustifyH("RIGHT")
+			else
+				t:SetPoint("TOPLEFT", root, "TOPLEFT", gx + offx + floor(tx0 * sg), -(gy + floor(st.ty[q] * sg)))
+				t:SetJustifyH("LEFT")
+			end
+			t:SetWidth(floor(cfg.width * sg))
+			t:SetHeight(11 * sg)
+			t:Show()
+		else
+			t:Hide()
+		end
+	end
 	setCaption(st, cfg, prefix, cnt)
 	st.legend:SetText(L("mod.preview.raid.legend") .. " " .. L("mod.preview.raid.legend2"))
 end
@@ -1012,6 +1122,12 @@ local function makeDef(kind, prefix, sizes, defN, caps)
 			b.st = st
 			st.btns[i] = b
 		end
+		st.titles = {}
+		for q = 1, 8 do
+			st.titles[q] = T.Text(root, 9, T.c.dim, "LEFT", true)
+			st.titles[q]:Hide()
+		end
+		st.tx, st.ty, st.tj = {}, {}, {}
 		st.cap = T.Text(root, 10, T.c.dim, "LEFT")
 		st.cap:SetHeight(12)
 		st.capZone = P.Zone(root, "sort")

@@ -76,7 +76,13 @@ M.lastZone = nil
 M.lastClock = nil
 M.cfg = { shape = "round", size = 140, wheel = true, coords = true, dec = 1, zone = true, zonepvp = true, clock = "off", clutter = true,
 	buttons = true, btnmode = "drawer", keep = "", cols = 4, btnsize = 28, alpha = 1, edge = true,
-	launcher = true, launchangle = 165, launchsize = 22 }
+	launcher = true, launchangle = 165, launchsize = 22, coordpos = "bottomleft", coordshow = "always", clockpos = "bottomright",
+	clockfmt = "24", zonepos = "top", trackpos = "auto", tracksize = 100 }
+-- Emplacements des textes (zone, coordonnees, heure) : { point du texte, point du cadre, dx, dy }. "below" / "above" = hors du cadre.
+local TEXTPOS = { top = { "TOP", "TOP", 0, -(PAD + 3) }, bottom = { "BOTTOM", "BOTTOM", 0, PAD + 2 },
+	bottomleft = { "BOTTOMLEFT", "BOTTOMLEFT", PAD + 2, PAD + 2 }, bottomright = { "BOTTOMRIGHT", "BOTTOMRIGHT", -(PAD + 2), PAD + 2 },
+	below = { "TOP", "BOTTOM", 0, -2 }, above = { "BOTTOM", "TOP", 0, 2 } }
+local TRACK = { MiniMapTrackingFrame = true, MiniMapTracking = true }
 local CORNER = { topleft = { "TOPLEFT", 2, -2 }, topright = { "TOPRIGHT", -2, -2 }, bottomleft = { "BOTTOMLEFT", 2, 2 },
 	bottomright = { "BOTTOMRIGHT", -2, 2 } }
 
@@ -157,6 +163,13 @@ function M.ReadConfig()
 	cfg.launcher = C.Get("minimap.launcher")
 	cfg.launchangle = C.Get("minimap.launchangle")
 	cfg.launchsize = C.Get("minimap.launchsize")
+	cfg.coordpos = C.Get("minimap.coordpos")
+	cfg.coordshow = C.Get("minimap.coordshow")
+	cfg.clockpos = C.Get("minimap.clockpos")
+	cfg.clockfmt = C.Get("minimap.clockfmt")
+	cfg.zonepos = C.Get("minimap.zonepos")
+	cfg.trackpos = C.Get("minimap.trackpos")
+	cfg.tracksize = C.Get("minimap.tracksize")
 end
 
 -- ---------------------------------------------------------------- texte : coordonnees, zone, heure
@@ -169,21 +182,52 @@ end
 
 function M.UpdateCoords()
 	local txt = ""
-	if M.cfg.coords then txt = M.CoordText() end
+	if M.cfg.coords and (M.cfg.coordshow ~= "hover" or M.coordHover) then txt = M.CoordText() end
 	if txt ~= M.lastCoord then
 		M.lastCoord = txt
 		M.coordText:SetText(txt)
 	end
 end
 
+-- Coordonnees "au survol" : minuterie (0,25 s) seulement tant que ce mode est choisi ; le texte n'apparait que souris sur la minimap.
+function M.CoordHoverTick()
+	if not M.on or not M.holder or type(MouseIsOver) ~= "function" then return end
+	local over = MouseIsOver(M.holder) and true or false
+	if over ~= M.coordHover then
+		M.coordHover = over
+		M.UpdateCoords()
+	end
+end
+
+function M.ApplyCoordHover()
+	local want = M.on and M.active and M.cfg.coords and M.cfg.coordshow == "hover"
+	if want and not M.coordTask then
+		M.coordTask = SUI.Every(HOVER_TICK, M.CoordHoverTick, "minimap.coordhover")
+	elseif not want and M.coordTask then
+		SUI.Cancel(M.coordTask)
+		M.coordTask = nil
+		M.coordHover = false
+	end
+end
+
+-- Heure : 24 h (defaut) ou 12 h avec am / pm.
+function M.ClockText(h, m)
+	if M.cfg.clockfmt == "12" then
+		local h12 = SUI.Mod(h, 12)
+		if h12 == 0 then h12 = 12 end
+		return strformat("%d:%02d%s", h12, m, h >= 12 and "pm" or "am")
+	end
+	return strformat("%02d:%02d", h, m)
+end
+
 function M.UpdateClock()
 	local txt = ""
 	local mode = M.cfg.clock
 	if mode == "local" then
-		txt = date("%H:%M")
+		txt = M.ClockText(tonumber(date("%H")) or 0, tonumber(date("%M")) or 0)
 	elseif mode == "server" then
 		local h, m = GetGameTime()
-		txt = strformat("%02d:%02d", h, m)
+		txt = M.ClockText(h, m)
 	end
 	if txt ~= M.lastClock then
 		M.lastClock = txt
@@ -779,6 +823,7 @@ function M.BlizHidden(name)
 	local cfg = M.cfg
 	if not M.on then return false end
 	if M.keep[name] then return false end
+	if TRACK[name] and cfg.trackpos ~= "auto" then return false end   -- un coin choisi pour le suivi = on le veut visible
 	if cfg.clutter then return true end
 	return cfg.buttons and cfg.btnmode == "hide"
 end
@@ -791,6 +836,21 @@ function M.PlaceBliz(r, y)
 		r.o = { p = p, rel = rel, rp = rp, x = x, y = yy, parent = f:GetParent() }
 	end
 	if not r.o.p then return y end
+	local tp = TRACK[r.name] and M.cfg.trackpos or "auto"
+	if tp ~= "auto" and CORNER[tp] then
+		-- suivi : dans le coin choisi de la minimap, a la taille choisie (parent, niveau et echelle d'origine gardes)
+		if not r.o.level then r.o.level, r.o.scale = f:GetFrameLevel(), f:GetScale() or 1 end
+		local k = (M.cfg.tracksize or 100) / 100
+		f:SetParent(M.holder)
+		f:SetFrameLevel(Minimap:GetFrameLevel() + 6)
+		f:SetScale(k)
+		f:ClearAllPoints()
+		local c = CORNER[tp]
+		f:SetPoint(c[1], M.holder, c[1], c[2] / k, c[3] / k)
+		r.placed, r.corner = true, true
+		return y
+	end
+	if r.corner then M.UnplaceBliz(r) end
 	f:ClearAllPoints()
 	f:SetPoint("TOPRIGHT", M.holder, "TOPLEFT", -2, y)
 	r.placed = true
@@ -803,6 +863,14 @@ function M.UnplaceBliz(r)
 	if not r.placed then return end
 	r.placed = nil
 	local o = r.o
+	if r.corner then
+		r.corner = nil
+		if o and o.level then
+			r.f:SetParent(o.parent)
+			r.f:SetFrameLevel(o.level)
+			r.f:SetScale(o.scale or 1)
+		end
+	end
 	r.f:ClearAllPoints()
 	if o and o.p then r.f:SetPoint(o.p, o.rel, o.rp, o.x, o.y) end
 end
@@ -1057,6 +1125,23 @@ function M.OpenList()
 end
 
 -- ---------------------------------------------------------------- application des reglages
+-- Pose un texte a l'emplacement choisi (jamais re-ancre si rien n'a change).
+local function placeOne(fs, pos, def)
+	local d = TEXTPOS[pos] or TEXTPOS[def]
+	fs:ClearAllPoints()
+	fs:SetPoint(d[1], M.holder, d[2], d[3], d[4])
+end
+
+function M.PlaceTexts()
+	local cfg = M.cfg
+	local sig = cfg.zonepos .. "/" .. cfg.coordpos .. "/" .. cfg.clockpos
+	if sig == M.textSig then return end
+	M.textSig = sig
+	placeOne(M.zoneText, cfg.zonepos, "top")
+	placeOne(M.coordText, cfg.coordpos, "bottomleft")
+	placeOne(M.clockText, cfg.clockpos, "bottomright")
+end
+
 function M.ApplyOptions()
 	if not M.built then return end
 	local cfg = M.cfg
@@ -1084,8 +1169,10 @@ function M.ApplyOptions()
 		M.hoverOpen = false
 		M.drawer:Hide()
 	end
+	M.PlaceTexts()
 	M.ApplyIcons()
 	M.LaunchApply()
+	M.ApplyCoordHover()
 	M.lastCoord, M.lastClock, M.lastZone = nil, nil, nil
 	if on then
 		M.UpdateCoords()
@@ -1776,6 +1863,9 @@ function M.Deactivate()
 	M.watchTask = nil
 	SUI.Cancel(M.hoverTask)
 	M.hoverTask = nil
+	SUI.Cancel(M.coordTask)
+	M.coordTask = nil
+	M.coordHover = false
 	-- Remove detache un observateur de la configuration : jamais pendant une notification (Config.Notify parcourt sa liste), donc differe.
 	if SUI.Visibility and M.holder then SUI.After(0.05, M.VisDrop, "minimap.visdrop") end
 	M.LaunchStopDrag()
@@ -1833,7 +1923,7 @@ end
 
 local MM_OPTIONS = {
 		opt("shape", "choice", 10, "round", { choices = { "round", "square" }, simple = true }),
-		opt("size", "number", 20, 140, { min = 100, max = 240, step = 10, simple = true }),
+		opt("size", "number", 20, 140, { min = 80, max = 320, step = 10, simple = true }),
 		opt("alpha", "number", 25, 1, { min = 0.3, max = 1, step = 0.1 }),
 		opt("wheel", "bool", 30, true, { simple = true }),
 		opt("coords", "bool", 40, true, { simple = true }),
@@ -1841,6 +1931,13 @@ local MM_OPTIONS = {
 		opt("zone", "bool", 50, true),
 		opt("zonepvp", "bool", 51, true),
 		opt("clock", "choice", 60, "off", { choices = { "off", "local", "server" } }),
+		opt("coordpos", "choice", 42, "bottomleft", { choices = { "bottomleft", "bottom", "bottomright", "top", "below", "above" } }),
+		opt("coordshow", "choice", 43, "always", { choices = { "always", "hover" } }),
+		opt("zonepos", "choice", 52, "top", { choices = { "top", "bottom", "below", "above" } }),
+		opt("clockpos", "choice", 61, "bottomright", { choices = { "bottomright", "bottomleft", "bottom", "top", "below", "above" } }),
+		opt("clockfmt", "choice", 62, "24", { choices = { "24", "12" } }),
+		opt("trackpos", "choice", 94, "auto", { choices = { "auto", "topleft", "topright", "bottomleft", "bottomright" } }),
+		opt("tracksize", "number", 95, 100, { min = 60, max = 160, step = 10 }),
 		opt("clutter", "bool", 70, true),
 		opt("buttons", "bool", 80, true, { simple = true }),
 		opt("btnmode", "choice", 81, "drawer", { choices = { "drawer", "hover", "hide" }, simple = true }),

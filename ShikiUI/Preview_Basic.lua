@@ -451,7 +451,7 @@ P.Register("units", { watch = { "units." }, build = unitsBuild, update = unitsUp
 
 -- ================================================================ barres d'action
 local NBTN = 12
-local BKEYS = { "size", "keybinds", "cooldowns", "counts", "range", "mana", "macrotext", "c.unusable", "c.equipped", "presshl", "size", "empty" }
+local BKEYS = { "stanceind", "keybinds", "cooldowns", "counts", "range", "mana", "macrotext", "c.unusable", "c.equipped", "presshl", "showgcd", "empty" }
 local KEYTXT = { "1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "-", "=" }
 -- coins de texte (memes noms que les reglages hotanchor / cntanchor / macanchor) : point, retrait de base x / y, justification
 local BANCH = {
@@ -510,6 +510,7 @@ local function barsBuild(parent, w, h)
 		b:SetFrameLevel(P.Lv(1))
 		b.edge, b.bg, b.ic = box(b, "BACKGROUND"), box(b, "BACKGROUND"), box(b, "ARTWORK")
 		b.tint, b.cd = box(b, "OVERLAY"), box(b, "OVERLAY")
+		b.sw, b.stn = box(b, "OVERLAY"), box(b, "OVERLAY")          -- balayage de recharge (cdsweep), repere de forme active (stanceind)
 		b.key = txt(b, 9, T.c.text, "RIGHT")
 		b.cnt = txt(b, 9, T.c.text, "RIGHT")
 		b.mac = txt(b, 8, T.c.dim, "LEFT")
@@ -518,6 +519,10 @@ local function barsBuild(parent, w, h)
 		st.z[i] = P.Zone(root, "b" .. i)
 	end
 	st.hint = txt(root, 10, T.c.dim, "LEFT")
+	st.xp = box(root, "ARTWORK")                                  -- barre d'experience (actionbars.xpbar)
+	st.xpf = box(root, "OVERLAY")
+	st.mic = {}                                                   -- micro-menu (actionbars.micro.*)
+	for i = 1, 8 do st.mic[i] = box(root, "ARTWORK") end
 	return root
 end
 
@@ -603,7 +608,9 @@ local function barsUpdate(root, w, h, key, value)
 			if showCd and i == 3 then
 				P.Fill(b.cd, T.c.bg, shade)
 				P.Box(b.cd, b, 1, 1, bs - 2, bs - 2)
-				P.Font(b.cdt, 13 * s)
+				P.Font(b.cdt, bFs(num("actionbars.cdsize", 14), s))
+				local cc = flag("actionbars.cdcolor", true) and T.c.warn or T.c.text
+				b.cdt:SetTextColor(cc[1], cc[2], cc[3], 1)          -- cdcolor : couleur selon le temps restant
 				b.cdt:SetText("8")
 				b.cdt:ClearAllPoints()
 				b.cdt:SetPoint("CENTER", b, "CENTER", 0, 0)
@@ -612,6 +619,23 @@ local function barsUpdate(root, w, h, key, value)
 			else
 				b.cd:Hide()
 				b.cdt:Hide()
+			end
+			-- balayage radial de la recharge (cdsweep) : quart eclairci par-dessus l'ombre du bouton 3
+			b.sw:Hide()
+			if showCd and i == 3 and flag("actionbars.cdsweep", true) then
+				P.Fill(b.sw, T.c.text, 0.18)
+				P.Box(b.sw, b, bs / 2, 1, bs / 2 - 1, bs / 2)
+			end
+			-- voile de recharge globale (showgcd) sur le bouton 11
+			if i == 11 and flag("actionbars.showgcd", true) then
+				P.Fill(b.tint, T.c.bg, 0.45)
+				P.Box(b.tint, b, 1, 1, bs - 2, bs - 2)
+			end
+			-- repere de forme active (stanceind) : trait d accent sous le bouton 1
+			b.stn:Hide()
+			if i == 1 and flag("actionbars.stanceind", true) then
+				b.stn:SetVertexColor(ar, ag, ab, 1)
+				P.Box(b.stn, b, 1, bs - 3, bs - 2, 2)
 			end
 			if showKeys then
 				bText(b.key, b, bs, "hot", "topright", KEYTXT[i], bFs(num("actionbars.hotsize", 9), s))
@@ -647,8 +671,47 @@ local function barsUpdate(root, w, h, key, value)
 		st.bg:Hide()
 	end
 	P.PlaceZone(st.gap, root, 4, 6, gw, gh)
+	-- opacite de la barre hors combat (alphaout) : l'apercu l'applique, jamais sous 0.15 pour rester lisible
+	local ao = num("actionbars.alphaout", 100) / 100
+	if ao < 0.15 then ao = 0.15 end
+	root:SetAlpha(1)
+	for i = 1, NBTN do st.b[i]:SetAlpha((i == NBTN and not showEmpty) and 0.15 or ao) end
+	-- barre d'experience (xpbar : fine / cachee / Blizzard) et micro-menu (micro.*) sous la barre
+	local yb = gh + 12
+	local xm = C.Get("actionbars.xpbar")
+	if xm ~= "hide" then
+		local xh = (xm == "blizz") and 8 or 3
+		P.Fill(st.xp, T.c.inset, 1)
+		P.Box(st.xp, root, 4, yb, gw - bsp, xh)
+		st.xpf:SetVertexColor(ar, ag, ab, 1)
+		P.Box(st.xpf, root, 4, yb, floor((gw - bsp) * 0.6), xh)
+		yb = yb + xh + 4
+	else
+		st.xp:Hide()
+		st.xpf:Hide()
+	end
+	local mic = C.Get("actionbars.micro") ~= "never"
+	local mcols, msp = num("actionbars.micro.cols", 8), num("actionbars.micro.space", 1)
+	local ms = floor(10 * num("actionbars.micro.scale", 100) / 100 * s + 0.5)
+	if mcols < 1 then mcols = 1 end
+	local mal = num("actionbars.micro.alpha", 100) / 100
+	for i = 1, 8 do
+		local m = st.mic[i]
+		if mic and ms >= 2 then
+			local mr = floor((i - 1) / mcols)
+			local mc = (i - 1) - mr * mcols
+			P.Fill(m, T.c.border, mal)
+			P.Box(m, root, 4 + mc * (ms + msp), yb + mr * (ms + msp), ms, ms)
+		else
+			m:Hide()
+		end
+	end
+	if mic then
+		local mrows = floor(7 / mcols) + 1
+		yb = yb + mrows * (ms + msp) + 4
+	end
 	st.hint:ClearAllPoints()
-	st.hint:SetPoint("TOPLEFT", root, "TOPLEFT", 4, -(gh + 16))
+	st.hint:SetPoint("TOPLEFT", root, "TOPLEFT", 4, -(yb + 8))
 	st.hint:SetWidth(w - 8)
 	st.hint:SetHeight(50)
 	st.hint:SetText(L("mod.preview.bars.hint"))
@@ -2081,7 +2144,30 @@ P.Register("totems", { watch = { "totems." }, build = totemBuild, update = totem
 -- ================================================================ minimap
 -- Rond ou carre dessine par bandes horizontales de textures unies (aucune ressource du jeu) : la bande du haut est plus etroite en rond.
 local NSTRIP = 28
-local MZN = { "disc", "size", "edge", "coords", "zone", "clock", "launcher", "toggle" }
+local MZN = { "disc", "size", "edge", "coords", "zone", "clock", "launcher", "toggle", "track" }
+
+-- Emplacement d'un texte de la minimap : (y relatif au disque, alignement). Meme vocabulaire que les reglages minimap.*pos.
+local function mmTextAt(pos, d, R, fs)
+	if pos == "top" then return R * 0.2, "CENTER" end
+	if pos == "below" then return d + 2, "CENTER" end
+	if pos == "above" then return -fs - 2, "CENTER" end
+	local y = d - fs - R * 0.2
+	if pos == "bottomleft" then return y, "LEFT" end
+	if pos == "bottomright" then return y, "RIGHT" end
+	return y, "CENTER"
+end
+
+-- Place un texte de la minimap sur le disque : largeur utile = le disque moins une marge ; retourne la zone cliquable (x, w).
+local function mmPutText(fs, disc, pos, d, R, size, str)
+	local y, just = mmTextAt(pos, d, R, size)
+	local pad = 4
+	putText(fs, disc, pad, y, size, str)
+	fs:SetWidth(d - 2 * pad)
+	if fs.SetJustifyH then fs:SetJustifyH(just) end
+	if just == "LEFT" then return y, pad, d * 0.5 end
+	if just == "RIGHT" then return y, d * 0.5 - pad, d * 0.5 end
+	return y, d * 0.25, d * 0.5
+end
 local TOGGLE = { topleft = { 0, 0 }, topright = { 1, 0 }, bottomleft = { 0, 1 }, bottomright = { 1, 1 } }
 
 local function mapBuild(parent, w, h)
@@ -2097,6 +2183,7 @@ local function mapBuild(parent, w, h)
 	st.zone, st.coords, st.clock = txt(d, 10, T.c.text, "CENTER"), txt(d, 10, T.c.text, "CENTER"), txt(d, 10, T.c.text, "CENTER")
 	st.lb, st.lt = box(d, "OVERLAY"), txt(d, 9, T.c.text, "CENTER")
 	st.tb, st.tt = box(d, "OVERLAY"), txt(d, 9, T.c.text, "CENTER")
+	st.kb, st.kt = box(d, "OVERLAY"), txt(d, 9, T.c.text, "CENTER")
 	st.grip = box(d, "OVERLAY")
 	st.cap = txt(root, 10, T.c.dim, "CENTER")
 	zoneSet(root, st, MZN)
@@ -2109,9 +2196,9 @@ local function mapUpdate(root, w, h, key, value)
 	local round = (C.Get("minimap.shape") ~= "square")
 	local size = num("minimap.size", 140)
 	local maxD = w - 40
-	if h - 90 < maxD then maxD = h - 90 end
+	if h - 112 < maxD then maxD = h - 112 end
 	if maxD < 60 then maxD = 60 end
-	local sc = maxD / 240
+	local sc = maxD / 320
 	local d = floor(size * sc)
 	if d < 40 then d = 40 end
 	local R = d / 2
@@ -2165,20 +2252,34 @@ local function mapUpdate(root, w, h, key, value)
 	local zoneOn, coordOn = flag("minimap.zone", true), flag("minimap.coords", true)
 	local clock = C.Get("minimap.clock") or "off"
 	st.on.zone, st.on.coords, st.on.clock = zoneOn, coordOn, clock
-	local zy = R * 0.2
-	putText(st.zone, disc, 0, zy, fs, L("mod.preview.minimap.zone"))
-	st.zone:SetWidth(d)
+	local zpos, cpos, kpos = C.Get("minimap.zonepos") or "top", C.Get("minimap.coordpos") or "bottomleft", C.Get("minimap.clockpos") or "bottomright"
+	local hover = (C.Get("minimap.coordshow") == "hover")
+	local ctime = (C.Get("minimap.clockfmt") == "12") and "12:34pm" or "12:34"
+	st.on.zonepos, st.on.coordpos, st.on.clockpos, st.on.hover, st.on.clockfmt = zpos, cpos, kpos, hover, ctime
+	local zy, zx, zw = mmPutText(st.zone, disc, zpos, d, R, fs, L("mod.preview.minimap.zone"))
 	if not zoneOn then st.zone:Hide() end
-	local cy = d - fs - R * 0.2
 	local dec = floor(num("minimap.dec", 1))
 	if dec < 0 then dec = 0 elseif dec > 2 then dec = 2 end
-	putText(st.coords, disc, 0, cy, fs, fixed(45.23, dec) .. ", " .. fixed(63.11, dec))
-	st.coords:SetWidth(d)
+	local cy, cx, cw = mmPutText(st.coords, disc, cpos, d, R, fs, fixed(45.23, dec) .. ", " .. fixed(63.11, dec))
+	st.coords:SetAlpha(hover and 0.55 or 1)
 	if not coordOn then st.coords:Hide() end
-	local ky = zy + fs + 2
-	putText(st.clock, disc, 0, ky, fs, (clock == "server") and L("mod.preview.minimap.server") or "12:34")
-	st.clock:SetWidth(d)
+	local ky, kx, kw = mmPutText(st.clock, disc, kpos, d, R, fs, (clock == "server") and (ctime .. " (S)") or ctime)
 	if clock == "off" then st.clock:Hide() end
+	-- icone du suivi (tracking) dans le coin choisi, a la taille choisie ; absente en mode "auto"
+	local trpos = C.Get("minimap.trackpos") or "auto"
+	local tc = TOGGLE[trpos]
+	st.on.track = (tc ~= nil)
+	if tc then
+		local tks = num("minimap.tracksize", 100) / 100 * 16 * sc * 1.2
+		if tks < 8 then tks = 8 end
+		P.Fill(st.kb, T.c.panel, 1)
+		P.Box(st.kb, disc, tc[1] * (d - tks), tc[2] * (d - tks), tks, tks)
+		putText(st.kt, disc, tc[1] * (d - tks), tc[2] * (d - tks) + (tks - 9) / 2, 9, "T")
+		st.kt:SetWidth(tks)
+	else
+		st.kb:Hide()
+		st.kt:Hide()
+	end
 	-- lanceur (sur le bord, a l'angle choisi) et bouton du tiroir
 	local launch = flag("minimap.launcher", true)
 	local ls = num("minimap.launchsize", 22) * sc * 1.2
@@ -2215,7 +2316,7 @@ local function mapUpdate(root, w, h, key, value)
 	P.Fill(st.grip, T.c.dim, 0.8)
 	P.Box(st.grip, disc, d - 5, d - 5, 7, 7)
 	st.cap:ClearAllPoints()
-	st.cap:SetPoint("TOPLEFT", root, "TOPLEFT", 4, -(dy + d + 8))
+	st.cap:SetPoint("TOPLEFT", root, "TOPLEFT", 4, -(dy + d + 18))
 	st.cap:SetWidth(w - 8)
 	st.cap:SetText(L("mod.preview.minimap.cap", L(round and "mod.preview.minimap.round" or "mod.preview.minimap.square"), size))
 	st.cap:Show()
@@ -2223,17 +2324,130 @@ local function mapUpdate(root, w, h, key, value)
 	zp(st, root, "disc", dx, dy, d, d)
 	zp(st, root, "size", dx + d - 6, dy + d - 6, 12, 12)
 	zp(st, root, "edge", dx - 4, dy + R - 10, 8, 20)
-	zp(st, root, "coords", dx + R * 0.3, dy + cy, d * 0.7, fs + 2)
-	zp(st, root, "zone", dx + R * 0.3, dy + zy, d * 0.7, fs + 2)
-	zp(st, root, "clock", dx + R * 0.5, dy + ky, d * 0.5, fs + 2)
+	zp(st, root, "coords", dx + cx, dy + cy, cw, fs + 2)
+	zp(st, root, "zone", dx + zx, dy + zy, zw, fs + 2)
+	zp(st, root, "clock", dx + kx, dy + ky, kw, fs + 2)
+	if tc then
+		zp(st, root, "track", dx + tc[1] * (d - 16 * sc * 1.2), dy + tc[2] * (d - 16 * sc * 1.2), 16 * sc * 1.2, 16 * sc * 1.2)
+	else
+		zh(st, "track")
+	end
 	zp(st, root, "launcher", dx + lx, dy + ly, ls, ls)
 	zp(st, root, "toggle", dx + tx, dy + ty, ts, ts)
-	hintAt(st, root, dy + d + 26, w, "mod.preview.minimap.hint")
+	hintAt(st, root, dy + d + 34, w, "mod.preview.minimap.hint")
 end
 
 local MMK = { disc = "minimap.shape", size = "minimap.size", edge = "minimap.edge", coords = "minimap.coords", zone = "minimap.zone",
-	clock = "minimap.clock", launcher = "minimap.launcher", toggle = "minimap.buttons" }
+	clock = "minimap.clock", launcher = "minimap.launcher", toggle = "minimap.buttons", track = "minimap.trackpos" }
 P.Register("minimap", { watch = { "minimap." }, build = mapBuild, update = mapUpdate, click = function(zone) return MMK[zone] end })
+
+-- ================================================================ carte du monde
+-- Carte d'exemple : taille (map.scale), opacite (map.alpha), coordonnees du joueur et du curseur (haut / bas), 4 pastilles de groupe
+-- (map.dotsize / dotclass / dotnames) et infobulle (map.tipscale). Les noms sont des DONNEES D'EXEMPLE.
+local WMZ = { "scale", "coords", "cursor", "dots", "alpha", "tip" }
+local WMDOT = { { 0.22, 0.32, "PALADIN", "Ana" }, { 0.5, 0.26, "WARRIOR", "Bo" }, { 0.68, 0.55, "MAGE", "Cy" }, { 0.38, 0.62, "DRUID", "Di" } }
+
+local function wmBuild(parent, w, h)
+	local root = CreateFrame("Frame", nil, parent)
+	local st = { dots = {}, names = {}, on = {} }
+	root.st = st
+	local pan = CreateFrame("Frame", nil, root)
+	pan:SetFrameLevel(P.Lv(1))
+	st.pan = pan
+	st.edge, st.bg = box(pan, "BACKGROUND"), box(pan, "BACKGROUND")
+	st.land1, st.land2, st.me = box(pan, "ARTWORK"), box(pan, "ARTWORK"), box(pan, "OVERLAY")
+	st.pos, st.cur = txt(pan, 10, T.c.text, "CENTER"), txt(pan, 10, T.c.dim, "CENTER")
+	for i = 1, getn(WMDOT) do
+		st.dots[i] = box(pan, "OVERLAY")
+		st.names[i] = txt(pan, 9, T.c.text, "LEFT")
+	end
+	st.tip = newPanel(root)
+	st.tipt = txt(st.tip, 9, T.c.text, "CENTER")
+	st.cap = txt(root, 10, T.c.dim, "CENTER")
+	zoneSet(root, st, WMZ)
+	st.hint = txt(root, 10, T.c.dim, "LEFT")
+	return root
+end
+
+local function wmUpdate(root, w, h, key, value)
+	local st = root.st
+	local scl = num("map.scale", 100)
+	local alpha = num("map.alpha", 1)
+	local basew = floor((w - 8) / 1.5)
+	if h - 100 < basew * 0.6 then basew = floor((h - 100) / 0.6) end
+	if basew < 80 then basew = 80 end
+	local pw = floor(basew * scl / 100)
+	local ph = floor(pw * 0.6)
+	local px, py = floor((w - pw) / 2), 6
+	local pan = st.pan
+	P.Place(pan, root, px, py, pw, ph)
+	pan:SetAlpha(alpha)
+	P.Fill(st.edge, T.c.border, 1)
+	P.Box(st.edge, pan, 0, 0, pw, ph)
+	P.Fill(st.bg, T.c.inset, 1)
+	P.Box(st.bg, pan, 1, 1, pw - 2, ph - 2)
+	P.Fill(st.land1, T.c.good, 0.25)
+	P.Box(st.land1, pan, pw * 0.1, ph * 0.45, pw * 0.5, ph * 0.4)
+	local ar, ag, ab = T.Accent()
+	st.land2:SetVertexColor(ar, ag, ab, 0.2)
+	P.Box(st.land2, pan, pw * 0.5, ph * 0.12, pw * 0.4, ph * 0.45)
+	st.me:SetVertexColor(ar, ag, ab, 1)
+	P.Box(st.me, pan, pw * 0.43, ph * 0.5, 6, 6)
+	-- coordonnees : en bas (defaut) ou en haut ; le joueur se decale quand le curseur est aussi affiche
+	local top = (C.Get("map.coordpos") == "top")
+	local coordOn, curOn = flag("map.coords", true), flag("map.cursor", true)
+	local cy = top and 4 or (ph - 15)
+	putText(st.pos, pan, 0, cy, 10, "43, 73")
+	st.pos:SetWidth(curOn and floor(pw / 2) or pw)
+	st.pos:SetAlpha(coordOn and 1 or 0.35)
+	putText(st.cur, pan, floor(pw / 2), cy, 10, L("mod.preview.map.cursor"))
+	st.cur:SetWidth(floor(pw / 2))
+	st.cur:SetAlpha(curOn and 1 or 0.35)
+	-- pastilles du groupe
+	local ds = num("map.dotsize", 0)
+	local tint, names = flag("map.dotclass", false), flag("map.dotnames", false)
+	local dpx = (ds > 0) and (ds * 0.5) or 7
+	if dpx < 4 then dpx = 4 elseif dpx > 16 then dpx = 16 end
+	for i = 1, getn(WMDOT) do
+		local d = WMDOT[i]
+		local r, g, b
+		if tint then r, g, b = classRGB(d[3]) else r, g, b = T.c.text[1], T.c.text[2], T.c.text[3] end
+		st.dots[i]:SetVertexColor(r, g, b, 1)
+		P.Box(st.dots[i], pan, pw * d[1], ph * d[2], dpx, dpx)
+		if names then
+			local cr, cg, cb = classRGB(d[3])
+			putText(st.names[i], pan, pw * d[1] + dpx + 2, ph * d[2] + (dpx - 9) / 2, 9, d[4])
+			st.names[i]:SetTextColor(cr, cg, cb, 1)
+		else
+			st.names[i]:Hide()
+		end
+	end
+	st.on.scale, st.on.alpha, st.on.coords, st.on.cursor, st.on.top = scl, alpha, coordOn, curOn, top
+	st.on.dotsize, st.on.dotclass, st.on.dotnames, st.on.dotpx = ds, tint, names, dpx
+	-- infobulle (coin haut droit, hors de l'opacite de la carte) a l'echelle choisie
+	local ts = num("map.tipscale", 100) / 100
+	local tw, th = floor(52 * ts), floor(18 * ts)
+	paintPanel(st.tip, tw, th, T.c.panel, 1, T.c.border, 1)
+	P.Place(st.tip, root, px + pw - tw - 4, py + 4, tw, th)
+	putText(st.tipt, st.tip, 2, (th - 9) / 2, 9, L("mod.preview.minimap.zone"))
+	st.tipt:SetWidth(tw - 4)
+	st.on.tipscale = ts
+	st.cap:ClearAllPoints()
+	st.cap:SetPoint("TOPLEFT", root, "TOPLEFT", 4, -(py + ph + 8))
+	st.cap:SetWidth(w - 8)
+	st.cap:SetText(L("mod.preview.map.cap", scl, floor(alpha * 100 + 0.5)))
+	st.cap:Show()
+	zp(st, root, "scale", px + pw - 8, py + ph - 8, 12, 12)
+	zp(st, root, "coords", px + (top and 0 or 0), py + cy, curOn and floor(pw / 2) or pw, 14)
+	zp(st, root, "cursor", px + floor(pw / 2), py + cy, floor(pw / 2), 14)
+	zp(st, root, "dots", px + pw * 0.2, py + ph * 0.24, pw * 0.5, ph * 0.45)
+	zp(st, root, "alpha", px, py, pw * 0.25, ph * 0.25)
+	zp(st, root, "tip", px + pw - tw - 4, py + 4, tw, th)
+	hintAt(st, root, py + ph + 22, w, "mod.preview.map.hint")
+end
+
+local WMK = { scale = "map.scale", coords = "map.coords", cursor = "map.cursor", dots = "map.dotsize", alpha = "map.alpha", tip = "map.tipscale" }
+P.Register("map", { watch = { "map." }, build = wmBuild, update = wmUpdate, click = function(zone) return WMK[zone] end })
 
 -- ================================================================ sacs
 local NSLOT = 40
