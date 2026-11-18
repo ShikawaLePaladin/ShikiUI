@@ -693,7 +693,7 @@ local KEYTXT = { "1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "-", "=" }
 local BANCH = {
 	topleft = { "TOPLEFT", 2, -2, "LEFT" }, top = { "TOP", 0, -2, "CENTER" }, topright = { "TOPRIGHT", -2, -2, "RIGHT" },
 	left = { "LEFT", 2, 0, "LEFT" }, center = { "CENTER", 0, 0, "CENTER" }, right = { "RIGHT", -2, 0, "RIGHT" },
-	bottomleft = { "BOTTOMLEFT", 2, 2, "LEFT" }, bottom = { "BOTTOM", 0, 2, "CENTER" }, bottomright = { "BOTTOMRIGHT", -2, 2, "RIGHT" },
+	bottomleft = { "BOTTOMLEFT", 1, 2, "LEFT" }, bottom = { "BOTTOM", 0, 2, "CENTER" }, bottomright = { "BOTTOMRIGHT", -2, 2, "RIGHT" },
 }
 local HEXC = { 0, 0, 0, 1 }           -- couleur d'etat choisie (RRGGBB) lue dans les reglages, table reutilisee
 
@@ -718,6 +718,10 @@ end
 -- Place un texte de bouton dans son coin (reglages <cle>anchor / <cle>x / <cle>y).
 local function bText(fs, b, bs, key, dflt, str, fsz)
 	local name = C.Get("actionbars." .. key .. "anchor")
+	if name == "off" then
+		fs:Hide()
+		return
+	end
 	local a = BANCH[name] or BANCH[dflt]
 	P.Font(fs, fsz)
 	fs:SetText(str)
@@ -746,7 +750,7 @@ local barSel = 1             -- barre montree (indice de BARS)
 
 -- Zone posee sur le texte d'un bouton (raccourci, quantite, macro) : meme coin et memes retraits que le texte dessine.
 local function textZone(root, z, i, per, bs, bsp, n, show, name, dflt, fsz, nch)
-	if not show or i > n then
+	if not show or i > n or C.Get("actionbars." .. name .. "anchor") == "off" then
 		z:Hide()
 		return
 	end

@@ -44,11 +44,13 @@ M.raidIdx = 3
 M.FRAC = { 1, 0.8, 0.55, 0.9, 0.35, 0.7 }       -- vie factice des cellules d'exemple
 M.alignMode = "y"
 M.alignOff = 0
+M.multi = {}            -- selection multiple (id -> true) pour egaliser les ecarts
 M.ROWS = 6
 M.GHOSTW, M.GHOSTH = 160, 60     -- taille maximale d'un faux cadre d'exemple
 M.GHOSTA = 0.35                  -- opacite des faux cadres d'exemple
 
 SUI.RegisterOption({ key = "mover.snap", type = "bool", cat = "layout", label = "opt.mover.snap", tip = "tip.mover.snap", default = true, order = 20 })
+SUI.RegisterOption({ key = "mover.gaps", type = "bool", cat = "layout", label = "opt.mover.gaps", tip = "tip.mover.gaps", default = true, order = 25 })
 SUI.RegisterOption({ key = "mover.grid", type = "bool", cat = "layout", label = "opt.mover.grid", tip = "tip.mover.grid", default = false, order = 30 })
 SUI.RegisterOption({ key = "mover.gridsize", type = "number", cat = "layout", label = "opt.mover.gridsize", tip = "tip.mover.gridsize",
 	min = 20, max = 100, step = 10, default = 40, order = 40 })
@@ -404,7 +406,7 @@ function M.PaintHandle(rec)
 	local a = 0.55
 	if fl then a = 0.95 elseif M.sel == rec then a = 0.8 elseif not M.Visible(rec.frame) then a = 0.3 end
 	h:SetBackdropColor(c[1], c[2], c[3], a)
-	if M.sel == rec or M.hover == rec or fl then
+	if M.sel == rec or M.hover == rec or fl or (M.multi and M.multi[rec.id]) then
 		local r, g, b = T.Accent()
 		h:SetBackdropBorderColor(r, g, b, 1)
 	else
@@ -645,6 +647,9 @@ local function hDown()
 	local cx, cy = M.Cursor()
 	local d = { h = h, rec = rec, cx = cx, cy = cy, l = l0, b = b0, w = w, hh = hh, fh = fh, moved = false }
 	d.xs, d.ys = M.Targets(rec)
+	d.rects = M.OtherRects(rec)
+	d.hg = M.GapPairs(d.rects, 1, 3, 2, 4)      -- ecarts deja presents entre deux autres cadres (horizontal)
+	d.vg = M.GapPairs(d.rects, 2, 4, 1, 3)      -- idem vertical
 	M.ClosePropose()
 	M.drag = d
 	h:SetScript("OnUpdate", M.DragTick)
@@ -979,10 +984,185 @@ function M.ShowGuides(ax, ay)
 	end
 end
 
+-- ---------------------------------------------------------------- ecarts egaux et distance au voisin
+-- Rectangles { gauche, bas, droite, haut } (indices 1..4) des autres cadres visibles (meme filtre que Targets).
+function M.OtherRects(skip)
+	local out = {}
+	for i = 1, getn(M.order) do
+		local rec = M.items[M.order[i]]
+		if rec ~= skip and rec.handle and rec.handle:IsShown() and not (skip and Layout.IsDescendant(rec.id, skip.id)) then
+			local l, b, r, t = M.Rect(rec)
+			if l then tinsert(out, { l, b, r, t }) end
+		end
+	end
+	return out
+end
+
+-- Ecarts deja presents entre deux rectangles qui se font face sur l'axe (mlo, mhi), avec recouvrement sur l'autre axe (clo, chi).
+-- Une entree par valeur d'ecart (arrondie) : { v, m1, m2, c } (c = milieu du recouvrement).
+function M.GapPairs(rects, mlo, mhi, clo, chi)
+	local out, seen = {}, {}
+	local n = getn(rects)
+	for i = 1, n do
+		local a = rects[i]
+		for j = 1, n do
+			local b = rects[j]
+			if i ~= j then
+				local v = b[mlo] - a[mhi]
+				local k = floor(v + 0.5)
+				if v >= 1 and not seen[k] then
+					local c1, c2 = a[clo], a[chi]
+					if b[clo] > c1 then c1 = b[clo] end
+					if b[chi] < c2 then c2 = b[chi] end
+					if c2 - c1 > 0 then
+						seen[k] = true
+						tinsert(out, { v = v, m1 = a[mhi], m2 = b[mlo], c = (c1 + c2) / 2 })
+					end
+				end
+			end
+		end
+	end
+	return out
+end
+
+-- Voisins immediats de p sur l'axe (mlo, mhi) : celui d'avant (le plus proche, recouvrement croise > 0) et celui d'apres.
+function M.Neighbors(p, rects, mlo, mhi, clo, chi)
+	local before, after
+	for i = 1, getn(rects) do
+		local r = rects[i]
+		local c1, c2 = p[clo], p[chi]
+		if r[clo] > c1 then c1 = r[clo] end
+		if r[chi] < c2 then c2 = r[chi] end
+		if c2 - c1 > 0 then
+			if r[mhi] <= p[mlo] + 0.001 and (not before or r[mhi] > before[mhi]) then before = r end
+			if r[mlo] >= p[mhi] - 0.001 and (not after or r[mlo] < after[mlo]) then after = r end
+		end
+	end
+	return before, after
+end
+
+local function crossMid(p, r, clo, chi)
+	local c1, c2 = p[clo], p[chi]
+	if r[clo] > c1 then c1 = r[clo] end
+	if r[chi] < c2 then c2 = r[chi] end
+	return (c1 + c2) / 2
+end
+
+-- Aimantation d'ecart egal sur un axe. p = rectangle deplace. Renvoie le decalage a appliquer sur l'axe (ou nil) et les segments
+-- a dessiner { horiz, m1, m2, c, v } : l'ecart du cadre deplace et l'ecart de reference (ou les deux ecarts egaux de part et d'autre).
+function M.GapAxisSnap(p, rects, gaps, mlo, mhi, clo, chi, horiz)
+	local before, after = M.Neighbors(p, rects, mlo, mhi, clo, chi)
+	local size = p[mhi] - p[mlo]
+	local best, bd, bg, bkind = M.SNAP + 0.001, nil, nil, nil
+	for i = 1, getn(gaps) do
+		local g = gaps[i]
+		if before then
+			local d = before[mhi] + g.v - p[mlo]
+			if abs(d) < best then best, bd, bg, bkind = abs(d), d, g, "b" end
+		end
+		if after then
+			local d = after[mlo] - g.v - size - p[mlo]
+			if abs(d) < best then best, bd, bg, bkind = abs(d), d, g, "a" end
+		end
+	end
+	if before and after then
+		local free = after[mlo] - before[mhi] - size
+		if free >= 2 then
+			local d = before[mhi] + free / 2 - p[mlo]
+			if abs(d) < best then best, bd, bg, bkind = abs(d), d, nil, "both" end
+		end
+	end
+	if not bd then return nil, nil end
+	local lo = p[mlo] + bd
+	local hi = lo + size
+	local segs = {}
+	if bkind == "b" or bkind == "both" then
+		tinsert(segs, { horiz = horiz, m1 = before[mhi], m2 = lo, c = crossMid(p, before, clo, chi), v = lo - before[mhi] })
+	end
+	if bkind == "a" or bkind == "both" then
+		tinsert(segs, { horiz = horiz, m1 = hi, m2 = after[mlo], c = crossMid(p, after, clo, chi), v = after[mlo] - hi })
+	end
+	if bg then tinsert(segs, { horiz = horiz, m1 = bg.m1, m2 = bg.m2, c = bg.c, v = bg.v }) end
+	return bd, segs
+end
+
+-- Distance jusqu'au voisin le plus proche (quatre directions) : un segment { horiz, m1, m2, c, v } ou nil.
+function M.NearGap(p, rects)
+	local best
+	local axes = { { 1, 3, 2, 4, true }, { 2, 4, 1, 3, false } }
+	for k = 1, 2 do
+		local ax = axes[k]
+		local before, after = M.Neighbors(p, rects, ax[1], ax[2], ax[3], ax[4])
+		if before then
+			local v = p[ax[1]] - before[ax[2]]
+			if not best or v < best.v then best = { horiz = ax[5], m1 = before[ax[2]], m2 = p[ax[1]], c = crossMid(p, before, ax[3], ax[4]), v = v } end
+		end
+		if after then
+			local v = after[ax[1]] - p[ax[2]]
+			if not best or v < best.v then best = { horiz = ax[5], m1 = p[ax[2]], m2 = after[ax[1]], c = crossMid(p, after, ax[3], ax[4]), v = v } end
+		end
+	end
+	return best
+end
+
+M.GAPSEGS = 8
+-- Dessine (ou masque, segs = nil) les segments d'ecart : trait accent + valeur en pixels. Appele par image : ne repose rien si inchange.
+function M.ShowGaps(segs)
+	local v = M.veil
+	if not v then return end
+	local sig = ""
+	if segs then
+		for i = 1, getn(segs) do
+			local s = segs[i]
+			sig = sig .. (s.horiz and "h" or "v") .. floor(s.m1 + 0.5) .. "," .. floor(s.m2 + 0.5) .. "," .. floor(s.c + 0.5) .. ";"
+		end
+	end
+	if M.gSig == sig and M.gaps then return end
+	M.gSig = sig
+	if not M.gaps then M.gaps = {} end
+	local pool = M.gaps
+	local ar, ag, ab = T.Accent()
+	for i = 1, M.GAPSEGS do
+		local g = pool[i]
+		local s = segs and segs[i]
+		if not g and s then
+			g = { tex = v:CreateTexture(nil, "OVERLAY"), fs = T.Text(v, 10, T.c.text, "CENTER", true) }
+			g.tex:SetTexture(T.tex.white)
+			pool[i] = g
+		end
+		if g then
+			if s then
+				g.tex:SetVertexColor(ar, ag, ab, 1)
+				g.tex:ClearAllPoints()
+				g.fs:ClearAllPoints()
+				if s.horiz then
+					g.tex:SetPoint("BOTTOMLEFT", v, "BOTTOMLEFT", s.m1, s.c)
+					g.tex:SetWidth(s.m2 - s.m1)
+					g.tex:SetHeight(1)
+					g.fs:SetPoint("BOTTOM", v, "BOTTOMLEFT", (s.m1 + s.m2) / 2, s.c + 3)
+				else
+					g.tex:SetPoint("BOTTOMLEFT", v, "BOTTOMLEFT", s.c, s.m1)
+					g.tex:SetWidth(1)
+					g.tex:SetHeight(s.m2 - s.m1)
+					g.fs:SetPoint("LEFT", v, "BOTTOMLEFT", s.c + 4, (s.m1 + s.m2) / 2)
+				end
+				g.fs:SetText(string.format("%d", floor(s.v + 0.5)))
+				g.tex:Show()
+				g.fs:Show()
+			else
+				g.tex:Hide()
+				g.fs:Hide()
+			end
+		end
+	end
+end
+
 -- Position finale (nl, nb) d'un glissement en cours apres aimantation (Alt = aucune), et lignes-guides.
 function M.SnapPos(d, nl, nb)
 	local alt = IsAltKeyDown() and true or false
-	local ax, ay
+	local ax, ay, gx, gy
+	local gsegs
+	local useGaps = d.rects and C.Get("mover.gaps")
 	if not alt then
 		if C.Get("mover.snap") then
 			local dx, atx = M.SnapAxis(nl, nl + d.w / 2, nl + d.w, d.xs)
@@ -991,11 +1171,25 @@ function M.SnapPos(d, nl, nb)
 			local bot = top - d.hh
 			local dy, aty = M.SnapAxis(bot, (bot + top) / 2, top, d.ys)
 			if dy then nb, ay = nb + dy, aty end
+			if useGaps then      -- ecarts egaux : seulement sur un axe sans accroche de bord
+				if not ax then
+					local ddx, sx = M.GapAxisSnap({ nl, bot, nl + d.w, top }, d.rects, d.hg, 1, 3, 2, 4, true)
+					if ddx then nl, gx, gsegs = nl + ddx, true, sx end
+				end
+				if not ay then
+					local ddy, sy = M.GapAxisSnap({ nl, bot, nl + d.w, top }, d.rects, d.vg, 2, 4, 1, 3, false)
+					if ddy then
+						nb, gy = nb + ddy, true
+						if not gsegs then gsegs = {} end
+						for i = 1, getn(sy) do tinsert(gsegs, sy[i]) end
+					end
+				end
+			end
 		end
 		if C.Get("mover.grid") then
 			local g = C.Get("mover.gridsize")
-			if not ax then nl = floor(nl / g + 0.5) * g end
-			if not ay then
+			if not ax and not gx then nl = floor(nl / g + 0.5) * g end
+			if not ay and not gy then
 				local top = nb + d.fh
 				local bot = top - d.hh
 				nb = nb + (floor(bot / g + 0.5) * g - bot)
@@ -1003,6 +1197,16 @@ function M.SnapPos(d, nl, nb)
 		end
 	end
 	M.ShowGuides(ax, ay)
+	if useGaps then      -- sans ecart egal : distance jusqu'au voisin le plus proche (meme avec Alt)
+		if not gsegs then
+			local top = nb + d.fh
+			local near = M.NearGap({ nl, top - d.hh, nl + d.w, top }, d.rects)
+			if near then gsegs = { near } end
+		end
+		M.ShowGaps(gsegs)
+	else
+		M.ShowGaps(nil)
+	end
 	return nl, nb
 end
 
@@ -1084,6 +1288,7 @@ function M.DragEnd(h)
 	if not d or d.h ~= h then return end
 	M.drag = nil
 	M.ShowGuides(nil, nil)
+	M.ShowGaps(nil)
 	M.ShowGlow(nil)
 	if d.moved and d.nl then
 		M.Commit(d.rec, d.nl, d.nb)
@@ -1618,6 +1823,93 @@ function M.MirrorUnits()
 	return true
 end
 
+-- ---------------------------------------------------------------- selection multiple et ecarts egaux
+function M.MultiCount()
+	local n = 0
+	for id in pairs(M.multi) do
+		local rec = M.items[id]
+		if rec and rec.handle and rec.handle:IsShown() then n = n + 1 end
+	end
+	return n
+end
+
+function M.ToggleMulti(rec)
+	if not rec then return false end
+	if M.multi[rec.id] then M.multi[rec.id] = nil else M.multi[rec.id] = true end
+	M.PaintHandle(rec)
+	return M.multi[rec.id] and true or false
+end
+
+function M.ClearMulti()
+	local old = M.multi
+	M.multi = {}
+	for id in pairs(old) do
+		local rec = M.items[id]
+		if rec and rec.handle then M.PaintHandle(rec) end
+	end
+end
+
+-- Repartit les cadres de la selection multiple pour que les ecarts entre voisins soient egaux sur l'axe x (horiz) ou y.
+-- Le premier et le dernier restent en place. Renvoie ok, ecart (px) ; ok = false si moins de 3 cadres.
+function M.EqualizeGaps(horiz)
+	local list = {}
+	for id in pairs(M.multi) do
+		local rec = M.items[id]
+		if rec and rec.handle and rec.handle:IsShown() then
+			local l, b, r, t, w, h, fh = M.Rect(rec)
+			if l then
+				local lo, hi = l, r
+				if not horiz then lo, hi = b, t end
+				tinsert(list, { rec = rec, lo = lo, hi = hi, size = hi - lo, h = h, fh = fh })
+			end
+		end
+	end
+	local n = getn(list)
+	if n < 3 then return false, 0 end
+	table.sort(list, function(a, c) return a.lo < c.lo end)
+	local sum = 0
+	for i = 1, n do sum = sum + list[i].size end
+	local gap = (list[n].hi - list[1].lo - sum) / (n - 1)
+	if gap < 0 then gap = 0 end
+	M.PushUndo("multi")            -- un seul pas d'annulation pour tout le groupe
+	local pos = list[1].lo
+	for i = 2, n - 1 do
+		pos = pos + list[i - 1].size + gap
+		local e = list[i]
+		local l0, b0 = M.FrameLB(e.rec)
+		M.undoId, M.undoAt = "multi", GetTime()
+		if horiz then
+			M.Commit(e.rec, pos, b0)
+		else
+			M.Commit(e.rec, l0, pos + e.h - e.fh)
+		end
+	end
+	M.undoId = nil
+	return true, gap
+end
+
+local function multiClick()
+	local rec = M.sel
+	if not rec then return end
+	M.ToggleMulti(rec)
+	M.FillPanel(rec)
+end
+
+local function multiClear()
+	M.ClearMulti()
+	if M.sel then M.FillPanel(M.sel) end
+end
+
+local function equalClick(horiz)
+	if M.MultiCount() < 3 then
+		SUI.Print(L("msg.mover.eq.need"))
+		return
+	end
+	local ok, gap = M.EqualizeGaps(horiz)
+	if ok then SUI.Print(L("msg.mover.eq.ok", floor(gap + 0.5))) end
+	if M.sel then M.FillPanel(M.sel) end
+end
+
 -- ---------------------------------------------------------------- panneau de position precise
 local function numOf(edit)
 	return tonumber(edit:GetText() or "")
@@ -1643,6 +1935,8 @@ function M.FillPanel(rec)
 	p.size:SetText(L("mod.mover.p.size", floor(fw + 0.5), floor(fh + 0.5), M.ScaleOf(rec)))
 	p.bAll.disabled = not M.HasSettings(rec)
 	p.bAll:SetAlpha(p.bAll.disabled and 0.4 or 1)
+	T.SetButtonText(p.bMulti, L(M.multi[rec.id] and "mod.mover.p.multi.off" or "mod.mover.p.multi.on", M.MultiCount()))
+	T.SetSelected(p.bMulti, M.multi[rec.id] and true or false)
 	-- liste des autres cadres
 	local list = {}
 	for i = 1, getn(M.order) do
@@ -1738,7 +2032,7 @@ function M.BuildPanel()
 	local p = CreateFrame("Frame", "ShikiUI_MoverPanel", M.veil)
 	M.panel = p
 	p:SetWidth(300)
-	p:SetHeight(392)
+	p:SetHeight(446)
 	p:SetFrameStrata("FULLSCREEN_DIALOG")
 	p:SetFrameLevel(M.veil:GetFrameLevel() + 30)
 	p:SetPoint("TOPRIGHT", UIParent, "TOPRIGHT", -20, -130)
@@ -1816,10 +2110,19 @@ function M.BuildPanel()
 	p.size:SetHeight(12)
 	p.bAll = T.Button(p, L("mod.mover.p.allopts"), 276, 22, function() if M.sel then M.OpenSettings(M.sel) end end)
 	p.bAll:SetPoint("TOPLEFT", p, "TOPLEFT", 12, -358)
-	local bodyW = { p.edX, p.edY, p.edS, p.bCenter, p.bMirror, p.bReset, p.bClose, p.mY, p.mX, p.mW, p.prev, p.next, p.page, p.size, p.bAll }
+	p.bMulti = T.Button(p, L("mod.mover.p.multi.on", 0), 136, 22, multiClick)
+	p.bMulti:SetPoint("TOPLEFT", p, "TOPLEFT", 12, -386)
+	p.bMultiClr = T.Button(p, L("mod.mover.p.multi.clear"), 136, 22, multiClear)
+	p.bMultiClr:SetPoint("TOPLEFT", p, "TOPLEFT", 152, -386)
+	p.bEqH = T.Button(p, L("mod.mover.p.eq.h"), 136, 22, function() equalClick(true) end)
+	p.bEqH:SetPoint("TOPLEFT", p, "TOPLEFT", 12, -412)
+	p.bEqV = T.Button(p, L("mod.mover.p.eq.v"), 136, 22, function() equalClick(false) end)
+	p.bEqV:SetPoint("TOPLEFT", p, "TOPLEFT", 152, -412)
+	local bodyW = { p.edX, p.edY, p.edS, p.bCenter, p.bMirror, p.bReset, p.bClose, p.mY, p.mX, p.mW, p.prev, p.next, p.page, p.size, p.bAll,
+		p.bMulti, p.bMultiClr, p.bEqH, p.bEqV }
 	for i = 1, getn(bodyW) do tinsert(p.body, bodyW[i]) end
 	for i = 1, getn(p.rows) do tinsert(p.body, p.rows[i]) end
-	p.fullH = 392
+	p.fullH = 446
 	p.bMin = T.Button(p, L("mod.mover.btn.min"), 70, 18, function() M.Collapse(M.panel, not M.panel.collapsed) end)
 	p.bMin:SetPoint("TOPRIGHT", p, "TOPRIGHT", -8, -8)
 	p:Hide()
@@ -2283,6 +2586,8 @@ function M.Exit(keep)
 		M.drag = nil
 	end
 	M.ShowGuides(nil, nil)
+	M.ShowGaps(nil)
+	M.multi = {}
 	M.ShowGlow(nil)
 	M.ClosePropose()
 	for i = 1, getn(M.order) do Layout.ClearPreview(M.order[i]) end

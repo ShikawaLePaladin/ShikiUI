@@ -115,6 +115,10 @@ local ANCH = {
 	bottomleft = { "BOTTOMLEFT", 1, 2, "LEFT" }, bottom = { "BOTTOM", 0, 2, "CENTER" }, bottomright = { "BOTTOMRIGHT", -2, 2, "RIGHT" },
 }
 M.ANCH = ANCH
+-- choix proposes pour les reglages de coin : les neuf coins + "off" (texte masque sur tous les boutons)
+M.ANCHORS_OFF = {}
+for i = 1, getn(M.ANCHORS) do M.ANCHORS_OFF[i] = M.ANCHORS[i] end
+M.ANCHORS_OFF[getn(M.ANCHORS) + 1] = "off"
 -- Textures de buff des postures qui commandent une page automatique (a completer ; A VERIFIER EN JEU : icones relevees de memoire).
 M.AUTO_STEALTH = { ["interface\\icons\\ability_stealth"] = true, ["interface\\icons\\ability_ambush"] = true }
 M.AUTO_SHADOW = { ["interface\\icons\\spell_shadow_shadowform"] = true }
@@ -178,7 +182,7 @@ function M.ReadConfig()
 		cfg.txt[k] = t
 		t.size, t.anchor = C.Get("actionbars." .. k .. "size"), C.Get("actionbars." .. k .. "anchor")
 		t.x, t.y = C.Get("actionbars." .. k .. "x"), C.Get("actionbars." .. k .. "y")
-		if not ANCH[t.anchor] then t.anchor = TXT_DEF[k][2] end
+		if not ANCH[t.anchor] and t.anchor ~= "off" then t.anchor = TXT_DEF[k][2] end
 	end
 	cfg.cRange = M.ReadColor(COL.range, "actionbars.c.range")
 	cfg.cOom = M.ReadColor(COL.oom, "actionbars.c.oom")
@@ -1238,7 +1242,10 @@ function M.StyleTexts(b)
 		local k = TXT[i]
 		local fs = b[k]
 		local t = cfg.txt and cfg.txt[k]
-		if fs and t then
+		if fs and t and t.anchor == "off" then
+			fs:Hide()
+		elseif fs and t then
+			fs:Show()
 			local a = ANCH[t.anchor] or ANCH[TXT_DEF[k][2]]
 			fs:ClearAllPoints()
 			fs:SetPoint(a[1], b, a[1], a[2] + t.x, a[3] + t.y)
@@ -2085,7 +2092,7 @@ local OPTS = {
 for i = 1, getn(TXT) do
 	local k = TXT[i]
 	OPTS[getn(OPTS) + 1] = { key = "actionbars." .. k .. "size", type = "number", min = 6, max = 18, step = 1, default = TXT_DEF[k][1] }
-	OPTS[getn(OPTS) + 1] = { key = "actionbars." .. k .. "anchor", type = "choice", choices = M.ANCHORS, default = TXT_DEF[k][2] }
+	OPTS[getn(OPTS) + 1] = { key = "actionbars." .. k .. "anchor", type = "choice", choices = M.ANCHORS_OFF, default = TXT_DEF[k][2] }
 	OPTS[getn(OPTS) + 1] = { key = "actionbars." .. k .. "x", type = "number", min = -12, max = 12, step = 1, default = 0 }
 	OPTS[getn(OPTS) + 1] = { key = "actionbars." .. k .. "y", type = "number", min = -12, max = 12, step = 1, default = 0 }
 end
