@@ -886,6 +886,10 @@ function M.StanceLabel(b)
 	setText(b.stnT, txt)
 end
 
+function M.ForceRepaint(b)
+	b.vst = nil
+end
+
 function M.UpdateState(b)
 	local kind = b.kind
 	if kind == "action" then
@@ -1736,6 +1740,7 @@ function M.Tick()
 	-- etat (portee, ressource, forme active) : sur demande, et une fois sur deux sinon ; recharges relues toutes les 0,5 s par prudence
 	if M.dState or SUI.Mod(M.tickN, 2) == 0 then
 		M.dState = false
+		if SUI.Mod(M.tickN, 10) == 0 then forEachShown(M.ForceRepaint) end    -- repeint complet regulier : le jeu peut avoir remis la teinte a blanc
 		forEachShown(M.UpdateState)
 	end
 	if SUI.Mod(M.tickN, 5) == 0 then forEachShown(M.UpdateCooldown) end
@@ -1754,7 +1759,7 @@ end
 local EVENTS = { "ACTIONBAR_SLOT_CHANGED", "ACTIONBAR_UPDATE_STATE", "ACTIONBAR_UPDATE_USABLE", "ACTIONBAR_UPDATE_COOLDOWN",
 	"ACTIONBAR_PAGE_CHANGED", "UPDATE_BONUS_ACTIONBAR", "UPDATE_SHAPESHIFT_FORM", "UPDATE_SHAPESHIFT_FORMS", "PET_BAR_UPDATE",
 	"PET_BAR_UPDATE_COOLDOWN", "UNIT_PET", "UPDATE_BINDINGS", "ACTIONBAR_SHOWGRID", "ACTIONBAR_HIDEGRID", "PLAYER_REGEN_DISABLED",
-	"PLAYER_REGEN_ENABLED", "PLAYER_TARGET_CHANGED", "PLAYER_ENTERING_WORLD", "UNIT_HEALTH", "PLAYER_AURAS_CHANGED" }
+	"PLAYER_REGEN_ENABLED", "PLAYER_TARGET_CHANGED", "PLAYER_ENTERING_WORLD", "UNIT_HEALTH", "PLAYER_AURAS_CHANGED", "UNIT_MANA", "UNIT_RAGE", "UNIT_ENERGY" }
 
 -- Relecture differee de l'etat des boutons de forme (l'aura / la forme active n'est parfois a jour que quelques dixiemes de seconde apres l'evenement).
 function M.LateState()
@@ -1772,6 +1777,8 @@ function M.OnEvent(ev, a1)
 		M.dState = true
 	elseif ev == "UNIT_HEALTH" then
 		if a1 == "target" and cfg.finisher then M.dState = true end
+	elseif ev == "UNIT_MANA" or ev == "UNIT_RAGE" or ev == "UNIT_ENERGY" then
+		if a1 == "player" then M.dState = true end
 	elseif ev == "ACTIONBAR_UPDATE_COOLDOWN" or ev == "PET_BAR_UPDATE_COOLDOWN" then
 		M.dCd = true
 	elseif ev == "ACTIONBAR_PAGE_CHANGED" or ev == "UPDATE_BONUS_ACTIONBAR" then

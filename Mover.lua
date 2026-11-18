@@ -411,6 +411,10 @@ function M.PaintHandle(rec)
 		local bc = T.c.border
 		h:SetBackdropBorderColor(bc[1], bc[2], bc[3], 1)
 	end
+	if h.grip then
+		local ar, ag, ab = T.Accent()
+		h.grip.tex:SetVertexColor(ar, ag, ab, (M.sel == rec or M.hover == rec) and 0.95 or 0.55)
+	end
 end
 
 function M.Repaint()
@@ -506,6 +510,9 @@ function M.Refresh(rec)
 	local w, hh = M.RectSize(rec)
 	h:SetWidth(w)
 	h:SetHeight(hh)
+	if h.grip then
+		if rec.scaleOk then h.grip:Show() else h.grip:Hide() end
+	end
 	M.ApplyLevel(rec)
 	h:ClearAllPoints()
 	if f:GetLeft() then
@@ -549,6 +556,78 @@ function M.StepScale(rec, delta, fixed)
 	M.Commit(rec, l0, b0, SUI.Round(s, 2))
 	if M.panel and M.panel:IsShown() and M.sel == rec then M.FillPanel(rec) end
 	return true
+end
+
+-- ---------------------------------------------------------------- coin bas-droit : redimensionner
+-- Glisser le coin change l'ECHELLE du cadre (les proportions sont donc toujours gardees) ; le coin haut-gauche reste en place.
+-- Maj = pas de 0,05. La taille (px et echelle) s'affiche en direct sur la poignee ; l'enregistrement a lieu au relachement (un seul pas d'annulation).
+M.GRIP = 14
+
+function M.ClampScale(s, coarse)
+	if coarse then s = floor(s / 0.05 + 0.5) * 0.05 end
+	if s < 0.5 then s = 0.5 end
+	if s > 2 then s = 2 end
+	return SUI.Round(s, 2)
+end
+
+function M.GripApply(g)
+	local rec = g.rec
+	rec.frame:SetScale(g.s)
+	g.nb = g.top - g.fh0 * g.s / g.s0
+	M.Move(rec, g.l, g.nb)
+	M.Refresh(rec)
+	local k = g.s / g.s0
+	rec.handle.coord:SetText(L("mod.mover.size.live", floor(g.fw0 * k + 0.5), floor(g.fh0 * k + 0.5), g.s))
+end
+
+function M.GripTick()
+	local g = M.rz
+	local grip = this
+	if not g or g.grip ~= grip then
+		grip:SetScript("OnUpdate", nil)
+		return
+	end
+	if IsMouseButtonDown and not IsMouseButtonDown("LeftButton") then
+		M.GripEnd(grip)
+		return
+	end
+	local cx, cy = M.Cursor()
+	local ratio = ((cx - g.l) / g.w + (g.top - cy) / g.hh) / 2
+	local s = M.ClampScale(g.s0 * ratio, IsShiftKeyDown())
+	if s ~= g.s then
+		g.s = s
+		M.GripApply(g)
+	end
+end
+
+function M.GripDown()
+	if arg1 ~= "LeftButton" or SUI.InCombat() or not M.active then return end
+	local grip = this
+	local rec = grip:GetParent().rec
+	if not rec or not rec.scaleOk then return end
+	local l0, b0 = M.FrameLB(rec)
+	if not l0 then return end
+	local w, hh, fw, fh = M.RectSize(rec)
+	local s0 = M.ScaleOf(rec)
+	M.ClosePropose()
+	M.CloseCtx()
+	M.Select(rec, true)
+	M.rz = { grip = grip, rec = rec, l = l0, w = w, hh = hh, fw0 = fw, fh0 = fh, top = b0 + fh, s0 = s0, s = s0, nb = b0 }
+	grip:SetScript("OnUpdate", M.GripTick)
+end
+
+function M.GripEnd(grip)
+	local g = M.rz
+	grip:SetScript("OnUpdate", nil)
+	if not g or g.grip ~= grip then return end
+	M.rz = nil
+	local rec = g.rec
+	if g.s ~= g.s0 then
+		M.Commit(rec, g.l, g.nb, g.s)
+	else
+		M.Refresh(rec)
+	end
+	if M.panel and M.panel:IsShown() and M.sel == rec then M.FillPanel(rec) end
 end
 
 local function hWheel()
@@ -642,10 +721,21 @@ local function ctxPick(b)
 	end
 end
 
+-- Vrai si le menu sait ouvrir des reglages pour ce cadre (ligne precise via OpenAt, ou page de categorie).
+function M.HasSettings(rec)
+	local mn = SUI.Menu
+	if mn and mn.OptionAnchorFor and mn.OpenAt and mn.OptionAnchorFor(rec.id) then return true end
+	return M.SettingsCat(rec.id) ~= nil
+end
+
 -- Ouvre le menu ShikiUI sur la page du module SANS quitter le mode deplacement (le menu passe au-dessus des poignees : Menu.SetRaised).
 function M.OpenSettings(rec)
-	local cat = M.SettingsCat(rec.id)
 	local mn = SUI.Menu
+	if mn and mn.OpenAt and mn.OptionAnchorFor and mn.OptionAnchorFor(rec.id) then
+		local found = mn.OpenAt(rec.id)         -- directement a la ligne / au groupe de reglages du cadre (ex. bars.bar3 -> barre d'action 3)
+		if found then return true end
+	end
+	local cat = M.SettingsCat(rec.id)
 	if not cat or not mn or not mn.Open or not mn.Show then
 		SUI.Print(L("msg.mover.nosettings", M.Label(rec.id)))
 		return false
@@ -712,7 +802,7 @@ function M.FillCtx(rec)
 		local act = b.act
 		local ok = true
 		if act == "minus" or act == "plus" or act == "norm" then ok = rec.scaleOk and true or false end
-		if act == "opts" then ok = M.SettingsCat(rec.id) ~= nil end
+		if act == "opts" then ok = M.HasSettings(rec) end
 		if act == "link" then ok = Layout.LinksEnabled() and Layout.items[rec.id] ~= nil end
 		if act == "unlink" then ok = Layout.GetLink(rec.id) ~= nil end
 		b.disabled = not ok
@@ -763,6 +853,16 @@ function M.NewHandle(rec)
 	h.coord:SetPoint("BOTTOM", h, "BOTTOM", 0, 3)
 	h.coord:SetWidth(120)
 	h.coord:SetHeight(12)
+	local g = CreateFrame("Button", nil, h)       -- coin bas-droit : glisser pour redimensionner (voir M.GripDown)
+	g:SetWidth(M.GRIP)
+	g:SetHeight(M.GRIP)
+	g:SetPoint("BOTTOMRIGHT", h, "BOTTOMRIGHT", 0, 0)
+	g:EnableMouse(true)
+	g.tex = g:CreateTexture(nil, "OVERLAY")
+	g.tex:SetTexture(T.tex.white)
+	g.tex:SetAllPoints(g)
+	g:SetScript("OnMouseDown", M.GripDown)
+	h.grip = g
 	h:SetScript("OnEnter", hEnter)
 	h:SetScript("OnLeave", hLeave)
 	h:SetScript("OnMouseWheel", hWheel)
@@ -1539,6 +1639,10 @@ function M.FillPanel(rec)
 		p.edS:Hide()
 		p.lbS:Hide()
 	end
+	local _, _, fw, fh = M.RectSize(rec)
+	p.size:SetText(L("mod.mover.p.size", floor(fw + 0.5), floor(fh + 0.5), M.ScaleOf(rec)))
+	p.bAll.disabled = not M.HasSettings(rec)
+	p.bAll:SetAlpha(p.bAll.disabled and 0.4 or 1)
 	-- liste des autres cadres
 	local list = {}
 	for i = 1, getn(M.order) do
@@ -1634,7 +1738,7 @@ function M.BuildPanel()
 	local p = CreateFrame("Frame", "ShikiUI_MoverPanel", M.veil)
 	M.panel = p
 	p:SetWidth(300)
-	p:SetHeight(350)
+	p:SetHeight(392)
 	p:SetFrameStrata("FULLSCREEN_DIALOG")
 	p:SetFrameLevel(M.veil:GetFrameLevel() + 30)
 	p:SetPoint("TOPRIGHT", UIParent, "TOPRIGHT", -20, -130)
@@ -1706,10 +1810,16 @@ function M.BuildPanel()
 	p.page:SetPoint("TOPLEFT", p, "TOPLEFT", 50, -316)
 	p.page:SetWidth(200)
 	p.page:SetHeight(12)
-	local bodyW = { p.edX, p.edY, p.edS, p.bCenter, p.bMirror, p.bReset, p.bClose, p.mY, p.mX, p.mW, p.prev, p.next, p.page }
+	p.size = T.Text(p, 10, T.c.dim, "LEFT")
+	p.size:SetPoint("TOPLEFT", p, "TOPLEFT", 12, -340)
+	p.size:SetWidth(276)
+	p.size:SetHeight(12)
+	p.bAll = T.Button(p, L("mod.mover.p.allopts"), 276, 22, function() if M.sel then M.OpenSettings(M.sel) end end)
+	p.bAll:SetPoint("TOPLEFT", p, "TOPLEFT", 12, -358)
+	local bodyW = { p.edX, p.edY, p.edS, p.bCenter, p.bMirror, p.bReset, p.bClose, p.mY, p.mX, p.mW, p.prev, p.next, p.page, p.size, p.bAll }
 	for i = 1, getn(bodyW) do tinsert(p.body, bodyW[i]) end
 	for i = 1, getn(p.rows) do tinsert(p.body, p.rows[i]) end
-	p.fullH = 350
+	p.fullH = 392
 	p.bMin = T.Button(p, L("mod.mover.btn.min"), 70, 18, function() M.Collapse(M.panel, not M.panel.collapsed) end)
 	p.bMin:SetPoint("TOPRIGHT", p, "TOPRIGHT", -8, -8)
 	p:Hide()
@@ -2165,6 +2275,7 @@ function M.Exit(keep)
 	if not M.active then return false end
 	M.closing = true
 	M.CloseCtx()
+	if M.rz then M.GripEnd(M.rz.grip) end
 	if keep == false then M.Restore() end
 	M.active = false
 	if M.drag then

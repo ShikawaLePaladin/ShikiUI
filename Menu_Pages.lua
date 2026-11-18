@@ -413,7 +413,7 @@ local function cellEnter()
 	if not o then return end
 	local def = SUI.Config.defaults[o.key]
 	M.TipShow(c, L(o.label), M.Tx(o.tip), L("mod.menu.default", M.ValueText(o, def)) .. "    " .. L("mod.menu.key", o.key),
-		o.reload and L("mod.menu.needsreload") or nil)
+		o.reload and L("mod.menu.needsreload") or (c.fresh:IsShown() and L("mod.menu.new.tip") or nil))
 end
 
 -- Clic sur la ligne d'un interrupteur : bascule (grande zone cliquable).
@@ -469,7 +469,24 @@ function NEW.cell()
 	end)
 	c.mod:SetScript("OnLeave", M.TipHide)
 	c.mod:Hide()
+	c.fresh = c:CreateTexture(nil, "OVERLAY")         -- pastille "nouveau" (apparu depuis la derniere version vue)
+	c.fresh:SetTexture(T.tex.white)
+	c.fresh:SetWidth(5)
+	c.fresh:SetHeight(5)
+	c.fresh:SetPoint("TOPLEFT", c, "TOPLEFT", 20, -4)
+	c.fresh:Hide()
 	return c
+end
+
+-- Surbrillance de la ligne c (cle key) : cle exacte ou groupe (voir M.IsHl), opacite M.hlA (forte puis attenuee pour OpenAt).
+function M.PaintHl(c, key)
+	if M.IsHl(key) then
+		local r, g, b = T.Accent()
+		c.hl:SetVertexColor(r, g, b, M.hlA or 0.2)
+		c.hl:Show()
+	else
+		c.hl:Hide()
+	end
 end
 
 -- Remplit la ligne c pour le reglage o. wide : une colonne avec aide visible ; w, h : taille de la ligne.
@@ -497,12 +514,12 @@ function M.BindCell(c, o, wide, w, h)
 	c.line:SetVertexColor(T.c.border[1], T.c.border[2], T.c.border[3], 0.6)
 	local ar, ag, ab = T.Accent()
 	c.mod.dot:SetVertexColor(ar, ag, ab, 1)
-	if M.hl == o.key then
-		local r, g, b = T.Accent()
-		c.hl:SetVertexColor(r, g, b, 0.2)
-		c.hl:Show()
+	M.PaintHl(c, o.key)
+	if M.IsNew(o.key) then
+		c.fresh:SetVertexColor(ar, ag, ab, 1)
+		c.fresh:Show()
 	else
-		c.hl:Hide()
+		c.fresh:Hide()
 	end
 	M.AttachCtl(c, o, ctlW, wide)
 	M.RefreshCtl(c)
@@ -670,10 +687,66 @@ local function goWait()
 	M.Open("modules")
 end
 
+-- "Je veux changer..." : taches courantes (M.tasks) ; chacune ouvre l'apercu 2D du module ET la bonne ligne (M.OpenAt).
+local function wantClick(b)
+	if b.task then M.OpenAt(b.task, { preview = true }) end
+end
+
+function M.HomeWant()
+	local list = {}
+	for i = 1, getn(M.tasks) do
+		local t = M.tasks[i]
+		if t.cat and M.CatExists(t.cat) then tinsert(list, t) end
+	end
+	if getn(list) == 0 then return end
+	M.Section(L("mod.menu.want.title"))
+	M.Para(L("mod.menu.want.hint"), 24, T.c.dim)
+	for i = 1, getn(list) do
+		local b = M.GridBtn(L(list[i].label), 4, 153, 26, wantClick)
+		if not b then break end
+		b.task = list[i].key
+	end
+	M.EndRow(8)
+end
+
+-- Nouveautes depuis la derniere fois : resume, une touche par categorie concernee, et "Tout marquer comme vu".
+local function newClearAll()
+	local n = M.NewClear(nil)
+	SUI.Print(L("msg.menu.new.cleared", n))
+end
+
+local function newGoCat(b)
+	if b.cat == "modules" then M.Open("modules") elseif b.cat then M.Open("cat", b.cat) end
+end
+
+function M.HomeNew()
+	local total = M.NewCount(nil)
+	if total <= 0 then return end
+	M.Section(L("mod.menu.new.title"))
+	M.Para(L("mod.menu.new.summary", total), 18, T.c.text)
+	local cats = {}
+	for k, _ in pairs(M.newCat) do
+		if k == "modules" or M.CatExists(k) then tinsert(cats, k) end
+	end
+	table.sort(cats)
+	for i = 1, getn(cats) do
+		if i > 7 then break end
+		local k = cats[i]
+		local b = M.GridBtn(L("mod.menu.new.catbtn", k == "modules" and L("mod.menu.nav.modules") or M.CatLabel(k), M.newCat[k]), 4, 153, 26,
+			newGoCat)
+		if not b then break end
+		b.cat = k
+	end
+	M.GridBtn(L("mod.menu.new.clear"), 4, 153, 26, newClearAll)
+	M.EndRow(8)
+end
+
 function P.home()
 	local C = SUI.Config
 	local S = SUI.Style
 	M.SetHead(L("mod.menu.home.title"), L("mod.menu.home.desc"))
+	M.HomeWant()
+	M.HomeNew()
 	M.Section(L("mod.menu.sec.state"))
 	-- 1 mode
 	stat(L("mod.menu.card.mode"), SUI.Mode.Name(C.mode), SUI.Mode.autoSet and L("mod.menu.home.auto") or "", nil,
@@ -1302,6 +1375,10 @@ function P.cat()
 	M.HeadBtn(mod and L("mod.menu.modreset") or L("mod.menu.pagereset"), 150, function(b)
 		M.ConfirmClick(b, "reset:" .. cat, mod and L("mod.menu.modreset") or L("mod.menu.pagereset"), function() M.ResetCat(cat) end)
 	end)
+	local nnew = M.NewCount(cat)
+	if nnew > 0 then
+		M.HeadBtn(L("mod.menu.new.clearcat", nnew), 130, function() M.NewClear(cat) end)
+	end
 	M.SetHead(M.CatLabel(cat), M.CatDesc(cat), mod and M.Tx("tip.modules." .. cat) or nil)
 	local h = M.frame.head
 	local counts = L("mod.menu.count", total, modified)

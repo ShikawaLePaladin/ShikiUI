@@ -54,12 +54,43 @@ local KEYS = { maxgroup = 8, width = 64, height = 28, powerheight = 0, spacing =
 	-- 5e passe (soigneur) : memes valeurs de repli que SUI.GroupEngine.CFGKEYS
 	fill = "tl", grpperline = 8, grouptitle = false, hppos = "right", manapos = "center", manacontent = "percent", manatext = false,
 	deadalpha = 0, offalpha = 0, los = false, losalpha = 0.6, markpos = "topleft", marksize = 0, hpcustom = "", deadcolor = "", inccolor = "",
-	autosize = false, scale20 = 0.9, scale25 = 0.8, scale40 = 0.7, tagpos = "topright", tagsize = 9 }
+	autosize = false, scale20 = 0.9, scale25 = 0.8, scale40 = 0.7, tagpos = "topright", tagsize = 9,
+	-- 7e passe (apercu cliquable) : barre de mana par role / classe, HoTs des tanks, vie basse
+	manabar = "all", manahunter = false, tankhots = 0, lowhp = 0 }
 local ZKEY = { frame = "width", hp = "hpcolor", heal = "incoming", power = "powerheight", name = "nameanchor", hptext = "hptext", tag = "roletag",
 	mark = "marks", dispel = "dispelstyle", deb = "debuffs", hot = "hots", buf = "buffs", aggro = "aggro", far = "range", dead = "deadalpha",
 	off = "offalpha", nic = "nameicons", big = "dispelbigmax", small = "dispelsmall", fx = "fxframes", agg = "aggroframes" }
 local ZORDER = { "frame", "hp", "heal", "power", "name", "hptext", "tag", "mark", "dispel", "deb", "hot", "buf", "aggro", "nic", "big", "small",
 	"fx", "agg" }
+-- Reglages modifiables sur place (mini-panneau) pour chaque element de l'apercu : suffixes du module (group. / raid.), ou "@cle" absolue.
+-- Les reglages absents d'un module (ex. groupgap pour le groupe) sont ignores par le panneau ; 7 lignes au plus.
+local ZPANEL = {
+	frame = { "width", "height", "autosize", "spacing", "groupgap", "perline" },
+	hp = { "hpcolor", "bartex", "lowhp" },
+	heal = { "incoming", "incsrc" },
+	power = { "powerheight", "manabar", "manahunter", "manatext", "manapos", "manacontent" },
+	name = { "nameanchor", "namelen", "nameicons", "fontsize" },
+	hptext = { "hptext", "hppos", "lowhp", "fontsize" },
+	tag = { "roletag", "leader", "tagpos", "tagsize" },
+	mark = { "marks", "markpos", "marksize" },
+	dispel = { "dispelmode", "dispelstyle", "dispelprio", "dispelonly", "dispelthick" },
+	deb = { "debuffs", "iconsize", "dispelonly" },
+	hot = { "hots", "tankhots", "hotall", "hotwarn", "iconsize" },
+	buf = { "buffs", "iconsize" },
+	aggro = { "aggro", "target" },
+	nic = { "nameicons", "dispelsmallsize" },
+	big = { "dispelbig", "dispelbigmax", "dispelsize", "dispelpos" },
+	small = { "dispelsmall", "dispelsmallpos", "dispelsmallsize" },
+	fx = { "fxframes", "fxsize", "fxpos", "fxmax", "@groupfx.fx.icon", "@groupfx.fx.tint", "@groupfx.fx.timer" },
+	agg = { "aggroframes", "@groupfx.aggromode", "@groupfx.aggro.frame", "@groupfx.aggro.icon", "@groupfx.aggro.tank" },
+	far = { "range", "outalpha", "rangeyd", "los", "losalpha" },
+	dead = { "deadalpha", "deadcolor", "resinfo" },
+	off = { "offalpha" },
+	gap = { "spacing", "groupgap", "orient", "perline" },
+	sort = { "sort", "orient", "fill", "perline", "grpperline", "grouptitle", "maxgroup" },
+	gt = { "grouptitle", "sort", "grpperline" },
+}
+local ZALL = { "gap", "sort", "far", "dead", "off" }          -- elements hors cadre agrandi (en plus de ZORDER ; les titres "gt" a part)
 
 R.roster = {}
 for i = 1, getn(LINES) do
@@ -109,6 +140,7 @@ R.demoFar.fx, R.demoFar.fxt, R.demoFar.ag = { 1 }, { 6 }, nil
 R.demoDead = copyOf(R.demo)
 R.demoDead.state, R.demoDead.hpr, R.demoDead.aggro, R.demoDead.deb, R.demoDead.mark = 1, 0, false, {}, nil
 R.demoDead.fx, R.demoDead.fxt, R.demoDead.ag = NOFX, NOFX, nil
+R.demoDead.res = true                             -- mort en cours de resurrection (reglage resinfo)
 R.demoOff = copyOf(R.demo)
 R.demoOff.state, R.demoOff.aggro, R.demoOff.deb, R.demoOff.mark = 2, false, {}, nil
 R.demoOff.fx, R.demoOff.fxt, R.demoOff.ag = NOFX, NOFX, nil
@@ -291,6 +323,24 @@ local function powerCol(pt)
 	local col = E and E.POWER_COL and E.POWER_COL[pt]
 	if col then return col[1], col[2], col[3] end
 	return T.c.dim[1], T.c.dim[2], T.c.dim[3]
+end
+
+-- Le joueur p a-t-il une barre de mana ? Meme regle que SUI.GroupEngine.ManaWanted : "all" toutes les ressources, "none" aucune, sinon
+-- seulement la mana, selon le role (H force la barre, T / D la retirent en mode "healers") et la classe. Mort / hors ligne : pas de barre.
+local function wantPower(cfg, p)
+	if cfg.powerheight <= 0 or p.state ~= 0 then return false end
+	local mode = cfg.manabar
+	if mode == "all" then return true end
+	if mode == "none" or p.ptype ~= 0 then return false end
+	if p.role == "H" then return true end
+	local E = SUI.GroupEngine
+	if mode == "healers" then
+		if p.role == "T" or p.role == "D" then return false end
+		return not (E and E.HEALER_CLASS) or E.HEALER_CLASS[p.class] == true
+	end
+	if not (E and E.CASTER_CLASS) then return true end
+	if E.CASTER_CLASS[p.class] then return true end
+	return (p.class == "HUNTER" and cfg.manahunter) and true or false
 end
 
 local function hpString(cfg, hp, mx)
@@ -562,7 +612,7 @@ function R.Paint(c, p, cfg, s, caps)
 	if h < 3 then h = 3 end
 	c:SetWidth(w)
 	c:SetHeight(h)
-	local ph = cfg.powerheight
+	local ph = wantPower(cfg, p) and cfg.powerheight or 0       -- reglage manabar : pas de barre pour ce role / cette classe
 	local phpx = 0
 	if ph > 0 then
 		phpx = floor(ph * s + 0.5)
@@ -698,9 +748,13 @@ function R.Paint(c, p, cfg, s, caps)
 	end
 	rect(c, "deb", floor(2 * s + 0.5), h - base - isz - 2, (isz + 2) * (shown > 0 and shown or 1), isz + 2)
 	local nhot = cfg.hots
+	local isTank = (p.role == "T")
+	if isTank and cfg.tankhots > nhot then nhot = cfg.tankhots end         -- reglage tankhots : plus de HoTs sur les tanks
 	if nhot > caps[3] then nhot = caps[3] end
 	local shownH = nhot
-	if shownH > p.hots then shownH = p.hots end
+	local hlim = p.hots
+	if isTank and cfg.tankhots > hlim then hlim = cfg.tankhots end
+	if shownH > hlim then shownH = hlim end
 	local hx = floor(2 * s + 0.5) + resR
 	for k = 1, caps[3] do
 		local ic = c.hi[k]
@@ -877,6 +931,9 @@ function R.Paint(c, p, cfg, s, caps)
 	if textOk and hs ~= "" and w >= 40 then
 		pfont(c.hpt, fs, cfg)
 		c.hpt:SetText(hs)
+		-- reglage lowhp : le texte de vie passe en couleur d'alerte sous le seuil (en pourcent)
+		local lc = (cfg.lowhp > 0 and p.hpr * 100 < cfg.lowhp) and T.c.bad or T.c.text
+		c.hpt:SetTextColor(lc[1], lc[2], lc[3], lc[4] or 1)
 		c.hpt:SetJustifyH(JUST[hat[2]])
 		c.hpt:ClearAllPoints()
 		c.hpt:SetPoint("TOPLEFT", c, "TOPLEFT", hx, -hy)
@@ -891,7 +948,11 @@ function R.Paint(c, p, cfg, s, caps)
 	rect(c, "hptext", zx, hy, zw, fs + 2)
 	if textOk and state ~= 0 then
 		pfont(c.stt, fs, cfg)
-		c.stt:SetText(state == 2 and L("unit.offline") or L("unit.dead"))
+		-- reglage resinfo : un mort en cours de resurrection montre "Res" en vert au lieu de "Mort"
+		local isRes = (state == 1 and cfg.resinfo and p.res) and true or false
+		local sc = isRes and T.c.good or T.c.warn
+		c.stt:SetTextColor(sc[1], sc[2], sc[3], sc[4] or 1)
+		c.stt:SetText(isRes and L("msg." .. cfg.ns .. ".res") or (state == 2 and L("unit.offline") or L("unit.dead")))
 		c.stt:ClearAllPoints()
 		c.stt:SetPoint("TOP", c, "TOP", 0, -ty)
 		c.stt:SetWidth(w - 4)
@@ -1069,8 +1130,13 @@ local function layoutAll(root, w, h)
 			t:SetWidth(floor(cfg.width * sg))
 			t:SetHeight(11 * sg)
 			t:Show()
+			-- zone cliquable posee sur le titre (reglage grouptitle)
+			local zx = gx + offx + floor(tx0 * sg)
+			if st.tj[q] then zx = zx - floor(cfg.width * sg) end
+			P.PlaceZone(st.gtz[q], root, zx, gy + floor(st.ty[q] * sg), floor(cfg.width * sg), 11 * sg)
 		else
 			t:Hide()
+			st.gtz[q]:Hide()
 		end
 	end
 	setCaption(st, cfg, prefix, cnt)
@@ -1084,6 +1150,72 @@ local function onPick()
 	st.redo()
 end
 
+-- Info-bulle d'un cadre de la grille : le nom du joueur et ce que fait le clic.
+local function cellEnter()
+	local p = R.roster[this.pi]
+	if p then M.TipShow(this, p.name, L("mod.preview.raid.cell")) end
+end
+
+local function cellLeave()
+	M.TipHide()
+end
+
+-- ---------------------------------------------------------------- elements cliquables : reglage, nom, info-bulle, mini-panneau
+-- Les titres de groupe sont "gt1" a "gt8" : un seul element "gt".
+local function zoneBase(zone)
+	if sfind(zone, "^gt%d$") then return "gt" end
+	return zone
+end
+
+local function absKey(prefix, suffix)
+	if string.sub(suffix, 1, 1) == "@" then return string.sub(suffix, 2) end
+	return prefix .. suffix
+end
+
+-- Cle de reglage qu'un clic sur l'element ouvre ; nil si inconnu. Le groupe n'a pas d'ecart entre groupes : l'espacement le remplace.
+local function zoneOpt(prefix, zone)
+	zone = zoneBase(zone)
+	if zone == "gap" then
+		if C.Get(prefix .. "sort") == "group" and P.FindOption(prefix .. "groupgap") then return prefix .. "groupgap" end
+		return prefix .. "spacing"
+	end
+	if zone == "sort" then return prefix .. "sort" end
+	if zone == "gt" then return prefix .. (P.FindOption(prefix .. "grouptitle") and "grouptitle" or "sort") end
+	local k = ZKEY[zone]
+	if k then return prefix .. k end
+	return nil
+end
+
+-- Table cle de reglage -> element de l'apercu : le saut du menu (OpenAt, recherche) peut ainsi entourer l'element concerne.
+-- Passe 1 : le reglage ouvert par un clic ; passe 2 : les autres reglages du mini-panneau de l'element.
+local function buildKz(prefix)
+	local kz = {}
+	local nz, na = getn(ZORDER), getn(ZALL)
+	for pass = 1, 2 do
+		for i = 1, nz + na do
+			local id = (i <= nz) and ZORDER[i] or ZALL[i - nz]
+			if pass == 1 then
+				local k = zoneOpt(prefix, id)
+				if k and not kz[k] then kz[k] = id end
+			else
+				local l = ZPANEL[id]
+				for j = 1, l and getn(l) or 0 do
+					local k = absKey(prefix, l[j])
+					if not kz[k] then kz[k] = id end
+				end
+			end
+		end
+	end
+	return kz
+end
+
+local function zonePanel(prefix, zone)
+	local l = ZPANEL[zoneBase(zone)]
+	local keys = {}
+	for i = 1, l and getn(l) or 0 do tinsert(keys, absKey(prefix, l[i])) end
+	return { keys = keys, go = zoneOpt(prefix, zone) }
+end
+
 local function onSize(b)
 	local st = b.st
 	st.n = b.n
@@ -1092,6 +1224,7 @@ end
 
 local function makeDef(kind, prefix, sizes, defN, caps)
 	local def = { title = nil, watch = { prefix, "groupfx." } }
+	local catId = (prefix == "raid.") and "raid" or "group"
 	def.build = function(parent, w, h)
 		local root = CreateFrame("Frame", nil, parent)
 		local st = { kind = kind, prefix = prefix, sizes = sizes, n = defN, pick = 0, caps = caps, cfg = {}, ord = {}, px = {}, py = {},
@@ -1105,8 +1238,10 @@ local function makeDef(kind, prefix, sizes, defN, caps)
 			c.st = st
 			c.pi = k
 			c:SetFrameLevel(P.Lv(2))
-			c:RegisterForClicks("LeftButtonUp")
+			c:RegisterForClicks("LeftButtonUp", "RightButtonUp")
 			c:SetScript("OnClick", onPick)
+			c:SetScript("OnEnter", cellEnter)
+			c:SetScript("OnLeave", cellLeave)
 			st.cells[k] = c
 		end
 		st.det = newCell(root, caps, false)
@@ -1122,10 +1257,12 @@ local function makeDef(kind, prefix, sizes, defN, caps)
 			b.st = st
 			st.btns[i] = b
 		end
-		st.titles = {}
+		st.titles, st.gtz = {}, {}
 		for q = 1, 8 do
 			st.titles[q] = T.Text(root, 9, T.c.dim, "LEFT", true)
 			st.titles[q]:Hide()
+			st.gtz[q] = P.Zone(root, "gt" .. q)
+			st.gtz[q]:Hide()
 		end
 		st.tx, st.ty, st.tj = {}, {}, {}
 		st.cap = T.Text(root, 10, T.c.dim, "LEFT")
@@ -1144,17 +1281,21 @@ local function makeDef(kind, prefix, sizes, defN, caps)
 		root.pw, root.ph = w, h
 		readCfg(prefix, st.cfg)
 		layoutAll(root, w, h)
-	end
-	def.click = function(zone)
-		if zone == "gap" then
-			local cfg = C.Get(prefix .. "sort")
-			return prefix .. (cfg == "group" and "groupgap" or "spacing")
+		-- le menu a saute a un reglage (OpenAt, recherche, clic droit sur la poignee) : l'element qui le commande est entoure
+		if key == nil then
+			local fk = M.hl
+			if type(fk) == "string" and fk ~= st.lastHl then
+				st.lastHl = fk
+				if not st.kz then st.kz = buildKz(prefix) end
+				local zid = st.kz[fk]
+				if zid then P.SelectId(catId, zid) end
+			end
 		end
-		if zone == "sort" then return prefix .. "sort" end
-		local k = ZKEY[zone]
-		if k then return prefix .. k end
-		return nil
 	end
+	def.click = function(zone) return zoneOpt(prefix, zone) end
+	def.label = function(zone) return "mod.preview.raid.z." .. zoneBase(zone) end
+	def.tip = function(zone) return "mod.preview.raid.tip." .. zoneBase(zone) end
+	def.panel = function(zone) return zonePanel(prefix, zone) end
 	return def
 end
 

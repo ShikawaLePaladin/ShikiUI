@@ -1886,7 +1886,7 @@ local LOOT_OPTIONS = {
 		opt("rollmax", "number", 350, 4, { min = 1, max = 8, step = 1 }),
 		opt("rollscale", "number", 360, 100, { min = 60, max = 150, step = 10 }),
 		opt("scale", "number", 365, 100, { min = 60, max = 150, step = 10 }),
-		opt("rollhold", "number", 370, 8, { min = 2, max = 30, step = 1 }),
+		opt("rollhold", "number", 370, 4, { min = 2, max = 30, step = 1 }),
 		opt("keepblizz", "bool", 380, false),
 }
 -- Options communes du socle : texture et forme des barres de minuteur des jets, police et taille des textes.

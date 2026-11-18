@@ -252,13 +252,24 @@ end
 local function click(zone)
 	local root = P.reg.layout and P.reg.layout.root
 	if not root then return nil end
+	-- le cadre mene a SA ligne de reglages (barre 3 -> reglages de la barre 3) quand le menu connait son groupe
+	local fk = root.st.map[zone]
+	if fk and M.OptionAnchorFor and M.OptionAnchorFor(fk) and M.OpenAt then return "at:" .. fk end
 	local cat = root.st.cats[zone]
 	if cat and M.CatExists(cat) then return "cat:" .. cat end
 	return nil
 end
 
+-- Nom du cadre au survol : celui de la poignee de deplacement.
+local function label(zone)
+	local root = P.reg.layout and P.reg.layout.root
+	local fk = root and root.st.map[zone]
+	if not fk then return nil end
+	return labelOf(fk)
+end
+
 P.Register("layout", { title = "mod.preview.layout.title", watch = { "pos", "layout", "mover.", "ui.scale" }, build = build, update = update,
-	click = click })
+	click = click, label = label })
 
 -- NOTES - NON VERIFIE EN JEU (1.12) : (1) GetLeft / GetBottom d'un cadre cache ou jamais affiche (repli sur la position enregistree) ;
 -- (2) l'echelle effective des cadres (GetEffectiveScale) pour convertir en unites d'UIParent ; (3) l'API de liens
