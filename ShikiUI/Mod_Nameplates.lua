@@ -36,7 +36,10 @@ local getn = table.getn
 local floor, abs = math.floor, math.abs
 local strformat, strfind = string.format, string.find
 
-local MAXSLOT = 80
+local MAXSLOT = 100
+local HEAVY = 24          -- au-dela : les plaques sans enjeu passent en mode compact (barre seule, plus petite) et se rafraichissent 1 tick sur 3
+local COMPACT_SCALE = 0.75
+local function mod3(x) return x - floor(x / 3) * 3 end
 local MAXDEB = 6
 local POOL = 128
 local EMPTY = ""
@@ -491,6 +494,15 @@ local function barTex(b)
 end
 
 -- Neutralise les objets d'origine d'une plaque (une seule fois par plaque). L'etat d'origine est garde : Unskin le rend.
+-- Le jeu peut rendre a une plaque recyclee ses textures d'origine : on la neutralise de nouveau si la bordure est revenue.
+function M.CheckSkin(plate)
+	local o = plate.suiOrig
+	if plate.suiSkin and o and hasBorder(o.borderR) then
+		plate.suiSkin = nil
+		M.Skin(plate)
+	end
+end
+
 function M.Skin(plate)
 	if plate.suiSkin then return end
 	plate.suiSkin = true
@@ -864,7 +876,7 @@ function M.UpdateBar(s, plate, friendly)
 		s.lastV, s.lastHi = v, hi
 		s.bar:SetMinMaxValues(lo, hi)
 		s.bar:SetValue(v)
-		if cfg.hptext and hi > lo then
+		if cfg.hptext and not s.compact and hi > lo then
 			local pct = floor((v - lo) / (hi - lo) * 100 + 0.5)
 			if pct ~= s.lastPct then
 				s.lastPct = pct
@@ -904,6 +916,7 @@ function M.UpdateTarget(s, plate)
 	if s.guid and M.targetGuid then isT = (s.guid == M.targetGuid)
 	else isT = (plate:GetAlpha() >= 0.99 and UnitExists("target") ~= nil) end
 	local scale = (isT and cfg.targetglow) and cfg.targetscale or 1
+	if s.compact and not isT then scale = COMPACT_SCALE end
 	if scale ~= s.lastScale then
 		s.lastScale = scale
 		s.f:SetScale(scale)
@@ -1025,6 +1038,22 @@ function M.UpdateDist(s, isT)
 	end
 end
 
+-- Mode compact (gros pull) : seule la barre de vie reste ; textes, effets, incantation et distance sont masques (moins de frames dessinees, moins de travail).
+function M.SetCompact(s, on)
+	on = on and true or false
+	if s.compact == on then return end
+	s.compact = on
+	s.lastScale = nil
+	if on then
+		s.nameFs:Hide() s.hpFs:Hide() s.distFs:Hide() s.thrFs:Hide()
+		if s.cbShown then s.cb:Hide() s.cbShown = false end
+		for k = 1, MAXDEB do s.dKey[k] = -1 s.dTex[k]:Hide() s.dFs[k]:SetText(EMPTY) end
+	else
+		s.nameFs:Show() s.hpFs:Show() s.distFs:Show() s.thrFs:Show()
+		s.lastName, s.lastV, s.lastDist, s.thrKey = nil, nil, nil, nil
+	end
+end
+
 function M.UpdateSlot(s, now)
 	local plate = s.plate
 	local g = plate:GetName(1)
@@ -1050,10 +1079,13 @@ function M.UpdateSlot(s, now)
 			T.Backdrop(s.f, T.c.bg, T.c.border)
 		end
 	end
+	local imp = (s.guid and s.guid == M.targetGuid) or s.cbShown or (s.thrState == 2 or s.thrState == 3 or s.thrState == 6)
+	M.SetCompact(s, M.heavy and not imp)
 	M.UpdateThreat(s, now, friendly)
 	M.UpdateBar(s, plate, friendly)
-	M.UpdateName(s, plate)
+	if not s.compact then M.UpdateName(s, plate) end
 	local isT = M.UpdateTarget(s, plate)
+	if s.compact then return end
 	if friendly and not M.cfg.friendly then
 		M.UpdateDebuffs(s, false, now)
 		if s.cbShown then s.cb:Hide() s.cbShown = false end
@@ -1078,16 +1110,18 @@ function M.Tick()
 		if M.dEnd[i] < now then M.DropDebuff(i) end
 	end
 	M.phase = (M.phase or 0) + 1 if M.phase > 2 then M.phase = 0 end
-	local heavy = M.nUsed > 24
+	local heavy = M.nUsed > HEAVY
+	M.heavy = heavy
 	for i = 1, M.nPlates do
 		local plate = M.plateList[i]
 		local s = M.slotOf[plate]
 		if plate:IsShown() then
+			if mod3(i + M.phase) == 0 then M.CheckSkin(plate) end
 			local fresh = false
 			if not s then s = M.Assign(plate) fresh = true end
 			if s then
 				-- gros pull : au-dela de HEAVY plaques, chacune n'est rafraichie qu'un tick sur 3 (cible, incantation et plaque neuve : a chaque tick)
-				if fresh or not heavy or s.cbShown or (s.guid and s.guid == M.targetGuid) or (i + M.phase) - floor((i + M.phase) / 3) * 3 == 0 then
+				if fresh or not heavy or s.cbShown or (s.guid and s.guid == M.targetGuid) or (s.thrState == 2 or s.thrState == 3 or s.thrState == 6) or mod3(i + M.phase) == 0 then
 					M.UpdateSlot(s, now)
 				end
 			end
@@ -1245,7 +1279,7 @@ local NP_OPTIONS = {
 		opt("markersize", "number", 200, 20, { min = 12, max = 40, step = 2 }),
 		opt("distance", "choice", 210, "target", { choices = { "off", "target", "all" } }),
 		opt("friendly", "bool", 220, false),
-		opt("maxplates", "number", 230, 40, { min = 10, max = 80, step = 5 }),
+		opt("maxplates", "number", 230, 40, { min = 10, max = 100, step = 5 }),
 		opt("rate", "number", 240, 0.1, { min = 0.05, max = 0.5, step = 0.05 }),
 }
 -- Options communes du socle : texture, forme (barres de vie et d'incantation), police et taille des textes.
