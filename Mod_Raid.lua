@@ -76,10 +76,7 @@ local function opt(key, typ, order, def, extra)
 	return o
 end
 
-SUI.RegisterModule("raid", {
-	default = false,
-	cost = "heavy",
-	options = {
+local RAID_OPTIONS = {
 		opt("maxgroup", "number", 10, 8, { min = 1, max = 8, step = 1, simple = true }),
 		opt("width", "number", 20, 64, { min = 40, max = 140, step = 2, simple = true }),
 		opt("height", "number", 30, 28, { min = 14, max = 60, step = 2, simple = true }),
@@ -92,8 +89,8 @@ SUI.RegisterModule("raid", {
 		opt("sort", "choice", 70, "group", { choices = { "group", "role", "class", "name", "none" }, simple = true }),
 		opt("orient", "choice", 80, "vertical", { choices = { "vertical", "horizontal" }, simple = true }),
 		opt("perline", "number", 90, 5, { min = 1, max = 40, step = 1 }),
-		opt("hpcolor", "choice", 100, "class", { choices = { "class", "health", "style" } }),
-		opt("hptext", "choice", 110, "deficit", { choices = { "none", "percent", "value", "deficit", "both" }, simple = true }),
+		opt("hpcolor", "choice", 100, "class", { choices = { "class", "health", "style", "custom" } }),
+		opt("hptext", "choice", 110, "deficit", { choices = { "none", "percent", "value", "deficit", "deficitpct", "both" }, simple = true }),
 		opt("namelen", "number", 120, 6, { min = 3, max = 12, step = 1 }),
 		opt("nameanchor", "choice", 121, "topleft", { choices = { "topleft", "topcenter", "topright", "left", "center", "right", "bottomleft", "bottomcenter", "bottomright" }, simple = true }),
 		opt("nameicons", "choice", 122, "dispel", { choices = { "off", "dispel", "fx", "both" } }),
@@ -141,7 +138,42 @@ SUI.RegisterModule("raid", {
 		opt("roleguess", "choice", 320, "none", { choices = { "none", "class" } }),
 		opt("budget", "number", 330, 12, { min = 1, max = 40, step = 1 }),
 		opt("slowstep", "number", 340, 10, { min = 1, max = 40, step = 1 }),
-	},
+		-- 5e passe (soigneur) : disposition, textes, transparences, ligne de vue, couleurs, listes de HoT
+		opt("fill", "choice", 91, "tl", { choices = { "tl", "tr", "bl", "br" } }),
+		opt("hpcustom", "color", 101, ""),
+		opt("deadcolor", "color", 102, ""),
+		opt("inccolor", "color", 103, ""),
+		opt("hppos", "choice", 111, "right", { choices = { "topleft", "topcenter", "topright", "left", "center", "right", "bottomleft", "bottomcenter", "bottomright" }, simple = true }),
+		opt("manapos", "choice", 64, "center", { choices = { "left", "center", "right" } }),
+		opt("manacontent", "choice", 65, "percent", { choices = { "percent", "value", "deficit" } }),
+		opt("deadalpha", "number", 151, 0, { min = 0, max = 1, step = 0.05 }),
+		opt("offalpha", "number", 152, 0, { min = 0, max = 1, step = 0.05 }),
+		opt("los", "bool", 153, false),
+		opt("losalpha", "number", 154, 0.6, { min = 0.1, max = 1, step = 0.05 }),
+		opt("markpos", "choice", 251, "topleft", { choices = { "topleft", "topcenter", "center" } }),
+		opt("marksize", "number", 252, 0, { min = 0, max = 24, step = 1 }),
+		opt("hotlist", "string", 176, ""),
+		opt("hotoff", "string", 177, ""),
+		opt("grpperline", "number", 61, 8, { min = 1, max = 8, step = 1 }),
+		opt("grouptitle", "bool", 62, false),
+		opt("autosize", "bool", 31, false, { simple = true }),
+		opt("scale20", "number", 32, 0.9, { min = 0.4, max = 1.2, step = 0.05 }),
+		opt("scale25", "number", 33, 0.8, { min = 0.4, max = 1.2, step = 0.05 }),
+		opt("scale40", "number", 34, 0.7, { min = 0.4, max = 1.2, step = 0.05 }),
+		-- 6e passe : role / chef place et dimensionne
+		opt("tagpos", "choice", 231, "topright", { choices = { "topright", "topleft", "bottomright", "bottomleft" } }),
+		opt("tagsize", "number", 232, 9, { min = 7, max = 16, step = 1 }),
+}
+-- Aspect : texture des barres, police et taille des textes (raid.bartex / raid.font / raid.fontsize).
+if SUI.Look then
+	local lk = SUI.Look.Options("raid", { bar = true, font = true, cat = "raid", order = 820 })
+	for i = 1, table.getn(lk) do table.insert(RAID_OPTIONS, lk[i]) end
+end
+
+SUI.RegisterModule("raid", {
+	default = false,
+	cost = "heavy",
+	options = RAID_OPTIONS,
 	enable = function() M.Enable() end,
 	disable = function() M.Disable() end,
 })

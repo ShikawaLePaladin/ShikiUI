@@ -220,20 +220,24 @@ function M.Scan()
 		local en = M.FRKEY[fold(name)] or ALIAS[name] or name
 		local k = M.known[en]
 		if not k then
-			k = { max = 0, txt = {}, gen = 0 }
+			k = { max = 0, txt = {}, idx = {}, cost = {}, gen = 0 }
 			M.known[en] = k
 		end
 		if k.gen ~= M.gen then
 			k.gen = M.gen
 			k.max = 0
 			for r in pairs(k.txt) do k.txt[r] = nil end
+			for r in pairs(k.idx) do k.idx[r] = nil end
+			for r in pairs(k.cost) do k.cost[r] = nil end
 		end
 		local _, _, n = sfind(rank or "", "(%d+)")
 		n = tonumber(n) or 0
 		if n > k.max then k.max = n end
 		k.txt[n] = rank or ""
+		k.idx[n] = i                    -- indice du grimoire de ce rang (lecture du cout en mana)
 		k.bookName = name
 	end
+	M.EnsureCostTip()
 	M.Rebuild()
 end
 
@@ -371,6 +375,7 @@ function M.Rebuild()
 	M.hasWheel = wheel
 	M.bound = bound
 	if SUI.GroupEngine and SUI.GroupEngine.SyncWheel then SUI.GroupEngine.SyncWheel() end
+	if SUI.GroupEngine and SUI.GroupEngine.SyncClicks then SUI.GroupEngine.SyncClicks() end
 	if SUI.Units and SUI.Units.SyncWheel then SUI.Units.SyncWheel() end
 	M.MarkAll()
 end
@@ -566,14 +571,86 @@ function M.Wheel(unit, delta, f)
 	return M.Run(e, unit, f)
 end
 
--- Lignes d'aide ajoutees a l'infobulle d'un cadre (option hints) : les trois clics de l'etat de modificateur courant.
+-- Touches de soin au clavier (Bindings.xml SHIKIUI_CLICKHEAL_1..5 = clic gauche, droit, milieu, roulette haut, roulette bas) : la touche
+-- lance la liaison du geste pour l'etat Maj / Ctrl / Alt tenu avec elle, sur le cadre survole (groupe, raid) ou, sans cadre survole,
+-- sur la cible amie (option keytarget). Meme chemin que le clic : memes liaisons, memes rangs, meme methode de lancement.
+function M.Key(bi)
+	if not M.on or not bi then return false end
+	local f = SUI.GroupEngine and SUI.GroupEngine.hover
+	local unit = f and f.unit
+	if unit and not UnitExists(unit) then unit, f = nil, nil end
+	if not unit and C.Get("clickheal.keytarget") and UnitExists("target") and UnitIsFriend("player", "target") then unit = "target" end
+	if not unit then return false end
+	local e = M.map[(modIndex() - 1) * 5 + bi]
+	if not e or e.kind == "default" then return false end
+	return M.Run(e, unit, f)
+end
+
+-- Noms affiches dans la fenetre des raccourcis du jeu (sans cela le client montrerait le nom interne).
+function M.NameBindings()
+	setglobal("BINDING_HEADER_SHIKIUI_CLICKHEAL", L("mod.clickheal.bind.header"))
+	for i = 1, 5 do setglobal("BINDING_NAME_SHIKIUI_CLICKHEAL_" .. i, L("mod.clickheal.bind." .. i)) end
+end
+
+-- Infobulle cachee qui sert a lire le cout en mana d'un sort du grimoire (option hintcost). Creee hors combat seulement (Scan l'appelle).
+function M.EnsureCostTip()
+	if M.costTip or not C.Get("clickheal.hintcost") or SUI.InCombat() then return M.costTip end
+	local ex = getglobal("ShikiUI_CHCostTip")
+	if ex then M.costTip = ex return ex end
+	local ok, t = pcall(CreateFrame, "GameTooltip", "ShikiUI_CHCostTip", UIParent, "GameTooltipTemplate")
+	if ok and t then M.costTip = t end
+	return M.costTip
+end
+
+-- Cout en mana (nombre) du sort 'name' (cle EN) au rang choisi par l'option de rang ; nil si inconnu / sans mana / lecture impossible.
+-- Le resultat est garde par rang jusqu'au prochain balayage du grimoire (talents, respec) : une lecture d'infobulle par rang et par balayage.
+function M.ManaCost(name)
+	local k = M.known[name]
+	local tip = M.costTip
+	if not (k and k.gen == M.gen and tip) then return nil end
+	local n = k.max
+	local key = "clickheal.rank." .. slug(name)
+	local want = (C.meta[key] ~= nil) and C.Get(key) or 0
+	if want > 0 and k.max > 0 then
+		for r = want, 1, -1 do
+			if k.idx[r] then n = r break end
+		end
+	end
+	local c = k.cost[n]
+	if c == nil then
+		c = false
+		local idx = k.idx[n]
+		if idx then
+			tip:SetOwner(UIParent, "ANCHOR_NONE")
+			tip:SetSpell(idx, getglobal("BOOKTYPE_SPELL") or "spell")
+			for i = 2, 4 do
+				local fs = getglobal("ShikiUI_CHCostTipTextLeft" .. i)
+				local t = fs and fs:GetText()
+				if t then
+					local _, _, v = sfind(t, "(%d+)%s+[Mm]ana")
+					if v then c = tonumber(v) break end
+				end
+			end
+		end
+		k.cost[n] = c
+	end
+	return c or nil
+end
+
+-- Lignes d'aide ajoutees a l'infobulle d'un cadre (option hints) : les trois clics de l'etat de modificateur courant ; avec l'option
+-- hintcost, le cout en mana du sort lie est ajoute apres son nom.
 function M.AddHints(tip, f)
 	if not M.on or not C.Get("clickheal.hints") or not tip or not tip.AddLine then return end
 	local mi = modIndex()
+	local cost = C.Get("clickheal.hintcost")
+	if cost and not M.costTip then M.EnsureCostTip() end
 	for bi = 1, 3 do
 		local e = M.map[(mi - 1) * 5 + bi]
 		if e and e.kind ~= "default" then
-			tip:AddLine(L("msg.clickheal.hint", L("choice.clickheal.btn." .. BTNS[bi]), M.Label(e)))
+			local lbl = M.Label(e)
+			local mana = cost and e.kind == "spell" and e.spell and M.ManaCost(e.spell)
+			if mana then lbl = L("msg.clickheal.hintcost", lbl, mana) end
+			tip:AddLine(L("msg.clickheal.hint", L("choice.clickheal.btn." .. BTNS[bi]), lbl))
 		end
 	end
 end
@@ -855,6 +932,7 @@ end
 
 function M.Enable()
 	M.on = true
+	M.NameBindings()
 	local _, class = UnitClass("player")
 	M.class = class
 	M.SetChoices(class)
@@ -886,6 +964,7 @@ function M.Disable()
 	M.bookTask = nil
 	M.SetChoices(nil)
 	if SUI.GroupEngine and SUI.GroupEngine.SyncWheel then SUI.GroupEngine.SyncWheel() end
+	if SUI.GroupEngine and SUI.GroupEngine.SyncClicks then SUI.GroupEngine.SyncClicks() end
 	if SUI.Units and SUI.Units.SyncWheel then SUI.Units.SyncWheel() end
 	if M.bLvlTask then SUI.Cancel(M.bLvlTask) end
 	M.bLvlTask = nil
@@ -987,6 +1066,9 @@ tinsert(options, opt("method", "choice", 100, "auto", { choices = { "auto", "swa
 tinsert(options, opt("autores", "bool", 110, true, { simple = true }))
 tinsert(options, opt("retarget", "bool", 120, true))
 tinsert(options, opt("hints", "bool", 130, true))
+tinsert(options, opt("hintcost", "bool", 131, true))
+tinsert(options, opt("keytarget", "bool", 133, true))
+tinsert(options, opt("clickon", "choice", 129, "up", { choices = { "up", "down" } }))
 tinsert(options, opt("self", "bool", 131, true, { simple = true }))
 tinsert(options, opt("target", "bool", 132, true, { simple = true }))
 tinsert(options, opt("btn", "bool", 140, true, { simple = true }))

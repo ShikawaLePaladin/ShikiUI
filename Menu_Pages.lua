@@ -59,10 +59,36 @@ function NEW.sec()
 	f.line:SetHeight(1)
 	f.line:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", 0, 2)
 	f.line:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", 0, 2)
+	-- bouton "Defaut" de la section (visible seulement si la section a des reglages modifies)
+	f.rst = T.Button(f, "", 110, 18, function(b)
+		local sec = b:GetParent()
+		M.ConfirmClick(b, "secrst:" .. tostring(sec.rid), L("mod.menu.secreset"), function() M.ResetList(sec.rlist) end)
+	end)
+	f.rst:SetPoint("RIGHT", f, "RIGHT", -150, 3)
+	f.rst:SetFrameLevel(M.lvl + 2)
+	f.rst:SetScript("OnEnter", function() M.TipShow(this, L("mod.menu.secreset"), L("mod.menu.secreset.tip")) end)
+	f.rst:SetScript("OnLeave", M.TipHide)
+	f.rst:Hide()
 	return f
 end
 
-function M.Section(title, count)
+-- Remet a leur valeur par defaut les reglages modifies de la liste (options) ; sauvegarde avant, retourne le nombre.
+function M.ResetList(list)
+	local n = 0
+	for i = 1, getn(list or {}) do
+		local o = list[i]
+		if o.type ~= "header" and SUI.Config.IsModified(o.key) then
+			if n == 0 and SUI.Backup then SUI.Backup.Create("reset") end
+			SUI.Config.Reset(o.key)
+			n = n + 1
+		end
+	end
+	SUI.Print(L("msg.menu.modreset", n))
+	M.Render()
+	return n
+end
+
+function M.Section(title, count, list)
 	M.EndRow(0)
 	if M.y > 0 then M.y = M.y + 10 end
 	local s = M.Get("sec")
@@ -73,6 +99,17 @@ function M.Section(title, count)
 	s.title:SetText(title)
 	s.count:SetText(count or "")
 	s.line:SetVertexColor(T.c.border[1], T.c.border[2], T.c.border[3], 1)
+	local nmod = 0
+	for i = 1, getn(list or {}) do
+		if list[i].type ~= "header" and SUI.Config.IsModified(list[i].key) then nmod = nmod + 1 end
+	end
+	s.rlist, s.rid = list, title
+	if nmod > 0 then
+		T.SetButtonText(s.rst, L("mod.menu.secreset.n", nmod))
+		s.rst:Show()
+	else
+		s.rst:Hide()
+	end
 	M.EndRow(6)
 	return s
 end
@@ -1142,6 +1179,112 @@ function M.Sections(opts)
 	return secs
 end
 
+-- Familles de reglages "<mod>.<nom>.<reste>" (barres d'action, cadres d'unites) : retourne le prefixe, la liste des noms (au moins 4
+-- reglages chacun) et la table nom -> { reste -> option }. nil si moins de deux noms comparables.
+function M.CopyFamily(opts)
+	local fam = {}
+	for i = 1, getn(opts) do
+		local o = opts[i]
+		if o.type ~= "header" then
+			local _, _, pre, nm, rest = string.find(o.key, "^([^.]+)%.([^.]+)%.(.+)$")
+			if nm then
+				fam[pre] = fam[pre] or { names = {}, map = {} }
+				local f = fam[pre]
+				if not f.map[nm] then
+					f.map[nm] = { n = 0 }
+					tinsert(f.names, nm)
+				end
+				f.map[nm][rest] = o
+				f.map[nm].n = f.map[nm].n + 1
+			end
+		end
+	end
+	local best, bestN, bestPre = nil, 1, nil
+	for pre, f in pairs(fam) do
+		local ref
+		for i = 1, getn(f.names) do
+			local nm = f.names[i]
+			if not ref or f.map[nm].n > f.map[ref].n then ref = nm end
+		end
+		local names = {}
+		for i = 1, getn(f.names) do
+			local nm = f.names[i]
+			local common = 0
+			for rest in pairs(f.map[nm]) do
+				if rest ~= "n" and f.map[ref][rest] then common = common + 1 end
+			end
+			if common >= 4 then tinsert(names, nm) end
+		end
+		if getn(names) > bestN then best, bestN, bestPre = { names = names, map = f.map }, getn(names), pre end
+	end
+	if not best then return nil end
+	return bestPre, best.names, best.map
+end
+
+-- Reglages comparables source -> destination : liste de { cle destination, valeur } dont la valeur differe (types identiques,
+-- jamais la cle "enabled" : copier ne doit pas activer ou couper un cadre).
+function M.CopyPlan(map, src, dst)
+	local plan = {}
+	local a, b = map[src], map[dst]
+	if not a or not b or src == dst then return plan end
+	for rest, o in pairs(a) do
+		local d = b[rest]
+		if rest ~= "n" and rest ~= "enabled" and type(o) == "table" and d and d.type == o.type and d.key ~= o.key then
+			local v = SUI.Config.Get(o.key)
+			if v ~= SUI.Config.Get(d.key) then tinsert(plan, { d.key, v }) end
+		end
+	end
+	return plan
+end
+
+function M.CopyRun(plan)
+	if SUI.Backup then SUI.Backup.Create("copy") end
+	for i = 1, getn(plan) do SUI.Config.Set(plan[i][1], plan[i][2]) end
+	SUI.Print(L("msg.menu.copy.done", getn(plan)))
+	M.Render()
+end
+
+local function copyNext(names, cur, skip)
+	local n = getn(names)
+	for i = 1, n do
+		if names[i] == cur then
+			local j = i
+			for _ = 1, n do
+				j = j + 1
+				if j > n then j = 1 end
+				if names[j] ~= skip then return names[j] end
+			end
+		end
+	end
+	return names[1]
+end
+
+function M.CopySection(opts)
+	local pre, names, map = M.CopyFamily(opts)
+	if not pre then return end
+	local st = M.copySt
+	if not st or st.pre ~= pre then st = { pre = pre, src = names[1], dst = names[2] }; M.copySt = st end
+	M.Section(L("mod.menu.sec.copy"), tostring(getn(names)))
+	M.Para(L("mod.menu.copy.why"), 30)
+	M.GridBtn(L("mod.menu.copy.src", M.Cap(st.src)), 3, 208, 26, function()
+		st.src = copyNext(names, st.src, st.dst)
+		M.Render()
+	end)
+	M.GridBtn(L("mod.menu.copy.dst", M.Cap(st.dst)), 3, 208, 26, function()
+		st.dst = copyNext(names, st.dst, st.src)
+		M.Render()
+	end)
+	local plan = M.CopyPlan(map, st.src, st.dst)
+	local go = M.GridBtn(L("mod.menu.copy.go", getn(plan)), 3, 208, 26, nil)
+	if go then
+		go.fn = function(b)
+			if getn(plan) == 0 then SUI.Print(L("msg.menu.copy.none")); return end
+			M.ConfirmClick(b, "copy:" .. st.src .. ">" .. st.dst, L("mod.menu.copy.go", getn(plan)), function() M.CopyRun(M.CopyPlan(map, st.src, st.dst)) end)
+		end
+	end
+	M.EndRow(8)
+end
+
 function P.cat()
 	local C = SUI.Config
 	local cat = M.cat
@@ -1193,7 +1336,7 @@ function P.cat()
 	local secs = M.Sections(opts)
 	for si = 1, getn(secs) do
 		local s = secs[si]
-		M.Section(s.title, tostring(getn(s.list)))
+		M.Section(s.title, tostring(getn(s.list)), s.list)
 		for i = 1, getn(s.list) do
 			local c = M.Get("cell")
 			if not c then break end
@@ -1202,6 +1345,7 @@ function P.cat()
 		end
 		M.EndRow(0)
 	end
+	if wide then M.CopySection(opts) end
 end
 
 -- ---------------------------------------------------------------- recherche

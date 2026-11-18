@@ -104,6 +104,11 @@ local MAXBUF = 32            -- buffs lus pour reperer les HoT
 local RESN = 6               -- resurrections suivies en meme temps
 E.hotEnd = {}                -- sort -> { [nom] = fin (GetTime) } : tables creees une fois
 for sp in pairs(E.HOTS) do E.hotEnd[sp] = {} end
+-- Listes de suivi modifiables (reglages <prefixe>hotlist / hotoff) : E.HOTS_BASE garde la liste d'origine, E.hotOff les sorts retires.
+E.HOTS_BASE = {}
+for sp, d in pairs(E.HOTS) do E.HOTS_BASE[sp] = d end
+E.hotOff = {}
+E.hotTmp = {}                -- liste de travail reutilisee (aucune table creee au rafraichissement)
 E.hotTex = {}                -- texture -> nom du sort (releve dans le grimoire)
 E.res = {}                   -- resurrections en cours : { c = lanceur, t = cible, u = fin }
 for i = 1, RESN do E.res[i] = { c = "", t = "", u = 0 } end
@@ -127,7 +132,13 @@ E.CFGKEYS = { solo = false, hideinraid = true, pets = false, maxgroup = 8, width
 	dispelpos = "center", tankhots = 0, hotwarn = 0, lowhp = 0,
 	-- 4e passe : pseudo place librement, icones de dissipation multiples, contour decoupe, effets de boss et aggro (SUI.GroupFx)
 	nameanchor = "left", nameicons = "off", dispelbigmax = 1, dispelsmall = false, dispelsmallpos = "bottomleft", dispelsmallsize = 9,
-	dispelthick = 2, fxframes = true, fxsize = 20, fxpos = "left", fxmax = 2, aggroframes = true }
+	dispelthick = 2, fxframes = true, fxsize = 20, fxpos = "left", fxmax = 2, aggroframes = true,
+	-- 5e passe (soigneur) : disposition libre, textes places, transparences distinctes, ligne de vue, couleurs, listes de HoT, densite auto
+	fill = "tl", grpperline = 8, grouptitle = false, hppos = "right", manapos = "center", manacontent = "percent",
+	deadalpha = 0, offalpha = 0, los = false, losalpha = 0.6, markpos = "topleft", marksize = 0, hotlist = "", hotoff = "",
+	hpcustom = "", deadcolor = "", inccolor = "", autosize = false, scale20 = 0.9, scale25 = 0.8, scale40 = 0.7,
+	-- 6e passe : role / chef place et dimensionne
+	tagpos = "topright", tagsize = 9 }
 
 -- Types de debuff : indice stable (les tables par cadre sont indexees 1..4), ordre de base = E.PRIO_BASE.
 E.TYPES = { "Magic", "Curse", "Poison", "Disease" }
@@ -187,11 +198,38 @@ function E.ScanCures()
 		if types then
 			for ty in pairs(types) do E.cure[ty] = true end
 		end
-		if gt and E.HOTS[name] then
+		if gt and E.HOTS[name] and not E.hotOff[name] then
 			local ok, tx = pcall(gt, i, book)
 			if ok and tx then E.hotTex[tx] = name end
 		end
 	end
+end
+
+-- Reconstruit la liste des HoT / sorts suivis : liste d'origine + ajouts "Sort:duree;Sort2" (reglage hotlist, duree 15 s par defaut)
+-- - sorts retires (reglage hotoff), reunis sur toutes les instances (groupe et raid partagent la meme table). Seuls les sorts du
+-- GRIMOIRE du joueur donnent une texture a reconnaitre (E.ScanCures releve la texture). Tables reutilisees.
+function E.RebuildHotList()
+	for sp in pairs(E.HOTS) do
+		if E.HOTS_BASE[sp] == nil then E.HOTS[sp] = nil end
+	end
+	for sp, d in pairs(E.HOTS_BASE) do E.HOTS[sp] = d end
+	for sp in pairs(E.hotOff) do E.hotOff[sp] = nil end
+	local tmp = E.hotTmp
+	for i = 1, getn(E.instances) do
+		local cfg = E.instances[i].cfg
+		local n = E.ParseList(cfg.hotlist, tmp)
+		for k = 1, n do
+			local _, _, nm, d = sfind(tmp[k], "^(.-)%s*:%s*(%d+)$")
+			if not nm then nm, d = tmp[k], 15 end
+			if nm ~= "" then
+				E.HOTS[nm] = tonumber(d) or 15
+				if not E.hotEnd[nm] then E.hotEnd[nm] = {} end
+			end
+		end
+		n = E.ParseList(cfg.hotoff, tmp)
+		for k = 1, n do E.hotOff[tmp[k]] = true end
+	end
+	for k = getn(tmp), 1, -1 do tmp[k] = nil end
 end
 
 local function abbrev(n)
@@ -212,7 +250,57 @@ function E.HpText(mode, hp, mx, pctOnly)
 		if mx - hp > 0 then return "-" .. abbrev(mx - hp) end
 		return ""
 	end
+	if mode == "deficitpct" then
+		if mx - hp > 0 then return "-" .. (100 - pct) .. "%" end
+		return ""
+	end
 	return abbrev(hp) .. " | " .. pct .. "%"
+end
+
+-- Texte de ressource : "percent" (par defaut), "value" (valeur abregee) ou "deficit" (manque abrege, vide si plein).
+function E.PowerText(mode, cur, mx)
+	if mode == "value" then return abbrev(cur) end
+	if mode == "deficit" then
+		if mx - cur > 0 then return "-" .. abbrev(mx - cur) end
+		return ""
+	end
+	local pc = floor(cur * 100 / mx + 0.5)
+	if pc > 100 then pc = 100 end
+	if pc < 0 then pc = 0 end
+	return E.NUM[pc] or "100"
+end
+
+-- Couleur reglee (RRGGBB) -> slot { r, g, b } reutilise ; nil si pas de surcharge ("" = couleur du style).
+function E.ReadHex(slot, hex)
+	if type(hex) ~= "string" or hex == "" or not SUI.Style or not SUI.Style.ParseHex then return nil end
+	local r, g, b = SUI.Style.ParseHex(hex)
+	if not r then return nil end
+	slot[1], slot[2], slot[3] = r, g, b
+	return slot
+end
+
+-- Facteur de densite selon l'effectif visible (reglage autosize) : 1 jusqu'a 10, puis les trois paliers 20 / 25 / 40.
+function E.AutoFactor(cfg, n)
+	if not cfg.autosize or n <= 10 then return 1 end
+	if n <= 20 then return cfg.scale20 end
+	if n <= 25 then return cfg.scale25 end
+	return cfg.scale40
+end
+
+-- Taille effective : tailles reglees (cfg.rw / rh / ri) x facteur de densite. Renvoie true si une dimension a change.
+function E.ApplyAuto(g)
+	local cfg = g.cfg
+	local f = E.AutoFactor(cfg, g.nOrder)
+	local w, h, i = cfg.rw, cfg.rh, cfg.ri
+	if f ~= 1 then
+		w, h, i = floor(w * f + 0.5), floor(h * f + 0.5), floor(i * f + 0.5)
+		if w < 24 then w = 24 end
+		if h < 10 then h = 10 end
+		if i < 6 then i = 6 end
+	end
+	if w == cfg.width and h == cfg.height and i == cfg.iconsize then return false end
+	cfg.width, cfg.height, cfg.iconsize = w, h, i
+	return true
 end
 
 -- Coupe un nom a n octets sans couper un caractere UTF-8 en deux.
@@ -233,7 +321,9 @@ function E.New(def)
 		maxBuf = def.maxBuf, layoutKey = def.layoutKey, defX = def.defX, defY = def.defY, after = def.after, cfg = {}, frames = {},
 		byUnit = {}, names = {}, order = {}, nOrder = 0, q = {}, qh = 1, qt = 1, qn = 0, rr = 1, built = false, active = false,
 		rosterDirty = true, arrangeDirty = true, evOn = {}, alerts = {}, nAlerts = 0, roles = {}, pins = {}, nPins = 0,
-		slowInterval = def.slowInterval or SLOW, tags = {}, sig = "", maxHot = def.maxHot or 0, dprio = {} }
+		slowInterval = def.slowInterval or SLOW, tags = {}, sig = "", maxHot = def.maxHot or 0, dprio = {},
+		lx = {}, ly = {}, tx = {}, ty = {}, tj = {}, ttl = {}, titles = {}, tShown = {}, look = def.prefix and ssub(def.prefix, 1, -2) or def.name,
+		colSlot = { { 0, 0, 0 }, { 0, 0, 0 }, { 0, 0, 0 } } }
 	g.cap = g.max + 2
 	g.fnFlush = function() E.Flush(g) end
 	g.fnSlow = function() E.Slow(g) end
@@ -301,6 +391,20 @@ function E.ReadConfig(g)
 		if C.meta[key] ~= nil then cfg[k] = C.Get(key) else cfg[k] = d end
 	end
 	if g.after then g.after(g) end
+	cfg.rw, cfg.rh, cfg.ri = cfg.width, cfg.height, cfg.iconsize        -- tailles reglees ; la densite automatique ajuste width / height / iconsize
+	E.ApplyAuto(g)
+	if cfg.grpperline < 1 then cfg.grpperline = 1 end
+	g.colHp = E.ReadHex(g.colSlot[1], cfg.hpcustom)                    -- couleurs personnalisees (nil = couleur du style)
+	g.colDead = E.ReadHex(g.colSlot[2], cfg.deadcolor)
+	g.colInc = E.ReadHex(g.colSlot[3], cfg.inccolor)
+	if cfg.hotlist ~= g.hotRaw or cfg.hotoff ~= g.hotOffRaw then
+		local idle = ((g.hotRaw or "") == "" and (g.hotOffRaw or "") == "" and cfg.hotlist == "" and cfg.hotoff == "")
+		g.hotRaw, g.hotOffRaw = cfg.hotlist, cfg.hotoff
+		if not idle then
+			E.RebuildHotList()
+			E.ScanCures()
+		end
+	end
 	cfg.hotany = (cfg.tankhots > cfg.hots) and cfg.tankhots or cfg.hots   -- icones de HoT voulues sur au moins un cadre
 	if cfg.alertlist ~= g.alertRaw then
 		g.alertRaw = cfg.alertlist
@@ -319,6 +423,7 @@ function E.ReadConfig(g)
 	g.dtl.Curse = L("msg." .. g.name .. ".dt.curse")
 	g.dtl.Poison = L("msg." .. g.name .. ".dt.poison")
 	g.dtl.Disease = L("msg." .. g.name .. ".dt.disease")
+	for s = 1, 8 do g.ttl[s] = L("msg." .. g.name .. ".gtitle", s) end
 	for i = 1, getn(g.frames) do E.ResetPaint(g.frames[i]) end
 	-- priorite des types a dissiper : le type choisi d'abord, puis l'ordre de base (table reutilisee)
 	local first = E.PRIO_KEY[cfg.dispelprio] or "Magic"
@@ -463,7 +568,7 @@ end
 function E.HpColor(g, f, ratio)
 	local mode = g.cfg.hpcolor
 	if f.state ~= 0 then
-		local c = T.c.dim
+		local c = g.colDead or T.c.dim
 		return c[1], c[2], c[3]
 	end
 	if g.kind == "pins" and not f.isPlayer then
@@ -481,14 +586,29 @@ function E.HpColor(g, f, ratio)
 			a, b, t = T.c.warn, T.c.bad, (0.5 - ratio) * 2
 		end
 		return a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t, a[3] + (b[3] - a[3]) * t
+	elseif mode == "custom" and g.colHp then
+		local c = g.colHp
+		return c[1], c[2], c[3]
 	end
 	local c = T.c.good
 	return c[1], c[2], c[3]
 end
 
+-- Transparence : mort (deadalpha) et hors ligne (offalpha) si reglees (0 = comme hors portee), hors portee (outalpha), en portee mais
+-- hors ligne de vue (losalpha, reglage los). Le premier cas vrai gagne.
 function E.ApplyAlpha(g, f)
+	local cfg = g.cfg
 	local a = 1
-	if f.state ~= 0 or f.inRange == false then a = g.cfg.outalpha end
+	local st = f.state
+	if st == 1 and cfg.deadalpha > 0 then
+		a = cfg.deadalpha
+	elseif st == 2 and cfg.offalpha > 0 then
+		a = cfg.offalpha
+	elseif st ~= 0 or f.inRange == false then
+		a = cfg.outalpha
+	elseif f.noSight then
+		a = cfg.losalpha
+	end
 	if a ~= f.alphaNow then
 		f.alphaNow = a
 		f:SetAlpha(a)
@@ -531,7 +651,7 @@ end
 function E.PaintFixed(g)
 	for i = 1, getn(g.frames) do
 		local f = g.frames[i]
-		local c = T.c.good
+		local c = g.colInc or T.c.good
 		f.heal:SetStatusBarColor(c[1], c[2], c[3], 0.45)
 		f.hv = nil
 		f.pty = nil
@@ -688,16 +808,17 @@ function E.UpdatePower(g, f)
 	local cur = UnitMana(unit)
 	pw:SetValue(cur / mx)
 	if cfg.manatext then
-		local pc = floor(cur * 100 / mx + 0.5)
-		if pc > 100 then pc = 100 end
-		if pc < 0 then pc = 0 end
-		if f.pwTxt ~= pc then
-			f.pwTxt = pc
-			f.pwText:SetText(E.NUM[pc] or "100")
+		local pt = f.pwTxt
+		local key = (cfg.manacontent == "percent") and floor(cur * 100 / mx + 0.5) or (cfg.manacontent == "value" and cur or mx - cur)
+		if f.pwKey ~= key or not pt then
+			f.pwKey = key
+			f.pwTxt = E.PowerText(cfg.manacontent, cur, mx)
+			f.pwText:SetText(f.pwTxt)
 		end
 		f.pwText:Show()
 	elseif f.pwTxt then
 		f.pwTxt = nil
+		f.pwKey = nil
 		f.pwText:Hide()
 	end
 end
@@ -931,14 +1052,72 @@ function E.PlaceName(g, f)
 	local cfg = g.cfg
 	local at = E.NAME_AT[cfg.nameanchor] or E.NAME_AT.left
 	local dx = at[3] * 3
-	if cfg.nameanchor == "topleft" and f.markIdx then dx = dx + cfg.iconsize + 2 end        -- sous le marqueur de raid
-	if cfg.nameanchor == "topright" and f.tagShown and f.tagShown ~= "" then dx = dx - 12 end  -- a gauche du role / chef
+	if cfg.nameanchor == "topleft" and f.markIdx and cfg.markpos == "topleft" then dx = dx + E.MarkSize(cfg) + 2 end   -- sous le marqueur de raid
+	local tp = cfg.tagpos
+	if f.tagShown and f.tagShown ~= "" then
+		if cfg.nameanchor == "topright" and tp == "topright" then dx = dx - 12 end    -- a gauche du role / chef
+		if cfg.nameanchor == "topleft" and tp == "topleft" then dx = dx + 12 end      -- a droite du role / chef
+		if cfg.nameanchor == "bottomright" and tp == "bottomright" then dx = dx - 12 end
+		if cfg.nameanchor == "bottomleft" and tp == "bottomleft" then dx = dx + 12 end
+	end
 	if f.namePt == at[1] and f.nameDx == dx and f.nameDy == at[4] then return end
 	f.namePt, f.nameDx, f.nameDy = at[1], dx, at[4]
 	f.nameText:ClearAllPoints()
 	f.nameText:SetPoint(at[1], f.hp, at[1], dx, at[4])
 	f.nameText:SetJustifyH(at[2])
 	f.nicPlaced = false
+end
+
+-- Taille du marqueur de raid : reglage marksize, 0 = taille des icones.
+function E.MarkSize(cfg)
+	if cfg.marksize > 0 then return cfg.marksize end
+	return cfg.iconsize
+end
+
+-- Place du role / chef (texte) : quatre coins, taille reglable. "topright" = emplacement d'origine.
+E.TAG_AT = { topright = { "TOPRIGHT", "RIGHT", -2, -2 }, topleft = { "TOPLEFT", "LEFT", 2, -2 },
+	bottomright = { "BOTTOMRIGHT", "RIGHT", -2, 2 }, bottomleft = { "BOTTOMLEFT", "LEFT", 2, 2 } }
+function E.PlaceTag(g, f)
+	local at = E.TAG_AT[g.cfg.tagpos] or E.TAG_AT.topright
+	f.tagText:ClearAllPoints()
+	f.tagText:SetPoint(at[1], f, at[1], at[3], at[4])
+	f.tagText:SetJustifyH(at[2])
+	f.tagText:SetHeight(10)
+	if SUI.Look then SUI.Look.ApplyText(f.tagText, g.look .. ".tag", g.cfg.tagsize, true) end
+	f.namePt = nil
+	E.PlaceName(g, f)
+end
+
+-- Place du marqueur de raid : coin haut gauche (par defaut), haut centre ou centre du cadre.
+function E.PlaceMark(g, f)
+	local cfg = g.cfg
+	local sz = E.MarkSize(cfg)
+	f.mark:ClearAllPoints()
+	if cfg.markpos == "topcenter" then
+		f.mark:SetPoint("TOP", f, "TOP", 0, -2)
+	elseif cfg.markpos == "center" then
+		f.mark:SetPoint("CENTER", f, "CENTER", 0, 0)
+	else
+		f.mark:SetPoint("TOPLEFT", f, "TOPLEFT", 2, -2)
+	end
+	f.mark:SetWidth(sz)
+	f.mark:SetHeight(sz)
+end
+
+-- Texte de vie : place choisie (memes neuf places que le pseudo ; "right" = emplacement d'origine). Texte de ressource : gauche / centre / droite.
+function E.PlaceHpText(g, f)
+	local at = E.NAME_AT[g.cfg.hppos] or E.NAME_AT.right
+	f.hpText:ClearAllPoints()
+	f.hpText:SetPoint(at[1], f.hp, at[1], at[3] * 3, at[4])
+	f.hpText:SetJustifyH(at[2])
+end
+
+E.PW_AT = { left = { "LEFT", "LEFT", 2 }, center = { "CENTER", "CENTER", 0 }, right = { "RIGHT", "RIGHT", -2 } }
+function E.PlacePwText(g, f)
+	local at = E.PW_AT[g.cfg.manapos] or E.PW_AT.center
+	f.pwText:ClearAllPoints()
+	f.pwText:SetPoint(at[1], f.pw, at[1], at[3], 0)
+	f.pwText:SetJustifyH(at[2])
 end
 
 function E.PlaceNameIcons(g, f)
@@ -1999,6 +2178,18 @@ function E.SlowFrame(g, f)
 		f.inRange = nil
 		E.ApplyAlpha(g, f)
 	end
+	if cfg.los then
+		-- ligne de vue (UnitXP "inSight") : seulement pour un allie vivant, en ligne, a portee ; inconnue (nil) = visible
+		local ns = false
+		if st == 0 and f.inRange ~= false and not f.isSelf and f.vis then ns = (SUI.Api.InSight(unit) == false) end
+		if ns ~= f.noSight then
+			f.noSight = ns
+			E.ApplyAlpha(g, f)
+		end
+	elseif f.noSight then
+		f.noSight = false
+		E.ApplyAlpha(g, f)
+	end
 	if g.banzai and cfg.aggro then
 		local ok, v = pcall(g.banzai.GetUnitAggroByUnitId, g.banzai, unit)
 		local ag = (ok and v) and true or false
@@ -2144,6 +2335,7 @@ local function setVisible(g, f, want)
 		f.aggro = false
 		f.res = false
 		f.inRange = nil
+		f.noSight = false
 		f.state = nil
 		f.lhp = nil
 	end
@@ -2212,6 +2404,7 @@ function E.Rebuild(g)
 	end
 	g.nOrder = n
 	if g.rr > n then g.rr = 1 end
+	if E.ApplyAuto(g) and g.built then E.ApplyGeometry(g) end      -- densite automatique : l'effectif a change de palier
 	g.arrangeDirty = true
 	E.Arrange(g)
 	if g.container then
@@ -2234,6 +2427,116 @@ local function less(g, a, b)
 	return a.idx < b.idx
 end
 
+E.TITLEH = 11                -- hauteur reservee au titre de chaque groupe (reglage grouptitle)
+E.lcnt = {}                  -- membres par sous-groupe (table de travail reutilisee)
+for i = 1, 8 do E.lcnt[i] = 0 end
+
+-- Geometrie de la grille, PURE (sert aux vrais cadres et a l'apercu du menu) : ord[1..n] = objets avec .sub dans l'ordre d'affichage ;
+-- remplit px[k] / py[k] (coin haut gauche, depuis le coin du conteneur), tx[s] / ty[s] / tj[s] = place du titre du groupe s (tx nil si
+-- le groupe est absent ou sans titre ; tj : titre accroche a droite). Renvoie largeur et hauteur totales.
+-- Tri "group" : un groupe par colonne (orientation verticale) ou par ligne (horizontale), grpperline groupes par bande puis retour a la ligne ;
+-- autres tris : perline cadres par ligne. fill : coin de depart (tl / tr / bl / br) : la grille entiere est retournee, titres compris.
+function E.Layout(cfg, ord, n, px, py, tx, ty, tj)
+	local w, h = cfg.width, cfg.height
+	local sp, gap = cfg.spacing, cfg.groupgap
+	local sortGroup = (cfg.sort == "group")
+	local vertical = (cfg.orient == "vertical")
+	local perline = cfg.perline
+	if perline < 1 then perline = 1 end
+	local gpl = cfg.grpperline
+	if gpl < 1 then gpl = 1 end
+	local th = (sortGroup and cfg.grouptitle) and E.TITLEH or 0
+	local cnt = E.lcnt
+	for i = 1, 8 do
+		cnt[i] = 0
+		tx[i] = nil
+	end
+	local maxc = 0
+	if sortGroup then
+		for k = 1, n do
+			local s = ord[k].sub
+			if s > 8 then s = 8 end
+			if s < 1 then s = 1 end
+			cnt[s] = cnt[s] + 1
+			if cnt[s] > maxc then maxc = cnt[s] end
+		end
+	end
+	local bandH = th + maxc * (h + sp) - sp + gap
+	local bandW = maxc * (w + sp) - sp + gap
+	local line, pos, lastSub, gi, col, band = 0, 0, nil, -1, 0, 0
+	local maxX, maxY = 0, 0
+	for k = 1, n do
+		local f = ord[k]
+		local x, y
+		if sortGroup then
+			if f.sub ~= lastSub then
+				gi = gi + 1
+				pos = 0
+				lastSub = f.sub
+				band = floor(gi / gpl)
+				col = gi - band * gpl
+				if th > 0 then
+					local s = f.sub
+					if s > 8 then s = 8 end
+					if s < 1 then s = 1 end
+					if vertical then
+						tx[s], ty[s] = col * (w + gap), band * bandH
+					else
+						tx[s], ty[s] = band * bandW, col * (th + h + gap)
+					end
+					tj[s] = false
+				end
+			end
+			if vertical then
+				x = col * (w + gap)
+				y = band * bandH + th + pos * (h + sp)
+			else
+				x = band * bandW + pos * (w + sp)
+				y = col * (th + h + gap) + th
+			end
+		else
+			line = floor((k - 1) / perline)
+			pos = (k - 1) - line * perline
+			if vertical then
+				x = line * (w + sp)
+				y = pos * (h + sp)
+			else
+				x = pos * (w + sp)
+				y = line * (h + sp)
+			end
+		end
+		px[k], py[k] = x, y
+		if x + w > maxX then maxX = x + w end
+		if y + h > maxY then maxY = y + h end
+		pos = pos + 1
+	end
+	local fill = cfg.fill
+	local right = (fill == "tr" or fill == "br")
+	local bottom = (fill == "bl" or fill == "br")
+	if right then
+		for k = 1, n do px[k] = maxX - px[k] - w end
+	end
+	if bottom then
+		for k = 1, n do py[k] = maxY - py[k] - h end
+	end
+	if th > 0 then
+		for s = 1, 8 do
+			if tx[s] then
+				if right then
+					if vertical then
+						tx[s] = maxX - tx[s] - w
+					else
+						tx[s] = maxX - tx[s]
+						tj[s] = true
+					end
+				end
+				if bottom then ty[s] = maxY - ty[s] - th end
+			end
+		end
+	end
+	return maxX, maxY
+end
+
 -- Tri par insertion (sans allocation) puis placement ; ne repose un point que s'il change.
 function E.Arrange(g)
 	g.arrangeDirty = false
@@ -2248,52 +2551,59 @@ function E.Arrange(g)
 		end
 		order[j + 1] = f
 	end
-	local w, h = cfg.width, cfg.height
-	local sp, gap = cfg.spacing, cfg.groupgap
-	local sortGroup = (cfg.sort == "group")
-	local vertical = (cfg.orient == "vertical")
-	local perline = cfg.perline
-	local line, pos, lastSub = 0, 0, nil
-	local maxX, maxY = 0, 0
+	local w = cfg.width
+	local maxX, maxY = E.Layout(cfg, order, n, g.lx, g.ly, g.tx, g.ty, g.tj)
 	for k = 1, n do
 		local f = order[k]
-		if sortGroup then
-			if f.sub ~= lastSub then
-				if lastSub then line = line + 1 end
-				pos = 0
-				lastSub = f.sub
-			end
-		else
-			line = floor((k - 1) / perline)
-			pos = (k - 1) - line * perline
-		end
-		local lineGap = sortGroup and gap or sp
-		local x, y
-		if vertical then
-			x = line * (w + lineGap)
-			y = pos * (h + sp)
-		else
-			x = pos * (w + sp)
-			y = line * (h + lineGap)
-		end
+		local x, y = g.lx[k], g.ly[k]
 		if x ~= f.px or y ~= f.py then
 			f.px, f.py = x, y
 			f:ClearAllPoints()
 			f:SetPoint("TOPLEFT", g.container, "TOPLEFT", x, -y)
 		end
-		if x + w > maxX then maxX = x + w end
-		if y + h > maxY then maxY = y + h end
-		pos = pos + 1
 	end
 	if g.container then
 		g.container:SetWidth(maxX > 0 and maxX or w)
 		g.maxY = maxY
+	end
+	E.PlaceTitles(g)
+end
+
+-- Titres de groupe ("G1"...) : crees UNE fois a la construction (hors combat), places seulement s'ils changent.
+function E.PlaceTitles(g)
+	local ts = g.titles
+	for s = 1, 8 do
+		local t = ts[s]
+		if t then
+			local x, y = g.tx[s], g.ty[s]
+			if x and g.cfg.grouptitle and g.cfg.sort == "group" then
+				local sig = x .. "|" .. y .. "|" .. tostring(g.tj[s]) .. "|" .. g.cfg.width .. "|" .. g.ttl[s]
+				if g.tShown[s] ~= sig then
+					g.tShown[s] = sig
+					t:ClearAllPoints()
+					if g.tj[s] then
+						t:SetPoint("TOPRIGHT", g.container, "TOPLEFT", x, -y)
+						t:SetJustifyH("RIGHT")
+					else
+						t:SetPoint("TOPLEFT", g.container, "TOPLEFT", x, -y)
+						t:SetJustifyH("LEFT")
+					end
+					t:SetWidth(g.cfg.width)
+					t:SetText(g.ttl[s])
+					t:Show()
+				end
+			elseif g.tShown[s] then
+				g.tShown[s] = nil
+				t:Hide()
+			end
+		end
 	end
 end
 
 -- ---------------------------------------------------------------- clics, survol
 local function onEnter()
 	local f = this
+	E.hover = f                       -- cadre survole : lu par les touches de soin au clavier (Mod_ClickHeal M.Key)
 	SUI.Api.SetMouseover(f.unit)
 	local g = f.g
 	if g.cfg.tooltip and GameTooltip and UnitExists(f.unit) then
@@ -2306,6 +2616,7 @@ local function onEnter()
 end
 
 local function onLeave()
+	if E.hover == this then E.hover = nil end
 	SUI.Api.SetMouseover(nil)
 	if GameTooltip then GameTooltip:Hide() end
 end
@@ -2526,6 +2837,16 @@ function E.CreateUnitFrame(g, i)
 	f.tagText = T.Text(f.ov, 9, T.c.warn, "RIGHT", true)
 	f.pwText = T.Text(f.ov, 8, T.c.text, "CENTER", true)
 	f.pwText:Hide()
+	local Look = SUI.Look
+	if Look then
+		-- texture des barres et police des textes principaux : <module>.bartex / <module>.font / <module>.fontsize (menu Aspect du module)
+		Look.ApplyBar(f.hp, g.look, {})
+		Look.ApplyBar(f.heal, g.look, {})
+		Look.ApplyBar(f.pw, g.look, {})
+		Look.ApplyText(f.nameText, g.look, 10, true)
+		Look.ApplyText(f.hpText, g.look, 10, true)
+		Look.ApplyText(f.statusText, g.look, 10, true)
+	end
 	f:SetScript("OnClick", onClick)
 	f:SetScript("OnEnter", onEnter)
 	f:SetScript("OnLeave", onLeave)
@@ -2548,6 +2869,26 @@ function anchorBar(b, f, hpH)
 	b:SetHeight(hpH)
 end
 
+-- Declenchement des clics sur les cadres : a l'appui (clickheal.clickon = down, module Soins au clic actif) ou au relachement (par defaut).
+function E.SyncClicks()
+	local ch = SUI.ClickHeal
+	local down = (ch and ch.on and C.Get("clickheal.clickon") == "down") and true or false
+	for i = 1, getn(E.instances) do
+		local g = E.instances[i]
+		for k = 1, getn(g.frames) do
+			local f = g.frames[k]
+			if f.clickDown ~= down then
+				f.clickDown = down
+				if down then
+					f:RegisterForClicks("LeftButtonDown", "RightButtonDown", "MiddleButtonDown")
+				else
+					f:RegisterForClicks("LeftButtonUp", "RightButtonUp", "MiddleButtonUp")
+				end
+			end
+		end
+	end
+end
+
 -- Roues de souris : seulement si les liaisons de clic en utilisent (voir Mod_ClickHeal.lua).
 function E.SyncWheel()
 	local ch = SUI.ClickHeal
@@ -2566,13 +2907,14 @@ function E.ApplyGeometry(g)
 	if nhot > g.maxHot then nhot = g.maxHot end
 	local dsz, dpos = cfg.dispelsize, cfg.dispelpos
 	local ssz, spos = cfg.dispelsmallsize, cfg.dispelsmallpos
-	local tagres = (cfg.roletag or cfg.leader) and 12 or 0                 -- place du role / chef en haut a droite
+	local tagres = ((cfg.roletag or cfg.leader) and cfg.tagpos == "topright") and 12 or 0   -- place du role / chef en haut a droite
 	local agres = cfg.aggroframes and 14 or 0                             -- place de l'icone d'aggro, a gauche du role
 	local resL = (cfg.dispelsmall and spos == "bottomleft") and 2 * (ssz + 3) or 0    -- petites icones : place reservee dans la rangee
 	local resR = (cfg.dispelsmall and spos == "bottomright") and 2 * (ssz + 3) or 0
 	local sig = w .. "|" .. h .. "|" .. ph .. "|" .. isz .. "|" .. nhot .. "|" .. dsz .. "|" .. dpos .. "|" .. cfg.nameanchor .. "|" ..
 		cfg.dispelthick .. "|" .. ssz .. "|" .. spos .. "|" .. tostring(cfg.dispelsmall) .. "|" .. tagres .. "|" .. agres .. "|" ..
-		cfg.fxsize .. "|" .. cfg.fxpos .. "|" .. tostring(cfg.marks)
+		cfg.fxsize .. "|" .. cfg.fxpos .. "|" .. tostring(cfg.marks) .. "|" .. cfg.hppos .. "|" .. cfg.manapos .. "|" .. cfg.manacontent .. "|" ..
+		cfg.markpos .. "|" .. cfg.marksize .. "|" .. cfg.tagpos .. "|" .. cfg.tagsize
 	if sig == g.sig then return end
 	g.sig = sig
 	for i = 1, getn(g.frames) do
@@ -2586,26 +2928,21 @@ function E.ApplyGeometry(g)
 		f.pw:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", 1, 1)
 		f.pw:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -1, 1)
 		f.pw:SetHeight(ph > 0 and ph or 1)
-		f.pwText:ClearAllPoints()
-		f.pwText:SetPoint("CENTER", f.pw, "CENTER", 0, 0)
+		f.pwText:SetWidth(floor(w * 0.5))
 		f.pwText:SetHeight(10)
+		E.PlacePwText(g, f)
 		f.pwTxt = nil
+		f.pwKey = nil
 		f.nameText:SetWidth(floor(w * 0.62))
 		f.nameText:SetHeight(12)
 		f.namePt = nil
 		E.PlaceName(g, f)
-		f.hpText:ClearAllPoints()
-		f.hpText:SetPoint("RIGHT", f.hp, "RIGHT", -3, 0)
 		f.hpText:SetHeight(12)
+		E.PlaceHpText(g, f)
 		f.statusText:ClearAllPoints()
 		f.statusText:SetPoint("CENTER", f.hp, "CENTER", 0, 0)
-		f.tagText:ClearAllPoints()
-		f.tagText:SetPoint("TOPRIGHT", f, "TOPRIGHT", -2, -2)
-		f.tagText:SetHeight(10)
-		f.mark:ClearAllPoints()
-		f.mark:SetPoint("TOPLEFT", f, "TOPLEFT", 2, -2)
-		f.mark:SetWidth(isz)
-		f.mark:SetHeight(isz)
+		E.PlaceTag(g, f)
+		E.PlaceMark(g, f)
 		f.dispelTx:ClearAllPoints()
 		f.dispelTx:SetPoint("TOPLEFT", f, "TOPLEFT", 0, 0)
 		f.dispelTx:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", 0, 0)
@@ -2746,6 +3083,14 @@ function E.Build(g)
 	g.handle:SetScript("OnDragStart", handleStart)
 	g.handle:SetScript("OnDragStop", handleStop)
 	for i = 1, g.max do g.frames[i] = E.CreateUnitFrame(g, i) end
+	if g.kind == "raid" then                       -- titres de groupe (reglage grouptitle) : huit textes, jamais crees en combat
+		for s = 1, 8 do
+			local t = T.Text(c, 9, T.c.dim, "LEFT", true)
+			t:SetHeight(E.TITLEH)
+			t:Hide()
+			g.titles[s] = t
+		end
+	end
 	SUI.Layout.Register(c, g.layoutKey, "TOPLEFT", g.defX, g.defY)
 	T.OnAccent(function()
 		if g.active then
@@ -2760,6 +3105,7 @@ function E.Build(g)
 	E.ApplyGeometry(g)
 	E.SyncLock(g)
 	E.SyncWheel()
+	E.SyncClicks()
 	if not g.active then c:Hide() end
 end
 
@@ -2880,9 +3226,12 @@ function E.OnKey(g, key)
 		g.aggroFrame = nil
 		for i = 1, g.nOrder do g.order[i].aggro = false end
 	end
+	if g.built and (key == nil or sfind(key, "color$") or sfind(key, "custom$")) then E.PaintFixed(g) end   -- couleurs personnalisees relues
 	for i = 1, g.nOrder do
 		local f = g.order[i]
 		if not cfg.range then f.inRange = nil end
+		if not cfg.los then f.noSight = false end
+		f.cr = nil
 		if not cfg.incoming then
 			f.inc = 0
 			f.incMine = 0
@@ -3238,10 +3587,7 @@ local function opt(key, typ, order, def, extra)
 	return o
 end
 
-SUI.RegisterModule("group", {
-	default = false,
-	cost = "medium",
-	options = {
+local GROUP_OPTIONS = {
 		opt("solo", "bool", 10, false, { simple = true }),
 		opt("hideinraid", "bool", 20, true),
 		opt("pets", "bool", 30, false),
@@ -3254,8 +3600,8 @@ SUI.RegisterModule("group", {
 		opt("spacing", "number", 70, 2, { min = 0, max = 20, step = 1 }),
 		opt("sort", "choice", 80, "none", { choices = { "none", "role", "class", "name" } }),
 		opt("orient", "choice", 90, "vertical", { choices = { "vertical", "horizontal" } }),
-		opt("hpcolor", "choice", 100, "class", { choices = { "class", "health", "style" }, simple = true }),
-		opt("hptext", "choice", 110, "percent", { choices = { "none", "percent", "value", "deficit", "both" }, simple = true }),
+		opt("hpcolor", "choice", 100, "class", { choices = { "class", "health", "style", "custom" }, simple = true }),
+		opt("hptext", "choice", 110, "percent", { choices = { "none", "percent", "value", "deficit", "deficitpct", "both" }, simple = true }),
 		opt("namelen", "number", 120, 10, { min = 4, max = 16, step = 1 }),
 		opt("nameanchor", "choice", 121, "topleft", { choices = { "topleft", "topcenter", "topright", "left", "center", "right", "bottomleft", "bottomcenter", "bottomright" }, simple = true }),
 		opt("nameicons", "choice", 122, "dispel", { choices = { "off", "dispel", "fx", "both" } }),
@@ -3309,7 +3655,36 @@ SUI.RegisterModule("group", {
 		opt("enemyauto", "choice", 370, "off", { choices = { "off", "boss" } }),
 		opt("enemywidth", "number", 380, 160, { min = 100, max = 300, step = 5 }),
 		opt("enemyheight", "number", 390, 22, { min = 14, max = 50, step = 2 }),
-	},
+		-- 5e passe (soigneur) : disposition, textes, transparences, ligne de vue, couleurs, listes de HoT
+		opt("fill", "choice", 91, "tl", { choices = { "tl", "tr", "bl", "br" } }),
+		opt("hpcustom", "color", 101, ""),
+		opt("deadcolor", "color", 102, ""),
+		opt("inccolor", "color", 103, ""),
+		opt("hppos", "choice", 111, "right", { choices = { "topleft", "topcenter", "topright", "left", "center", "right", "bottomleft", "bottomcenter", "bottomright" }, simple = true }),
+		opt("manapos", "choice", 64, "center", { choices = { "left", "center", "right" } }),
+		opt("manacontent", "choice", 65, "percent", { choices = { "percent", "value", "deficit" } }),
+		opt("deadalpha", "number", 151, 0, { min = 0, max = 1, step = 0.05 }),
+		opt("offalpha", "number", 152, 0, { min = 0, max = 1, step = 0.05 }),
+		opt("los", "bool", 153, false),
+		opt("losalpha", "number", 154, 0.6, { min = 0.1, max = 1, step = 0.05 }),
+		opt("markpos", "choice", 251, "topleft", { choices = { "topleft", "topcenter", "center" } }),
+		opt("marksize", "number", 252, 0, { min = 0, max = 24, step = 1 }),
+		opt("hotlist", "string", 176, ""),
+		opt("hotoff", "string", 177, ""),
+		-- 6e passe : role / chef place et dimensionne
+		opt("tagpos", "choice", 231, "topright", { choices = { "topright", "topleft", "bottomright", "bottomleft" } }),
+		opt("tagsize", "number", 232, 9, { min = 7, max = 16, step = 1 }),
+}
+-- Aspect : texture des barres, police et taille des textes (group.bartex / group.font / group.fontsize), meme systeme que les autres modules.
+if SUI.Look then
+	local lk = SUI.Look.Options("group", { bar = true, font = true, cat = "group", order = 820 })
+	for i = 1, getn(lk) do tinsert(GROUP_OPTIONS, lk[i]) end
+end
+
+SUI.RegisterModule("group", {
+	default = false,
+	cost = "medium",
+	options = GROUP_OPTIONS,
 	enable = function() M.Enable() end,
 	disable = function() M.Disable() end,
 })

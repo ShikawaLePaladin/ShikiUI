@@ -248,6 +248,7 @@ end
 
 function M.Commit(rec, nl, nb, s)
 	if s == nil then s = M.ScaleOf(rec) end
+	M.PushUndo(rec.id)
 	Layout.ClearPreview(rec.id)
 	local p, side, ldx, ldy = Layout.LinkedParent(rec.id)
 	local cl, cb
@@ -303,6 +304,7 @@ local function copyPos(src)
 end
 
 function M.Reset(id)
+	if M.active then M.undoId = nil; M.PushUndo(nil) end
 	if id == nil or id == "all" then
 		C.ResetPositions()
 		C.cur.layout = nil
@@ -314,6 +316,37 @@ function M.Reset(id)
 	Layout.ClearLink(id)            -- le lien conseille revient
 	C.ClearPosAll(id)
 	Layout.Apply(id)
+	C.Notify("pos", nil)
+	M.Sync()
+	return true
+end
+
+-- Annulation pas a pas (Ctrl+Z) : un instantane des positions est pris AVANT chaque geste (une rafale de fleches ou un glisser = un geste).
+M.UNDOMAX = 20
+M.undo = {}
+M.undoAt, M.undoId = 0, nil
+function M.PushUndo(id)
+	local now = GetTime()
+	if id and id == M.undoId and now - M.undoAt < 0.8 then
+		M.undoAt = now
+		return
+	end
+	M.undoId, M.undoAt = id, now
+	local u = M.undo
+	if getn(u) >= M.UNDOMAX then table.remove(u, 1) end
+	tinsert(u, { pos = copyPos(C.cur.pos), layout = C.cur.layout })
+end
+
+function M.Undo()
+	local u = M.undo
+	local n = getn(u)
+	if n == 0 then return false end
+	local e = u[n]
+	table.remove(u, n)
+	M.undoId = nil
+	C.cur.pos = e.pos
+	C.cur.layout = e.layout
+	Layout.ApplyAll()
 	C.Notify("pos", nil)
 	M.Sync()
 	return true
@@ -1909,6 +1942,18 @@ function M.OnKeyDown()
 		M.Nudge(-1, 0)
 	elseif k == "RIGHT" then
 		M.Nudge(1, 0)
+	elseif k == "Z" and IsControlKeyDown() then
+		if M.Undo() then SUI.Print(L("msg.mover.undo")) else SUI.Print(L("msg.mover.undo.none")) end
+	elseif k == "G" then
+		C.Set("mover.grid", not C.Get("mover.grid"))
+	elseif k == "S" then
+		C.Set("mover.snap", not C.Get("mover.snap"))
+	elseif k == "R" or k == "DELETE" then
+		local rec = M.sel or M.hover
+		if rec and rec.handle and rec.handle:IsShown() and M.Reset(rec.id) then SUI.Print(L("msg.mover.reset.one", M.Label(rec.id))) end
+	elseif k == "C" then
+		local rec = M.sel or M.hover
+		if rec and rec.handle and rec.handle:IsShown() then M.CenterH(rec) end
 	end
 end
 
@@ -2088,6 +2133,7 @@ function M.Enter()
 	end
 	M.BuildUI()
 	M.snap = { pos = copyPos(C.cur.pos), layout = C.cur.layout }
+	M.undo, M.undoId = {}, nil
 	M.active = true
 	M.showAll = false
 	M.sel, M.hover, M.drag, M.confirm = nil, nil, nil, nil
