@@ -1361,7 +1361,7 @@ function WR.style(pg)
 		local pv2 = pg.pv
 		pv2:ClearAllPoints()
 		-- centre de la zone reservee (330 x 170 a partir de CX, CY-114) : le SetScale retrecit autour du centre, le cadre reste en place
-		pv2:SetPoint("CENTER", pg, "TOPLEFT", CX + 165, -(114 + 85))
+		pv2:SetPoint("CENTER", pg, "TOPLEFT", CX + 165, CY - 114 - 85)
 		pv2:SetScale(sc)
 	end
 	pg.sizeLabel:SetText(L("mod.menu.wiz.style.size"))
