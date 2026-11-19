@@ -408,7 +408,9 @@ end
 -- affiche au lieu de la grille maximale, sinon la case de deplacement ne correspond jamais aux buffs visibles.
 local function layoutGroup(g, size, perrow, spacing, growLeft, count)
 	local step = size + spacing
-	local cnt = (count and count > 0) and count or g.max
+	-- Taille FIXE (grille complete) : la position enregistree est le coin bas-gauche du conteneur ; un conteneur qui epouse le nombre
+	-- d'icones affichees changeait de hauteur / largeur a chaque cible ou buff et les icones sautaient (haut ou bord droit deplaces).
+	local cnt = g.max
 	local rows = floor((cnt - 1) / perrow) + 1
 	local cols = perrow
 	if cnt < perrow then cols = cnt end
