@@ -1365,11 +1365,11 @@ function M.RRLayout()
 		local s = M.rr[i]
 		if not s.used then s.frame:Hide() end
 	end
+	-- Hauteur FIXE (1) : le coin bas-gauche enregistre ne bouge pas et les lignes pendent dessous (ancrage TOPLEFT). Une hauteur
+	-- suivant le contenu (y) faisait SAUTER la premiere ligne a chaque jet ajoute ou termine.
 	if n > 0 then
-		rf:SetHeight(y)
 		rf:Show()
 	else
-		rf:SetHeight(1)
 		rf:Hide()
 	end
 end

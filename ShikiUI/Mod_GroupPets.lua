@@ -211,10 +211,10 @@ function M.Place(shown)
 	end
 	local usedCols = (shown < cols) and shown or cols
 	if usedCols < 1 then usedCols = 1 end
-	local rows = floor((shown + cols - 1) / cols)
-	if rows < 1 then rows = 1 end
+	-- Hauteur FIXE (une ligne) : le coin bas-gauche enregistre ne bouge pas, les lignes suivantes pendent sous le cadre (ancrage TOPLEFT).
+	-- Une hauteur suivant le nombre de lignes faisait SAUTER le premier familier a chaque arrivee / depart d'un membre.
 	M.holder:SetWidth(usedCols * (w + GAP) - GAP)
-	M.holder:SetHeight(rows * (h + GAP) - GAP)
+	M.holder:SetHeight(h)
 	M.holder:SetScale(cfg.scale / 100)
 end
 
