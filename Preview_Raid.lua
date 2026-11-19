@@ -1034,10 +1034,14 @@ local function layoutAll(root, w, h)
 		T.SetSelected(b, b.n == st.n)
 		x = x + 38
 	end
-	P.Place(st.capZone, root, x + 4, 0, w - x - 4, 20)
+	-- 92 px a droite : bouton "Ecran" du panneau, pose par dessus l'apercu
+	local capw = w - x - 96
+	if capw < 40 then capw = 40 end
+	P.Place(st.capZone, root, x + 4, 0, capw, 20)
 	st.cap:ClearAllPoints()
 	st.cap:SetPoint("TOPLEFT", root, "TOPLEFT", x + 6, -4)
-	st.cap:SetWidth(w - x - 8)
+	st.cap:SetWidth(capw - 4)
+	st.cap:SetHeight(12)
 	-- zones : detail (haut ou gauche) et grille
 	local wide = (w >= 520 and w >= h * 1.5)
 	local dx, dy, dw, dh, gx, gy, gw, gh
