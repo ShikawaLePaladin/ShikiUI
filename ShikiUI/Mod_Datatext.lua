@@ -29,19 +29,29 @@ M.BLOCKS = {
 		return sformat("%dg", gold)
 	end },
 	{ key = "durab", fn = function()
-		local cur, mx = 0, 0
 		local gf = getglobal("GetInventoryItemDurability")
-		for slot = 1, 16 do
-			local c, m
-			if gf then
-				-- le client Turtle/OctoWow definit GetInventoryItemDurability(invSlot) : UN seul argument (l'appel (unit, slot) leve une erreur d'usage)
-				local ok, r1, r2 = pcall(gf, slot)
-				if (not ok) or r1 == nil then
-					ok, r1, r2 = pcall(gf, "player", slot)
-				end
-				if ok then c, m = r1, r2 end
-			end   -- pas de "and f() or nil" : ca tronquerait les multi-retours
-			if c and m then cur = cur + c ; mx = mx + m end
+		if not gf then return "-" end
+		-- le client Turtle/OctoWow definit GetInventoryItemDurability(invSlot) : UN seul argument ; un emplacement vide renvoie nil (pas une erreur).
+		-- La forme a deux arguments (unite, emplacement) n'est essayee qu'UNE fois par session, si la forme simple n'a rien donne.
+		local function sum(two)
+			local cur, mx = 0, 0
+			for slot = 1, 16 do
+				local ok, c, m
+				if two then ok, c, m = pcall(gf, "player", slot) else ok, c, m = pcall(gf, slot) end
+				if ok and c and m then cur = cur + c ; mx = mx + m end
+			end
+			return cur, mx
+		end
+		local cur, mx = 0, 0
+		if M.durTwo then
+			cur, mx = sum(true)
+		else
+			cur, mx = sum(false)
+			if mx <= 0 and not M.durTried then
+				M.durTried = true
+				local c2, m2 = sum(true)
+				if m2 > 0 then M.durTwo = true cur, mx = c2, m2 end
+			end
 		end
 		if mx <= 0 then return "-" end
 		local pct = floor(cur * 100 / mx + 0.5)
