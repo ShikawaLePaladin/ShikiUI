@@ -1050,6 +1050,12 @@ local function layoutAll(root, w, h)
 		if dh > 170 then dh = 170 end
 		dx, dy, dw = 0, 26, w
 		gx, gy, gw, gh = 0, 26 + dh + 6, w, h - 26 - dh - 6
+		-- legende ancree en bas : sinon elle passe sous la grille
+		local txt = L("mod.preview.raid.legend") .. " " .. L("mod.preview.raid.legend2")
+		local lh = (floor(string.len(txt) * 5.4 / (w > 40 and w or 40)) + 1) * 12 + 4
+		if lh > floor(gh / 2) then lh = floor(gh / 2) end
+		gh = gh - lh - 4
+		st.legendBottom = lh
 	end
 	-- cadre agrandi + 3 etats
 	local cw, ch = cfg.width, cfg.height
@@ -1075,7 +1081,13 @@ local function layoutAll(root, w, h)
 		sx = sx + cc:GetWidth() + 4
 	end
 	st.legend:ClearAllPoints()
-	st.legend:SetPoint("TOPLEFT", root, "TOPLEFT", dx, -(sy + states[1]:GetHeight() + 4))
+	if not wide and st.legendBottom then
+		st.legend:SetPoint("TOPLEFT", root, "TOPLEFT", 0, -(h - st.legendBottom))
+		st.legend:SetHeight(st.legendBottom)
+	else
+		st.legend:SetPoint("TOPLEFT", root, "TOPLEFT", dx, -(sy + states[1]:GetHeight() + 4))
+		st.legend:SetHeight(64)
+	end
 	st.legend:SetWidth(dw)
 	-- zones du cadre agrandi
 	local det = st.det
