@@ -685,7 +685,7 @@ function M.BuildPreview(f)
 			P.Show("layout")
 		end
 	end)
-	pv.bScreen:SetPoint("TOPRIGHT", pv, "TOPRIGHT", -8, -24)
+	pv.bScreen:SetPoint("BOTTOMRIGHT", pv, "BOTTOMRIGHT", -8, 6)
 	pv.bScreen:Hide()   -- montre par P.Show quand un autre apercu est actif
 	pv.status = T.Text(pv, 10, T.c.warn, "RIGHT")
 	pv.status:SetPoint("TOPRIGHT", pv, "TOPRIGHT", -8, -8)
