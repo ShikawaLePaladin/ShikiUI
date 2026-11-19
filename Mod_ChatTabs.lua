@@ -456,6 +456,18 @@ function M.IsShown(id)
 end
 
 -- ---------------------------------------------------------------- types de messages et canaux d'une fenetre
+-- Ce client regroupe certains types (ChatTypeGroup["PARTY"] contient aussi Raid et Champ de bataille, "SAY" les Emotes, "GUILD" les Officiers) :
+-- un type dont AUCUN groupe n'existe seul ne peut pas etre coche a part ; on ne l'affiche pas (la case ne reagirait jamais).
+function M.TypeKnown(t)
+	if t.special or not t.groups then return true end
+	local tg = getglobal("ChatTypeGroup")
+	if type(tg) ~= "table" then return true end
+	for i = 1, getn(t.groups) do
+		if tg[t.groups[i]] ~= nil then return true end
+	end
+	return false
+end
+
 function M.TypeOn(frame, t)
 	local list = frame and frame.messageTypeList
 	if type(list) ~= "table" then return false end
@@ -1672,8 +1684,10 @@ function M.PopItems()
 		local frame = frameOf(id)
 		for i = 1, getn(M.TYPES) do
 			local t = M.TYPES[i]
+			if M.TypeKnown(t) then
 			local on = M.TypeOn(frame, t)
 			add((on and "[x] " or "[  ] ") .. L("mod.chattabs.type." .. t.id), function() say(M.DoType(id, t.id, not on)) end, on)
+			end
 		end
 		add(L("mod.chattabs.pop.back"), function() M.PopGo("main") end)
 	elseif page == "chans" then
@@ -2033,11 +2047,17 @@ function M.Page()
 	local frame = frameOf(sel.id)
 	Mn.Section(L("mod.chattabs.sec.types"), sel.name)
 	local items = {}
+	local merged = false
 	for i = 1, getn(M.TYPES) do
 		local t = M.TYPES[i]
-		tinsert(items, { label = L("mod.chattabs.type." .. t.id), on = M.TypeOn(frame, t), fn = function(on) say(M.DoType(sel.id, t.id, on)) end })
+		if M.TypeKnown(t) then
+			tinsert(items, { label = L("mod.chattabs.type." .. t.id), on = M.TypeOn(frame, t), fn = function(on) say(M.DoType(sel.id, t.id, on)) end })
+		else
+			merged = true
+		end
 	end
 	checkCells(items, 3, 208, 12)
+	if merged then Mn.Para(L("mod.chattabs.help.merged"), 30) end
 	Mn.Section(L("mod.chattabs.sec.chans"), sel.name)
 	local chans = M.JoinedChannels()
 	if getn(chans) == 0 then
