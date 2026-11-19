@@ -179,6 +179,8 @@ local function update(root, w, h, key, value)
 		sorted[j + 1] = e
 	end
 	local n = 0
+	local labx, laby, labw, nlab = st.labx or {}, st.laby or {}, st.labw or {}, 0
+	st.labx, st.laby, st.labw = labx, laby, labw
 	for i = 1, cnt do
 		local e = sorted[i]
 		local k = e.key
@@ -210,10 +212,23 @@ local function update(root, w, h, key, value)
 			P.Fill(z.fill, T.c.panel, on and 1 or 0.45)
 			P.Box(z.fill, z, 1, 1, pw - 2, ph - 2)
 			z.cx, z.cy = x + pw / 2, y + ph / 2
-			if pw >= 24 and ph >= 9 then
-				local lab = labelOf(k)
-				local maxc = floor(pw / 5)
-				if string.len(lab) > maxc then lab = ssub(lab, 1, maxc) end
+			local lab = labelOf(k)
+			local maxc = floor(pw / 5)
+			if string.len(lab) > maxc then lab = ssub(lab, 1, maxc) end
+			-- anti-collision : une etiquette qui chevaucherait une etiquette deja posee (les grands rectangles d'abord) est omise
+			local lw = string.len(lab) * 5
+			local show = pw >= 24 and ph >= 9
+			if show then
+				local cx, cy = x + pw / 2, y + ph / 2
+				for q = 1, nlab do
+					if math.abs(labx[q] - cx) < (labw[q] + lw) / 2 and math.abs(laby[q] - cy) < 9 then show = false end
+				end
+				if show then
+					nlab = nlab + 1
+					labx[nlab], laby[nlab], labw[nlab] = cx, cy, lw
+				end
+			end
+			if show then
 				P.Font(z.lab, 8)
 				z.lab:SetText(lab)
 				z.lab:ClearAllPoints()
