@@ -17,7 +17,7 @@ local getn, tinsert = table.getn, table.insert
 local floor = math.floor
 local sfind, ssub = string.find, string.sub
 
-local NRECT, NLINK = 48, 24
+local NRECT, NLINK = 64, 24
 local PTS = { TOPLEFT = { 0, 1 }, TOP = { 0.5, 1 }, TOPRIGHT = { 1, 1 }, LEFT = { 0, 0.5 }, CENTER = { 0.5, 0.5 }, RIGHT = { 1, 0.5 },
 	BOTTOMLEFT = { 0, 0 }, BOTTOM = { 0.5, 0 }, BOTTOMRIGHT = { 1, 0 } }
 
@@ -147,15 +147,23 @@ local function update(root, w, h, key, value)
 	local ar, ag, ab = T.Accent()
 	local focus = P.focus
 	local ent = st.ent
-	for i = 1, getn(keys) do
-		local k = keys[i]
-		local it = SUI.Layout.items[k]
-		if cnt < NRECT and it then
-			cnt = cnt + 1
-			local e = ent[cnt]
-			e.key = k
-			e.l, e.b, e.w, e.h = rectOf(k, it, uw, uh)
-			e.area = e.w * e.h
+	-- deux passages : les cadres AFFICHES d'abord (sinon l'ordre alphabetique des cles coupait joueur / cible), puis les cadres masques
+	-- (grises) tant qu'il reste de la place ; les fenetres de messages en reserve (masquees) ne sont jamais dessinees : elles se superposaient.
+	for pass = 1, 2 do
+		for i = 1, getn(keys) do
+			local k = keys[i]
+			local it = SUI.Layout.items[k]
+			if cnt < NRECT and it then
+				local shown = it.frame and it.frame.IsShown and it.frame:IsShown() and true or false
+				local pool = (not shown) and string.find(k, "^messages%.win")
+				if ((pass == 1 and shown) or (pass == 2 and not shown and not pool)) then
+					cnt = cnt + 1
+					local e = ent[cnt]
+					e.key = k
+					e.l, e.b, e.w, e.h = rectOf(k, it, uw, uh)
+					e.area = e.w * e.h
+				end
+			end
 		end
 	end
 	-- les grands rectangles d'abord (dessous), les petits au-dessus : ils restent cliquables

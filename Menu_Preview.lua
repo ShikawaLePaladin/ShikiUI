@@ -679,10 +679,10 @@ function M.BuildPreview(f)
 	pv.title:SetHeight(14)
 	pv.bScreen = T.Button(pv, L("mod.preview.screen.toggle"), 64, 14, function()
 		-- bascule : apercu de l'ecran <-> apercu de la categorie courante
-		if P.curId == "screen" then
+		if P.curId == "layout" then
 			P.Show(P.Pick())
 		else
-			P.Show("screen")
+			P.Show("layout")
 		end
 	end)
 	pv.bScreen:SetPoint("TOPRIGHT", pv, "TOPRIGHT", -8, -24)
@@ -875,7 +875,7 @@ function P.Show(id)
 	end
 	local name = def.title and M.Has(def.title) and L(def.title) or M.CatLabel(def.id)
 	pv.title:SetText(L("mod.preview.for", name))
-	if id ~= "screen" and P.reg.screen then
+	if id ~= "layout" and P.reg.layout then
 		pv.bScreen:Show()
 	else
 		pv.bScreen:Hide()
