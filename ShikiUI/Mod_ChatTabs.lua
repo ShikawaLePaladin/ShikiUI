@@ -1246,7 +1246,27 @@ function M.AutoRestore()
 	if not did then
 		if C.Get("chattabs.autosetup") then M.AutoSetup() else M.Hint() end
 	end
+	M.TidyFloating()
 	M.FlushDedicated()
+end
+
+-- Une seule fois par personnage : les fenetres de chat laissees flottantes par le jeu (ex. "Loot & Spam", grand cadre noir a droite de l'ecran)
+-- sont rattachees a la barre d'onglets. Elles restent detachables ensuite (bouton Detacher) ; rien n'est touche une fois le menage fait.
+function M.TidyFloating()
+	local key = "chattabs.tidy." .. C.CharKey()
+	if C.GetGlobal(key) then return false end
+	C.SetGlobal(key, 1)
+	local list = M.Shown()
+	local n = 0
+	for i = 1, getn(list) do
+		local w = list[i]
+		local fr = frameOf(w.id)
+		if w.id ~= 1 and not w.combat and fr and not fr.isDocked then
+			local ok = M.Attach(w.id)
+			if ok then n = n + 1 end
+		end
+	end
+	return n > 0
 end
 
 local function plainCount()
