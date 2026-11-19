@@ -2436,7 +2436,20 @@ for i = 1, 8 do E.lcnt[i] = 0 end
 -- le groupe est absent ou sans titre ; tj : titre accroche a droite). Renvoie largeur et hauteur totales.
 -- Tri "group" : un groupe par colonne (orientation verticale) ou par ligne (horizontale), grpperline groupes par bande puis retour a la ligne ;
 -- autres tris : perline cadres par ligne. fill : coin de depart (tl / tr / bl / br) : la grille entiere est retournee, titres compris.
-function E.Layout(cfg, ord, n, px, py, tx, ty, tj)
+-- Dimensions de la grille pleine (cap cadres, sous-groupes de 5 dans l'ordre) : tables de travail reutilisees, aucune allocation en regime etabli.
+E.cord, E.cpx, E.cpy, E.ctx, E.cty, E.ctj = {}, {}, {}, {}, {}, {}
+function E.CapExtent(cfg, cap)
+	local o = E.cord
+	for k = 1, cap do
+		local e = o[k]
+		if not e then e = {}; o[k] = e end
+		e.sub = floor((k - 1) / 5) + 1
+		if e.sub > 8 then e.sub = 8 end
+	end
+	return E.Layout(cfg, o, cap, E.cpx, E.cpy, E.ctx, E.cty, E.ctj)
+end
+
+function E.Layout(cfg, ord, n, px, py, tx, ty, tj, cap)
 	local w, h = cfg.width, cfg.height
 	local sp, gap = cfg.spacing, cfg.groupgap
 	local sortGroup = (cfg.sort == "group")
@@ -2513,6 +2526,13 @@ function E.Layout(cfg, ord, n, px, py, tx, ty, tj)
 	local fill = cfg.fill
 	local right = (fill == "tr" or fill == "br")
 	local bottom = (fill == "bl" or fill == "br")
+	-- grille retournee : on la retourne dans les dimensions de la CAPACITE (groupe plein / raid complet), pas de l'effectif courant, sinon
+	-- le premier cadre change de place a chaque arrivee ou depart (le conteneur garde son bord gauche et son haut fixes a l'ecran)
+	if (right or bottom) and cap and cap > n then
+		local cx, cy = E.CapExtent(cfg, cap)
+		if right and cx > maxX then maxX = cx end
+		if bottom and cy > maxY then maxY = cy end
+	end
 	if right then
 		for k = 1, n do px[k] = maxX - px[k] - w end
 	end
@@ -2552,7 +2572,9 @@ function E.Arrange(g)
 		order[j + 1] = f
 	end
 	local w = cfg.width
-	local maxX, maxY = E.Layout(cfg, order, n, g.lx, g.ly, g.tx, g.ty, g.tj)
+	local cap
+	if g.kind == "raid" then cap = (cfg.maxgroup or 8) * 5 elseif g.kind == "party" then cap = 5 end
+	local maxX, maxY = E.Layout(cfg, order, n, g.lx, g.ly, g.tx, g.ty, g.tj, cap)
 	for k = 1, n do
 		local f = order[k]
 		local x, y = g.lx[k], g.ly[k]
