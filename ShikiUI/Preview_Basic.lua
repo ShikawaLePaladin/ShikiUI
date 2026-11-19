@@ -3115,18 +3115,25 @@ end
 local function screenUpdate(root, w, h)
 	local st = root.st
 	local ar, ag, ab = T.Accent()
+	local Layout = SUI.Layout
+	local uw, uh = UIParent:GetWidth(), UIParent:GetHeight()
+	if not uw or uw <= 0 then uw = 1024 end
+	if not uh or uh <= 0 then uh = 768 end
 	for i = 1, getn(SCREEN_FRAMES) do
 		local d = SCREEN_FRAMES[i]
 		local box = st.boxes[i]
-		local r = Layout and Layout.Rect and Layout.Rect(d.key)
-		if r then
-			local bl, bb = r[1] / w, r[2] / h          -- UIParent -> fraction (l, b en unites UIParent)
-			local bw = (r[3] or 80) / w
-			local bh = (r[4] or 20) / h
+		-- Layout.Rect renvoie gauche, bas, largeur, hauteur (unites d'UIParent) : plusieurs valeurs, pas une table
+		local l, b, rw, rh
+		if Layout and Layout.Rect then l, b, rw, rh = Layout.Rect(d.key) end
+		if l and b then
+			rw = rw or 80
+			rh = rh or 20
+			local bl, bb = l / uw, b / uh
+			local bw, bh = rw / uw, rh / uh
 			box:ClearAllPoints()
-			box:SetPoint("TOPLEFT", root, "TOPLEFT", floor(bl * w) + 2, -floor((1 - bb - bh) * h) - 2)
-			box:SetWidth(mmax(14, floor(bw * w) - 4))
-			box:SetHeight(mmax(8, floor(bh * h) - 4))
+			box:SetPoint("TOPLEFT", root, "TOPLEFT", floor(bl * w) + 1, -floor((1 - bb - bh) * h) - 1)
+			box:SetWidth(math.max(14, floor(bw * w) - 2))
+			box:SetHeight(math.max(8, floor(bh * h) - 2))
 			box:SetBackdropColor(ar, ag, ab, 0.35)
 			box.label:Show()
 			box:Show()
