@@ -835,6 +835,18 @@ function P.UpdateStatus(def)
 	else
 		pv.status:SetText("")
 	end
+	-- titre et etat se partagent la ligne : le titre cede la place a l etat (sinon ils se chevauchent)
+	local pw = pv:GetWidth() or 400
+	pv.status:SetWidth(floor(pw * 0.5))     -- largeur libre le temps de mesurer le texte
+	local sw = pv.status:GetStringWidth() or 0
+	if sw > 0 then
+		if sw > pw * 0.5 then sw = floor(pw * 0.5) end
+		pv.status:SetWidth(sw + 2)
+		pv.title:SetWidth(pw - sw - 28)
+	else
+		pv.status:SetWidth(10)
+		pv.title:SetWidth(pw - 16)
+	end
 end
 
 function P.Update(def, key, value)
