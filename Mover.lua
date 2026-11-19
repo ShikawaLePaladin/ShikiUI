@@ -529,6 +529,21 @@ function M.Refresh(rec)
 	local s = M.ScaleOf(rec)
 	if abs(s - 1) > 0.001 then name = name .. "  x" .. string.format("%.2f", s) end
 	h.label:SetWidth(w - 6)
+	-- petite poignee : le nom prend toute la hauteur, les coordonnees passent dessous (sinon elles se chevauchent)
+	local small = hh < 44
+	if small ~= h.smallMode then
+		h.smallMode = small
+		h.label:ClearAllPoints()
+		h.coord:ClearAllPoints()
+		if small then
+			h.label:SetPoint("CENTER", h, "CENTER", 0, 0)
+			h.coord:SetPoint("TOP", h, "BOTTOM", 0, -1)
+		else
+			h.label:SetPoint("TOP", h, "TOP", 0, -4)
+			h.coord:SetPoint("BOTTOM", h, "BOTTOM", 0, 3)
+		end
+	end
+	h.label:SetHeight(small and (hh > 18 and hh - 4 or 14) or 24)
 	h.label:SetText(name)
 	h.coord:SetText(M.CoordText(rec))
 	M.DrawGhost(rec)

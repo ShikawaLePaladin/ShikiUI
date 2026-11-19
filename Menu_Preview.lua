@@ -877,6 +877,8 @@ function P.Show(id)
 	pv.title:SetText(L("mod.preview.for", name))
 	if id ~= "layout" and P.reg.layout then
 		pv.bScreen:Show()
+		-- au dessus du contenu de l'apercu (cadre des unites, grilles) qui sinon le recouvre
+		pv.bScreen:SetFrameLevel(pv:GetFrameLevel() + 60)
 	else
 		pv.bScreen:Hide()
 	end
