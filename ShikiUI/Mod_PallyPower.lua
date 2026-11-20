@@ -275,15 +275,20 @@ end
 function M.BuildPairs()
 	M.npairs, M.qi, M.castn = 0, 0, 0
 	M.buffNames = {}   -- les noms de buffs sont relus a chaque tour du cycle
-	for i = 1, M.nrost do
-		local r = M.roster[i]
-		local a = M.assign[r.name]
-		if a then
-			for j = 1, getn(M.BLESS) do
-				local b = M.BLESS[j]
-				if a[b] and not M.HasBuff(r.unit, M.SPELLS[b]) then
-					M.npairs = M.npairs + 1
-					M.pairs[M.npairs] = { unit = r.unit, name = M.SpellName(b, a.single), base = M.SPELLS[b], frb = GAMEFR and M.SPELLS_FR[b] or nil, who = r.name }
+	-- deux passes : d'abord les benedictions de classe (30 min), ensuite les benedictions simples (10 min).
+	-- Une benediction de classe touche TOUTE la classe : posee apres, elle ecraserait la benediction simple d'un autre joueur de la classe
+	-- (ex. Sagesse de classe sur le druide soigneur ecraserait Puissance 10 min sur le druide feral).
+	for pass = 1, 2 do
+		for i = 1, M.nrost do
+			local r = M.roster[i]
+			local a = M.assign[r.name]
+			if a and ((pass == 2) == (a.single and true or false)) then
+				for j = 1, getn(M.BLESS) do
+					local b = M.BLESS[j]
+					if a[b] and not M.HasBuff(r.unit, M.SPELLS[b]) then
+						M.npairs = M.npairs + 1
+						M.pairs[M.npairs] = { unit = r.unit, name = M.SpellName(b, a.single), base = M.SPELLS[b], frb = GAMEFR and M.SPELLS_FR[b] or nil, who = r.name }
+					end
 				end
 			end
 		end
@@ -1390,15 +1395,23 @@ function M.CastNext(b)
 	if UnitIsDeadOrGhost("player") then return false end
 	if M.nrost == 0 then M.ScanRoster() end
 	local st = M.MiniScan()
-	for j = 1, getn(M.BLESS) do
-		local bb = M.BLESS[j]
-		if b == nil or b == bb then
-			local s = st[bb]
-			if s and s.units[1] then
-				castOn(s.units[1], M.SpellName(bb, s.singles[1]))
-				M.lastCast = s.miss[1]
-				if M.mini then M.MiniPaint() end
-				return true
+	-- d'abord les benedictions de classe, puis les simples (10 min) : sinon la benediction de classe ecraserait la simple d'un autre joueur de la classe
+	for pass = 1, 2 do
+		local single = (pass == 2)
+		for j = 1, getn(M.BLESS) do
+			local bb = M.BLESS[j]
+			if b == nil or b == bb then
+				local s = st[bb]
+				if s then
+					for k = 1, getn(s.units) do
+						if (s.singles[k] and true or false) == single then
+							castOn(s.units[k], M.SpellName(bb, single))
+							M.lastCast = s.miss[k]
+							if M.mini then M.MiniPaint() end
+							return true
+						end
+					end
+				end
 			end
 		end
 	end
