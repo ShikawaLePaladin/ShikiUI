@@ -275,7 +275,13 @@ function Cfg.Unwatch(fn)
 	end
 end
 
+-- Garde anti-recursion : un watcher qui re-ecrit (Set -> Notify) ne redelclenche pas une chaine infinie.
+Cfg.notifyDepth = 0
 function Cfg.Notify(key, value)
+	if Cfg.notifyDepth >= 4 then return end   -- 4 niveaux de cascade max (au-dela : bug de code, on coupe)
+	Cfg.notifyDepth = Cfg.notifyDepth + 1
+	local okAll = true
+	local i
 	for i = 1, getn(Cfg.watchers) do
 		local w = Cfg.watchers[i]
 		if key == nil or string.sub(key, 1, w.len) == w.prefix then
@@ -283,6 +289,7 @@ function Cfg.Notify(key, value)
 			if not ok then SUI.Report("watch " .. w.prefix, err) end
 		end
 	end
+	Cfg.notifyDepth = Cfg.notifyDepth - 1
 end
 
 -- ---------------------------------------------------------------- base de donnees et profils

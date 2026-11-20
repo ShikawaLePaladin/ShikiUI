@@ -149,9 +149,13 @@ function Layout.ApplyPreset(id, role)
 		end
 	end
 	if type(def.rpos) == "table" then
+		-- (2026-11-20) les valeurs rpos sont des FRACTIONS de l'ecran ({0.0-1.0, 0.0-1.0}) : converties au
+		-- moment de l'application pour etre resolues sur TOUTES les resolutions (les anciennes valeurs
+		-- absolues 0-1280 cassaient les autres tailles d'ecran).
 		local rk, re
+		local aw, ah = UIParent.GetWidth and UIParent:GetWidth() or 1280, UIParent.GetHeight and UIParent:GetHeight() or 768
 		for rk, re in pairs(def.rpos) do
-			C.SetPos(rk .. "|raid", re[1], re[2])
+			C.SetPos(rk .. "|raid", (re[1] or 0) * aw, (re[2] or 0) * ah)
 			if Layout.items[rk] then Layout.Apply(rk) end
 		end
 	end
@@ -717,7 +721,8 @@ function Layout.PollWake()
 	if not Layout.pollFast then
 		Layout.pollFast = true
 		SUI.Cancel(Layout.pollTask)
-		Layout.pollTask = SUI.Every(Layout.POLL_FAST, pollTick, "layout.links")
+		
+
 	end
 end
 Layout.pollTask = SUI.Every(Layout.POLL_FAST, pollTick, "layout.links")
@@ -770,8 +775,8 @@ SUI.RegisterLayout("shiki", { label = "mod.layout.name.shiki", reset = true,
 		["bossmods.win"] = { 1.0, 0.99, -260, -230 },
 	},
 	-- positions propres au mode Raid (cle|raid, en unites absolues bas-gauche) : raid a gauche sous le micro-menu, BigWigs en haut
-	rpos = { ["raid"] = { 0, 694 }, ["grouppets"] = { 0, 422 }, ["bossmods.bwbars"] = { 400, 728 }, ["bossmods.bwemph"] = { 360, 528 },
-		["bossmods.bwmsg"] = { 1040, 576 }, ["bossmods.bwsign"] = { 640, 608 }, ["meter.win2"] = { 1080, 34 } },
+	rpos = { ["raid"] = { 0.0, 0.904 }, ["grouppets"] = { 0.0, 0.549 }, ["bossmods.bwbars"] = { 0.313, 0.948 }, ["bossmods.bwemph"] = { 0.281, 0.688 },
+		["bossmods.bwmsg"] = { 0.813, 0.750 }, ["bossmods.bwsign"] = { 0.500, 0.792 }, ["meter.win2"] = { 0.844, 0.044 } },
 	links = {
 		{ "bars.bar3", "bars.main", "LEFT" }, { "bars.pet", "bars.bar2", "TOP" },
 		{ "threat.win", "meter.win1", "LEFT" }, { "tracker", "meter.win1", "BOTTOM" }, { "datatext.win", "minimap", "BOTTOM" }, 
@@ -907,5 +912,15 @@ local function cxWatch()
 		end
 	end
 end
+-- (2026-11-20) Les timers socle demarrent au LOGIN (plus au load du fichier) : rien ne tourne avant
+-- que le profil soit charge, et rien ne tourne du tout si aucun lien/pos.cx n'existe (economie permanente).
+Layout.socleTimersStarted = false
+function Layout.StartSocleTimers()
+	if Layout.socleTimersStarted then return end
+	Layout.socleTimersStarted = true
+	Layout.pollTask = SUI.Every(Layout.POLL_FAST, pollTick, "layout.links")
+	SUI.Every(2, cxWatch, "layout.cx", true)
+end
+SUI.On("PLAYER_LOGIN", function() SUI.WhenSafe(Layout.StartSocleTimers) end)
 SUI.On("PLAYER_ENTERING_WORLD", function() SUI.After(3, cxWatch, "layout.cx0") end)
 SUI.Every(2, cxWatch, "layout.cx", true)
