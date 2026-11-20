@@ -1184,6 +1184,16 @@ function M.Build()
 			mb:SetHeight(18)
 			mb:ClearAllPoints()
 			SUI.Layout.Register(mb, "chat.menubtn", "BOTTOMLEFT", 630, 40)
+			-- les menus deroulants (canaux, emotes, langues) s ouvrent AU-DESSUS des cadres d unites
+			local oc = mb:GetScript("OnClick")
+			mb:SetScript("OnClick", function()
+				if oc then oc() end
+				local nm = { "ChatMenu", "EmoteMenu", "LanguageMenu", "VoiceMacroMenu" }
+				for i = 1, 4 do
+					local m = getglobal(nm[i])
+					if m and m.SetFrameStrata then m:SetFrameStrata("FULLSCREEN_DIALOG") end
+				end
+			end)
 		end)
 		if not okm then SUI.Report("chat menubtn", errm) end
 	end

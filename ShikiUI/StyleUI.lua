@@ -20,7 +20,7 @@ P.page = 1
 local PER_PAGE = 8
 local CARD_W, CARD_H = 206, 66
 -- 20 mises en page enregistrees (14 de base + 6 presets d'ecran) : 5 par rangee, 4 rangees
-local MAX_LAYOUT_BUTTONS = 20
+local MAX_LAYOUT_BUTTONS = 24   -- 23 mises en page enregistrees (5 par rangee)
 
 local function accentRGB(tok)
 	local a = tok.accent
@@ -158,7 +158,7 @@ function P.Build()
 	local f = CreateFrame("Frame", "ShikiUI_Styles", UIParent)
 	P.frame = f
 	f:SetWidth(2 * CARD_W + 30)
-	f:SetHeight(490)
+	f:SetHeight(540)
 	f:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
 	f:SetFrameStrata("DIALOG")
 	f:SetToplevel(true)

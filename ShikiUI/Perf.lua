@@ -110,7 +110,7 @@ function P.Sample()
 			P.lowCount = 0
 			if fps >= th + 15 then P.highCount = P.highCount + 1 else P.highCount = 0 end
 		end
-		if not SUI.emergency and P.lowCount >= 3 then
+		if not SUI.emergency and P.lowCount >= 8 then
 			P.SetEmergency(true, true)
 		elseif SUI.emergency and P.autoTriggered and P.highCount >= 10 then
 			P.SetEmergency(false)
