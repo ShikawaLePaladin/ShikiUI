@@ -1100,7 +1100,8 @@ function M.UpdateSlot(s, now)
 		end
 	end
 	local imp = (s.guid and s.guid == M.targetGuid) or s.cbShown or (s.thrState == 2 or s.thrState == 3 or s.thrState == 6)
-	M.SetCompact(s, M.heavy and not imp)
+	-- le mode compact masque le nom : inutile (et nuisible) pour une plaque amie qui n affiche QUE le nom
+	M.SetCompact(s, M.heavy and not imp and not hideBox)
 	M.UpdateThreat(s, now, friendly)
 	M.UpdateBar(s, plate, friendly)
 	if not s.compact then M.UpdateName(s, plate) end
