@@ -146,6 +146,13 @@ function Layout.ApplyPreset(id, role)
 			end
 		end
 	end
+	if type(def.rpos) == "table" then
+		local rk, re
+		for rk, re in pairs(def.rpos) do
+			C.SetPos(rk .. "|raid", re[1], re[2])
+			if Layout.items[rk] then Layout.Apply(rk) end
+		end
+	end
 	if SUI.Auras and SUI.Auras.ApplyOptions then pcall(SUI.Auras.ApplyOptions) end     -- les icones d'auras suivent le cote de leur lien (au-dessus / dessous)
 	return true, "msg.layout.applied", ok, bad
 end
@@ -810,12 +817,12 @@ D("bars.bar5", "bars.bar4", "LEFT", -4, 0)
 -- SHIKI (disposition recommandee a l'installation) : cadres joueur / cible centres en bas juste au-dessus des barres, compteur et menace
 -- cote a cote en bas a droite, micro-menu puis bijoux / jeux d'equipement en haut a gauche, groupe / raid a gauche, minimap en haut a droite.
 SUI.RegisterLayout("shiki", { label = "mod.layout.name.shiki", reset = true,
-	v = { ["units.width"] = 170, ["actionbars.size"] = 30, ["meter.width"] = 190, ["meter.height"] = 140, ["threat.width"] = 170, ["threat.height"] = 140,
+	v = { ["units.width"] = 200, ["actionbars.size"] = 30, ["meter.width"] = 190, ["meter.height"] = 140, ["threat.width"] = 170, ["threat.height"] = 140,
 		["actionbars.micro.scale"] = 65, ["items.size"] = 28,
-		["auras.size"] = 24, ["auras.perrow"] = 6, ["auras.tsize"] = 24, ["auras.tperrow"] = 6 },
+		["auras.size"] = 24, ["auras.perrow"] = 8, ["auras.tsize"] = 24, ["auras.tperrow"] = 8, ["auras.spacing"] = 2 },
 	pos = {
 		["bars.stance"] = { 0.5, 0.0, 0, 6, "c" }, ["bars.main"] = { 0.5, 0.0, 0, 42, "c" },
-		["unit.player"] = { 0.5, 0.0, -110, 170, "r" }, ["unit.target"] = { 0.5, 0.0, 110, 170 },
+		["unit.player"] = { 0.5, 0.0, -110, 235, "r" }, ["unit.target"] = { 0.5, 0.0, 110, 235 },
 		["chat.main"] = { 0.0, 0.0, 6, 34 },
 		["lootroll"] = { 0.68, 0.66, 0, 0 }, ["lootwin"] = { 0.68, 0.46, 0, 0 }, ["loot"] = { 0.68, 0.30, 0, 0 },
 		["bossmods.msg"] = { 0.5, 0.50, 0, 0, "c" }, ["bossmods.bwbars"] = { 0.5, 1.0, 0, -90, "ct" }, ["bossmods.bwemph"] = { 0.5, 1.0, 0, -200, "ct" },
@@ -826,12 +833,15 @@ SUI.RegisterLayout("shiki", { label = "mod.layout.name.shiki", reset = true,
 		["group"] = { 0.0, 0.5, 12, 0 }, ["raid"] = { 0.0, 0.5, 12, 0 },
 		["bossmods.win"] = { 1.0, 0.99, -260, -230 },
 	},
+	-- positions propres au mode Raid (cle|raid, en unites absolues bas-gauche) : raid a gauche sous le micro-menu, BigWigs en haut
+	rpos = { ["raid"] = { 0, 694 }, ["grouppets"] = { 0, 422 }, ["bossmods.bwbars"] = { 400, 728 }, ["bossmods.bwemph"] = { 360, 528 },
+		["bossmods.bwmsg"] = { 1040, 576 }, ["bossmods.bwsign"] = { 640, 608 }, ["meter.win2"] = { 1080, 0 }, ["tracker"] = { 0, 216 } },
 	links = {
 		{ "bars.bar3", "bars.main", "LEFT" }, { "bars.pet", "bars.bar2", "TOP" },
 		{ "threat.win", "meter.win1", "LEFT" }, { "datatext.win", "minimap", "BOTTOM" }, 
-		{ "chat.tabs", "chat.main", "TOP" }, { "marks.bar", "chat.tabs", "TOP" }, { "chat.copybtn", "chat.tabs", "RIGHT" }, { "chat.menubtn", "chat.copybtn", "TOP" },
+		{ "chat.tabs", "chat.main", "TOP" }, { "marks.bar", "chat.tabs", "TOP" }, { "chat.copybtn", "chat.tabs", "RIGHT", -26, 0 }, { "chat.menubtn", "chat.copybtn", "LEFT", -3, 0 },
 		{ "unit.targettarget", "unit.target", "LEFT" },
-		{ "auras.pb", "unit.player", "TOP" }, { "auras.pw", "auras.pb", "TOP" }, { "castbar.player", "unit.player", "BOTTOM" },
+		{ "auras.pb", "minimap", "LEFT", -40, 0 }, { "auras.pw", "auras.pb", "BOTTOM" }, { "castbar.player", "unit.player", "BOTTOM" },
 		{ "auras.pd", "castbar.player", "BOTTOM" }, { "auras.tb", "unit.target", "TOP" }, { "castbar.target", "unit.target", "BOTTOM" },
 		{ "auras.td", "castbar.target", "BOTTOM" },
 	} })

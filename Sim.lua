@@ -136,7 +136,9 @@ local function install()
 		if S.mode ~= "raid" then return oI(i) end
 		local m = S.m[i]
 		if not m then return nil end
-		return m.name, (i == 1) and 2 or 0, m.sub, 60, CLASSNAMES[m.class], m.class, "Sim", (not m.offline) and 1 or nil, m.dead and 1 or nil
+		-- le membre 1 est le VRAI joueur (les addons de raid, comme BigWigs, s attendent a s y trouver)
+		local nm = (i == 1) and (UnitName("player") or m.name) or m.name
+		return nm, (i == 1) and 2 or 0, m.sub, 60, CLASSNAMES[m.class], m.class, "Sim", (not m.offline) and 1 or nil, m.dead and 1 or nil
 	end
 end
 
@@ -242,7 +244,16 @@ local function auraStop()
 	fire("UNIT_AURA", "target")
 end
 
-local function auraStart()
+local function auraStart(nb, nd)
+	-- nb buffs / nd debuffs fictifs (cycle sur les icones de base ; 8 et 4 par defaut, 40 au plus)
+	nb = floor(tonumber(nb) or 8)
+	nd = floor(tonumber(nd) or 4)
+	if nb < 0 then nb = 0 elseif nb > 40 then nb = 40 end
+	if nd < 0 then nd = 0 elseif nd > 16 then nd = 16 end
+	local BF, DF = {}, {}
+	local q
+	for q = 1, nb do BF[q] = BUFFS[math.mod(q - 1, getn(BUFFS)) + 1] end
+	for q = 1, nd do DF[q] = DEBUFFS[math.mod(q - 1, getn(DEBUFFS)) + 1] end
 	local function wrap(name, fn)
 		AUR.orig[name] = _G[name]
 		_G[name] = fn
@@ -250,15 +261,15 @@ local function auraStart()
 	-- indices du joueur : 0..7 = buffs, 100..103 = debuffs
 	wrap("GetPlayerBuff", function(i, filter)
 		if filter == "HARMFUL" then
-			if i < getn(DEBUFFS) then return 100 + i, 0 end
-		elseif i < getn(BUFFS) then
+			if i < nd then return 100 + i, 0 end
+		elseif i < nb then
 			return i, 0
 		end
 		return -1
 	end)
 	wrap("GetPlayerBuffTexture", function(idx)
-		if idx >= 100 then return ICON .. DEBUFFS[idx - 99] end
-		return ICON .. BUFFS[idx + 1]
+		if idx >= 100 then return ICON .. DF[idx - 99] end
+		return ICON .. BF[idx + 1]
 	end)
 	wrap("GetPlayerBuffApplications", function(idx) return (idx >= 100 and idx == 101) and 3 or 0 end)
 	wrap("GetPlayerBuffDispelType", function(idx) return (idx >= 100) and "Magic" or nil end)
@@ -266,14 +277,14 @@ local function auraStart()
 	local oB, oD = _G.UnitBuff, _G.UnitDebuff
 	wrap("UnitBuff", function(u, i, a)
 		if u == "target" or u == "player" then
-			if BUFFS[i] then return ICON .. BUFFS[i], (i == 2) and 2 or 0 end
+			if BF[i] then return ICON .. BF[i], (i == 2) and 2 or 0 end
 			return nil
 		end
 		return oB(u, i, a)
 	end)
 	wrap("UnitDebuff", function(u, i, a)
 		if u == "target" or u == "player" then
-			if DEBUFFS[i] then return ICON .. DEBUFFS[i], (i == 2) and 3 or 0, "Magic" end
+			if DF[i] then return ICON .. DF[i], (i == 2) and 3 or 0, "Magic" end
 			return nil
 		end
 		return oD(u, i, a)
@@ -320,7 +331,10 @@ local function cmd(rest)
 	elseif sub == "roll" then
 		rollStart()
 	elseif sub == "buffs" then
-		if AUR.on then auraStop() else auraStart() end
+		if a ~= "" then
+			auraStop()
+			auraStart(a, b)
+		elseif AUR.on then auraStop() else auraStart() end
 		SUI.Print(L(AUR.on and "msg.sim.buffs.on" or "msg.sim.buffs.off"))
 	elseif not S.on then
 		SUI.Print(L("help.sim"))
