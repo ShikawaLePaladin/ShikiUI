@@ -769,7 +769,7 @@ function M.RefreshBar()
 	local fw = (f1:GetWidth() or 0) * (f1:GetScale() or 1) / (bar:GetScale() or 1)
 	if fw <= 0 then fw = bar:GetWidth() or 400 end
 	if M.barRelay and M.barRelay.moved and bar:GetWidth() ~= fw then bar:SetWidth(fw) end
-	local avail = fw - 24 - 30      -- 30 px reserves au bouton copier
+	local avail = fw - 24 - 58      -- 58 px reserves aux boutons copier et bulle (ils se placent dans la barre, a droite des onglets)
 	local w = floor(avail / shownN)
 	if w > 110 then w = 110 end
 	if w < 36 then w = 36 end
