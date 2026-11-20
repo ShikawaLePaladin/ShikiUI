@@ -79,6 +79,8 @@ function M.ReadConfig()
 	cfg.history = C.Get("chat.history")
 	cfg.wheel = C.Get("chat.wheel")
 	cfg.tabs = C.Get("chat.tabs")
+	cfg.cw = C.Get("chat.width") or 0
+	cfg.ch = C.Get("chat.height") or 0
 	cfg.background = C.Get("chat.background")
 	cfg.bgalpha = C.Get("chat.bgalpha")
 	cfg.hidebuttons = C.Get("chat.hidebuttons")
@@ -848,6 +850,14 @@ function M.ApplyOptions()
 			f:SetScript("OnMouseWheel", nil)
 			M.wheelSet[i] = nil
 		end
+		-- taille de la fenetre principale : 0 = celle du client (le Mover garde le reste)
+		if i == 1 and M.on and (cfg.cw > 0 or cfg.ch > 0) then
+			if cfg.cw > 0 then f:SetWidth(cfg.cw) end
+			if cfg.ch > 0 then f:SetHeight(cfg.ch) end
+			local save = getglobal("FCF_SavePositionAndDimensions")
+			if type(save) == "function" then pcall(save, f) end
+			if M.SyncRelays then SUI.After(0.1, M.SyncRelays, "chat.size") end
+		end
 		-- lignes gardees : valeur du reglage ; retour a 128 (defaut du client) quand le module est coupe ou la valeur remise a 128
 		local ml = 128
 		if M.on then ml = cfg.maxlines end
@@ -1170,6 +1180,8 @@ function M.Build()
 			mb:SetParent(UIParent)
 			mb:SetFrameStrata(bar:GetFrameStrata())
 			mb:SetFrameLevel((bar:GetFrameLevel() or 1) + 3)
+			mb:SetWidth(22)
+			mb:SetHeight(18)
 			mb:ClearAllPoints()
 			SUI.Layout.Register(mb, "chat.menubtn", "BOTTOMLEFT", 630, 40)
 		end)
@@ -1353,6 +1365,8 @@ SUI.RegisterModule("chat", {
 		opt("background", "bool", 110, false),
 		opt("bgalpha", "number", 111, 0.6, { min = 0.1, max = 1, step = 0.1 }),
 		opt("fontsize", "number", 120, 0, { min = 0, max = 20, step = 1 }),
+		opt("width", "number", 125, 0, { min = 0, max = 800, step = 10 }),
+		opt("height", "number", 126, 0, { min = 0, max = 600, step = 10 }),
 		opt("maxlines", "number", 130, 128, { min = 128, max = 1024, step = 64 }),
 		opt("keywords", "text", 140, "$me"),
 		opt("nick", "text", 141, ""),
