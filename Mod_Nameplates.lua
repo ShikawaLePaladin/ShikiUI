@@ -563,10 +563,12 @@ function M.SetMark(s)
 end
 
 function M.Assign(plate)
-	if M.nFree == 0 or M.nUsed >= M.cfg.maxplates then
-		-- plaque en trop : en combat (gros pull) on masque quand meme la plaque du jeu, sinon elle double la notre ;
-		-- hors combat (ville pleine) on la laisse telle quelle : elle reste lisible et passera chez nous des qu'une place se libere
-		if UnitAffectingCombat and UnitAffectingCombat("player") then M.Skin(plate) else M.Unskin(plate) end
+	-- limite : hors combat (ville pleine d'allies, plaques "nom seul" legeres) on prend toutes les plaques disponibles ;
+	-- en combat (gros pull) on s'en tient a maxplates
+	local lim = M.cfg.maxplates
+	if not (UnitAffectingCombat and UnitAffectingCombat("player")) then lim = MAXSLOT end
+	if M.nFree == 0 or M.nUsed >= lim then
+		M.Skin(plate)    -- plaque en trop : on masque quand meme la plaque du jeu (sinon elle double la notre, enorme)
 		return nil
 	end
 	M.Skin(plate)
