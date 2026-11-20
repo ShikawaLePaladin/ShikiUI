@@ -564,14 +564,23 @@ end
 function Cfg.GetPos(key)
 	local p = Cfg.cur.pos[key]
 	if type(p) == "table" and type(p.l) == "number" and type(p.b) == "number" then
-		return p.l, p.b, (type(p.s) == "number") and p.s or nil
+		local l = p.l
+		-- centre horizontal memorise (preset "c") : le bord gauche suit la largeur ACTUELLE du cadre (barre de formes, etc.)
+		if type(p.cx) == "number" and Cfg.cxWidth then
+			local base, bar = key, string.find(key, "|", 1, true)
+			if bar then base = string.sub(key, 1, bar - 1) end
+			local w = Cfg.cxWidth(base)
+			if w and w > 1 then l = math.floor(p.cx - w / 2 + 0.5) end
+		end
+		return l, p.b, (type(p.s) == "number") and p.s or nil
 	end
 	return nil
 end
 
 -- s : facteur d'echelle propre au cadre (service Mover), facultatif ; 1 = pas de facteur
-function Cfg.SetPos(key, l, b, s)
+function Cfg.SetPos(key, l, b, s, cx)
 	local e = { l = math.floor(l + 0.5), b = math.floor(b + 0.5) }
+	if type(cx) == "number" then e.cx = math.floor(cx + 0.5) end
 	if type(s) == "number" and s > 0.49 and s < 2.01 and math.abs(s - 1) > 0.001 then e.s = SUI.Round(s, 2) end
 	Cfg.cur.pos[key] = e
 end
