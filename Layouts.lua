@@ -773,6 +773,20 @@ D("bars.bar5", "bars.bar4", "LEFT", -4, 0)
 -- et l'ecran entier passe a la disposition (vos positions personnalisees sont remplacees).
 -- Positions = { fraction largeur, fraction hauteur, dx, dy } en unites d'UIParent (origine en bas-gauche).
 
+-- SHIKI (disposition recommandee a l'installation) : cadres joueur / cible centres en bas juste au-dessus des barres, compteur et menace
+-- cote a cote en bas a droite, micro-menu puis bijoux / jeux d'equipement en haut a gauche, groupe / raid a gauche, minimap en haut a droite.
+SUI.RegisterLayout("shiki", { label = "mod.layout.name.shiki", reset = true,
+	v = { ["units.width"] = 170, ["meter.width"] = 190, ["meter.height"] = 140, ["threat.width"] = 170, ["threat.height"] = 140 },
+	pos = {
+		["bars.main"] = { 0.5, 0.0, -226, 6 },
+		["unit.player"] = { 0.5, 0.0, -300, 150 }, ["unit.target"] = { 0.5, 0.0, 90, 150 }, ["unit.targettarget"] = { 0.5, 0.0, 270, 150 },
+		["bars.micro"] = { 0.0, 1.0, 10, -38 }, ["items"] = { 0.0, 1.0, 10, -100 },
+		["group"] = { 0.0, 0.5, 12, 0 }, ["raid"] = { 0.0, 0.5, 12, 0 },
+		["threat.win"] = { 1.0, 0.0, -350, 8 }, ["meter.win1"] = { 1.0, 0.0, -160, 8 },
+		["bossmods.win"] = { 1.0, 0.99, -260, -230 }, ["marks.bar"] = { 0.5, 1.0, -110, -40 },
+		["minimap"] = { 1.0, 1.0, -170, -170 },
+	} })
+
 -- ESPORT DPS : concu pour les raids - barres compactees en bas, cadres perso au centre-bas,
 -- raid a gauche, compteur/menace a droite, alarmes en haut-droite. Le centre de l'ecran reste libre.
 SUI.RegisterLayout("esportdps", { label = "mod.layout.name.esportdps", reset = true,
