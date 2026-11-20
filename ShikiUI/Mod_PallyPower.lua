@@ -1002,7 +1002,9 @@ function M.AutoOne(r)
 	for j = 1, getn(M.BLESS) do a[M.BLESS[j]] = nil end
 	a.sg = nil
 	local set = M.AutoSet(r)
-	for i = 1, getn(set) do a[set[i]] = true end
+	for i = 1, getn(set) do
+		if not M.PeerCovers(r.file, set[i]) then a[set[i]] = true end
+	end
 	if C.Get("pallypower.autosingle") and (a.tank or M.HYBRID[r.file]) then a.single = true end
 end
 
@@ -1292,6 +1294,17 @@ function M.SyncSoon()
 	if M.demo or C.Get("pallypower.sync") == false then return end
 	if M.stask then SUI.Cancel(M.stask) end
 	M.stask = SUI.After(1.2, function() M.stask = nil M.SyncSend() end, "pp.sync")
+end
+
+-- Un AUTRE paladin donne-t-il deja cette benediction a cette classe ? (option de repartition, vrai par defaut)
+function M.PeerCovers(file, b)
+	if C.Get("pallypower.autosplit") == false then return false end
+	local cid, bid = M.SYNC_CLS[file], M.SYNC_BID[b]
+	if not cid or not bid then return false end
+	for name, p in pairs(M.peers) do
+		if p[cid] == bid then return true end
+	end
+	return false
 end
 
 local function classNameById(id)
@@ -1671,6 +1684,7 @@ SUI.RegisterModule("pallypower", {
 		opt("autosalv", "bool", 18, false),
 		opt("sync", "bool", 19, true),
 		opt("syncmsg", "bool", 19.5, true),
+		opt("autosplit", "bool", 19.7, true),
 		opt("judge", "choice", 20, "none", { choices = { "none", "light", "wisdom", "crusader" }, choiceText = judgeText, simple = true }),
 	},
 	enable = function() M.Enable() end,
