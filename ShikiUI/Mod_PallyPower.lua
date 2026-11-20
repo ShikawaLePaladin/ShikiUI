@@ -465,6 +465,9 @@ function M.Build()
 	f.bClear:SetPoint("LEFT", f.bDef, "RIGHT", 6, 0)
 	f.bCast = mkBtn(f, L("msg.pallypower.cast"), 110, 20, function() M.CastAll() end)
 	f.bCast:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -10, 8)
+	M.BuildMatrix(f)
+	f.bView = mkBtn(f, EMPTY, 96, 20, function() C.Set("pallypower.compact", not M.Compact()) end)
+	f.bView:SetPoint("BOTTOM", f, "BOTTOM", 0, 8)
 	T.GearButton(f, "pallypower", { size = 14, point = "TOPRIGHT", x = -26, y = -4, title = L("msg.pallypower.gear") })
 	f:SetScript("OnMouseWheel", function()
 		if arg1 > 0 then M.Scroll(-3) else M.Scroll(3) end
@@ -476,6 +479,204 @@ function M.Build()
 	T.OnAccent(function()
 		if M.win and M.win:IsShown() then M.PaintCells() end
 	end)
+end
+
+-- ---------------------------------------------------------------- vue compacte : une icone par benediction et par classe
+-- (dans l'esprit de la grille d'icones de l'addon PallyPower : colonnes = classes presentes, lignes = benedictions)
+M.BICON = { kings = "Spell_Magic_MageArmor", wisdom = "Spell_Holy_SealOfWisdom", might = "Spell_Holy_FistOfJustice",
+	salvation = "Spell_Holy_SealOfSalvation", light = "Spell_Holy_PrayerOfHealing02" }
+M.CORDER = { "WARRIOR", "ROGUE", "HUNTER", "MAGE", "WARLOCK", "PRIEST", "DRUID", "SHAMAN", "PALADIN" }
+M.CCOORD = { WARRIOR = { 0, 0.25, 0, 0.25 }, MAGE = { 0.25, 0.5, 0, 0.25 }, ROGUE = { 0.5, 0.75, 0, 0.25 }, DRUID = { 0.75, 1, 0, 0.25 },
+	HUNTER = { 0, 0.25, 0.25, 0.5 }, SHAMAN = { 0.25, 0.5, 0.25, 0.5 }, PRIEST = { 0.5, 0.75, 0.25, 0.5 }, WARLOCK = { 0.75, 1, 0.25, 0.5 },
+	PALADIN = { 0, 0.25, 0.5, 0.75 } }
+local CELL, GAP = 34, 4
+
+function M.Compact()
+	return C.Get("pallypower.compact") ~= false
+end
+
+-- (nombre de joueurs de la classe, nombre qui portent cette attribution)
+function M.ClassState(file, b)
+	local n, have = 0, 0
+	for i = 1, M.nrost do
+		local r = M.roster[i]
+		if r.file == file then
+			n = n + 1
+			if M.Has(r.name, b) then have = have + 1 end
+		end
+	end
+	return n, have
+end
+
+function M.SetClassBless(file, b, want)
+	for i = 1, M.nrost do
+		local r = M.roster[i]
+		if r.file == file then
+			local a = asg(r.name)
+			if want then a[b] = true else a[b] = nil end
+		end
+	end
+	saveAssign()
+	M.PaintCells()
+end
+
+local function iconBtn(parent, tex)
+	local b = CreateFrame("Button", nil, parent)
+	b:SetWidth(CELL)
+	b:SetHeight(CELL)
+	T.Backdrop(b, T.c.bg, T.c.border)
+	b.icon = b:CreateTexture(nil, "ARTWORK")
+	b.icon:SetPoint("TOPLEFT", b, "TOPLEFT", 2, -2)
+	b.icon:SetPoint("BOTTOMRIGHT", b, "BOTTOMRIGHT", -2, 2)
+	b.icon:SetTexCoord(0.07, 0.93, 0.07, 0.93)
+	if tex then b.icon:SetTexture(tex) end
+	b:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+	return b
+end
+
+function M.BuildMatrix(f)
+	local mx = CreateFrame("Frame", nil, f)
+	mx:SetPoint("TOPLEFT", f, "TOPLEFT", 0, 0)
+	mx:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", 0, 0)
+	f.mx = mx
+	mx.cols = {}
+	for i = 1, M.MAXCLASS do
+		local c = iconBtn(mx, "Interface\\Glues\\CharacterCreate\\UI-CharacterCreate-Classes")
+		c.icon:SetTexCoord(0, 0.25, 0, 0.25)
+		c.count = T.Text(c, 10, T.c.text, "CENTER", true)
+		c.count:SetPoint("BOTTOM", c, "BOTTOM", 0, 2)
+		c:SetScript("OnClick", function()
+			if this.file then M.SetClass(this.file, arg1 ~= "RightButton") end
+		end)
+		c:Hide()
+		mx.cols[i] = c
+	end
+	mx.rows = {}
+	for j = 1, getn(M.BLESS) do
+		local b = M.BLESS[j]
+		local row = { cells = {} }
+		row.head = iconBtn(mx, "Interface\\Icons\\" .. M.BICON[b])
+		row.head.bless = b
+		row.head:SetScript("OnClick", function()
+			if arg1 == "RightButton" then M.SetAll(this.bless, false) else M.SetAll(this.bless, not M.AllHave(this.bless)) end
+		end)
+		row.label = T.Text(mx, 11, T.c.text, "LEFT")
+		row.label:SetText(L("mod.pallypower.bless." .. b))
+		for i = 1, M.MAXCLASS do
+			local cell = iconBtn(mx, "Interface\\Icons\\" .. M.BICON[b])
+			cell.bless = b
+			cell:SetScript("OnClick", function()
+				local c = this
+				if not c.file then return end
+				local n, have = M.ClassState(c.file, c.bless)
+				if arg1 == "RightButton" then M.SetClassBless(c.file, c.bless, false) else M.SetClassBless(c.file, c.bless, have < n) end
+			end)
+			cell:Hide()
+			row.cells[i] = cell
+		end
+		mx.rows[j] = row
+	end
+	mx:Hide()
+end
+
+-- Place et peint la grille compacte : classes presentes en colonnes, une icone par benediction.
+function M.PaintMatrix()
+	local f = M.win
+	if not f or not f.mx then return end
+	local mx = f.mx
+	local ar, ag, ab = T.Accent()
+	local bc = T.c.border
+	local x0 = 10 + 96
+	local n = 0
+	local idx
+	for idx = 1, getn(M.CORDER) do
+		local file = M.CORDER[idx]
+		if M.classes[file] then
+			n = n + 1
+			local x = x0 + (n - 1) * (CELL + GAP)
+			local c = mx.cols[n]
+			c.file = file
+			local tc = M.CCOORD[file]
+			if tc then c.icon:SetTexCoord(tc[1], tc[2], tc[3], tc[4]) end
+			c:ClearAllPoints()
+			c:SetPoint("TOPLEFT", f, "TOPLEFT", x, -34)
+			local cnt = 0
+			for i = 1, M.nrost do if M.roster[i].file == file then cnt = cnt + 1 end end
+			c.count:SetText(cnt)
+			c:Show()
+			local j
+			for j = 1, getn(M.BLESS) do
+				local cell = mx.rows[j].cells[n]
+				cell.file = file
+				cell:ClearAllPoints()
+				cell:SetPoint("TOPLEFT", f, "TOPLEFT", x, -(34 + CELL + 10 + (j - 1) * (CELL + GAP)))
+				local nm, have = M.ClassState(file, M.BLESS[j])
+				if nm > 0 and have == nm then
+					cell.icon:SetVertexColor(1, 1, 1, 1)  -- style:ok
+					cell:SetBackdropBorderColor(ar, ag, ab, 1)
+				elseif have > 0 then
+					cell.icon:SetVertexColor(0.8, 0.8, 0.8, 0.7)  -- style:ok
+					cell:SetBackdropBorderColor(ar, ag, ab, 0.5)
+				else
+					cell.icon:SetVertexColor(0.35, 0.35, 0.35, 0.45)  -- style:ok
+					cell:SetBackdropBorderColor(bc[1], bc[2], bc[3], bc[4] or 1)
+				end
+				cell:Show()
+			end
+		end
+	end
+	local i2
+	for i2 = n + 1, M.MAXCLASS do
+		mx.cols[i2].file = nil
+		mx.cols[i2]:Hide()
+		local j2
+		for j2 = 1, getn(M.BLESS) do
+			mx.rows[j2].cells[i2].file = nil
+			mx.rows[j2].cells[i2]:Hide()
+		end
+	end
+	local j3
+	for j3 = 1, getn(M.BLESS) do
+		local row = mx.rows[j3]
+		local y = -(34 + CELL + 10 + (j3 - 1) * (CELL + GAP))
+		row.head:ClearAllPoints()
+		row.head:SetPoint("TOPLEFT", f, "TOPLEFT", 10, y)
+		row.label:ClearAllPoints()
+		row.label:SetPoint("LEFT", row.head, "RIGHT", 6, 0)
+		if M.AllHave(M.BLESS[j3]) then
+			row.head.icon:SetVertexColor(1, 1, 1, 1)  -- style:ok
+			row.head:SetBackdropBorderColor(ar, ag, ab, 1)
+		else
+			row.head.icon:SetVertexColor(0.8, 0.8, 0.8, 0.8)  -- style:ok
+			row.head:SetBackdropBorderColor(bc[1], bc[2], bc[3], bc[4] or 1)
+		end
+	end
+end
+
+-- Bascule entre la vue compacte (par classe) et la vue detaillee (par joueur).
+function M.ApplyView()
+	local f = M.win
+	if not f then return end
+	local compact = M.Compact()
+	if compact then
+		local n = 0
+		for _ in pairs(M.classes) do n = n + 1 end
+		if n < 3 then n = 3 end
+		f:SetWidth(10 + 96 + n * (CELL + GAP) + 10)
+		f:SetHeight(34 + CELL + 10 + getn(M.BLESS) * (CELL + GAP) + 44)
+		f.mx:Show()
+		for _, b in pairs(f.allB) do b:Hide() end
+		for i = 1, M.MAXCLASS do f.classB[i]:Hide() end
+		for i = 1, M.ROWS do f.rows[i]:Hide() end
+		f.bView.txt:SetText(L("msg.pallypower.viewdetail"))
+	else
+		f:SetWidth(540)
+		f:SetHeight(520)
+		f.mx:Hide()
+		for _, b in pairs(f.allB) do b:Show() end
+		f.bView.txt:SetText(L("msg.pallypower.viewclass"))
+		M.PaintRows()
+	end
 end
 
 -- Tout le monde dans la liste porte-t-il cette attribution ? (bouton d'en-tete : tout / personne)
@@ -498,6 +699,7 @@ end
 function M.PaintRows()
 	local f = M.win
 	if not f then return end
+	if M.Compact() then return end
 	for i = 1, M.ROWS do
 		local row = f.rows[i]
 		local r = M.roster[i]
@@ -521,6 +723,11 @@ end
 function M.PaintCells()
 	local f = M.win
 	if not f or not f:IsShown() then return end
+	if M.Compact() then
+		M.PaintMatrix()
+		M.PaintStatus()
+		return
+	end
 	local ar, ag, ab = T.Accent()
 	local bc = T.c.border
 	for i = 1, M.ROWS do
@@ -544,6 +751,7 @@ end
 function M.PaintClasses()
 	local f = M.win
 	if not f then return end
+	if M.Compact() then return end
 	local n = 0
 	for file in pairs(M.classes) do
 		n = n + 1
@@ -575,6 +783,7 @@ end
 -- Reconstruit la grille (roster change) : lignes, classes, cases.
 function M.Rebuild()
 	M.Build()
+	M.ApplyView()
 	M.PaintRows()
 	M.PaintCells()
 end
@@ -601,6 +810,10 @@ end
 -- ---------------------------------------------------------------- cycle de vie
 function M.OnKey(key)
 	if key == nil or sfind(key or EMPTY, "^pallypower%.") then
+		if key == "pallypower.compact" and M.win then
+			M.ApplyView()
+			M.PaintCells()
+		end
 		if M.win and M.win:IsShown() then M.PaintStatus() end
 	end
 end
@@ -663,6 +876,7 @@ SUI.RegisterModule("pallypower", {
 	cost = "medium",
 	options = {
 		opt("greater", "bool", 10, true, { simple = true }),
+		opt("compact", "bool", 15, true, { simple = true }),
 		opt("judge", "choice", 20, "none", { choices = { "none", "light", "wisdom", "crusader" }, choiceText = judgeText, simple = true }),
 	},
 	enable = function() M.Enable() end,
