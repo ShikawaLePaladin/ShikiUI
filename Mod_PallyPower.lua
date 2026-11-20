@@ -106,6 +106,20 @@ local function asg(name)
 	return a
 end
 
+-- Une benediction est de 10 min si le joueur est marque "10" (toutes ses benedictions) ou si CETTE case l'est (clic droit).
+function M.IsSingle(a, b)
+	return a and a[b] and (a.single or (a.sg and a.sg[b])) and true or false
+end
+
+function M.AnySingle(a)
+	if not a then return false end
+	if a.single then return true end
+	for j = 1, getn(M.BLESS) do
+		if M.IsSingle(a, M.BLESS[j]) then return true end
+	end
+	return false
+end
+
 function M.Has(name, b)
 	local a = M.assign[name]
 	return a and a[b] and true or false
@@ -122,6 +136,21 @@ function M.Toggle(name, b, want)
 	local a = asg(name)
 	if want == nil then want = not a[b] end
 	if want then a[b] = true else a[b] = nil end
+	if a.sg then a.sg[b] = nil end
+	saveAssign()
+	M.PaintCells()
+end
+
+-- Pose une benediction sur un joueur : mode "10" = benediction de 10 min pour cette case seulement, sinon benediction superieure.
+function M.Put10(name, b, ten)
+	local a = asg(name)
+	a[b] = true
+	if ten then
+		if not a.sg then a.sg = {} end
+		a.sg[b] = true
+	elseif a.sg then
+		a.sg[b] = nil
+	end
 	saveAssign()
 	M.PaintCells()
 end
@@ -282,12 +311,12 @@ function M.BuildPairs()
 		for i = 1, M.nrost do
 			local r = M.roster[i]
 			local a = M.assign[r.name]
-			if a and ((pass == 2) == (a.single and true or false)) then
+			if a then
 				for j = 1, getn(M.BLESS) do
 					local b = M.BLESS[j]
-					if a[b] and not M.HasBuff(r.unit, M.SPELLS[b]) then
+					if a[b] and (pass == 2) == M.IsSingle(a, b) and not M.HasBuff(r.unit, M.SPELLS[b]) then
 						M.npairs = M.npairs + 1
-						M.pairs[M.npairs] = { unit = r.unit, name = M.SpellName(b, a.single), base = M.SPELLS[b], frb = GAMEFR and M.SPELLS_FR[b] or nil, who = r.name }
+						M.pairs[M.npairs] = { unit = r.unit, name = M.SpellName(b, M.IsSingle(a, b)), base = M.SPELLS[b], frb = GAMEFR and M.SPELLS_FR[b] or nil, who = r.name }
 					end
 				end
 			end
@@ -355,14 +384,28 @@ function M.Stop()
 end
 
 -- ---------------------------------------------------------------- fenetre (grille)
+-- Clic gauche : pose / retire la benediction superieure (30 min). Clic droit : pose la benediction de 10 min sur CETTE case
+-- (ou la convertit en 10 min) ; un second clic droit la retire.
 local function cellClick()
 	local b = this
-	if b.who and b.bless then M.Toggle(b.who, b.bless) end
+	if not (b.who and b.bless) then return end
+	local a = M.assign[b.who]
+	if a and a[b.bless] and a.sg and a.sg[b.bless] then
+		M.Put10(b.who, b.bless, false)      -- une case de 10 min : le clic gauche la repasse en superieure
+	else
+		M.Toggle(b.who, b.bless)
+	end
 end
 
 local function cellRClick()
 	local b = this
-	if b.who and b.bless then M.Toggle(b.who, b.bless, false) end
+	if not (b.who and b.bless) then return end
+	local a = M.assign[b.who]
+	if a and a[b.bless] and ((a.sg and a.sg[b.bless]) or a.single) then
+		M.Toggle(b.who, b.bless, false)
+	else
+		M.Put10(b.who, b.bless, true)
+	end
 end
 
 local function mkBtn(parent, label, w, h, fn, rfn)
@@ -464,6 +507,7 @@ function M.Build()
 				if arg1 == "RightButton" then cellRClick() else cellClick() end
 			end)
 			cell:SetPoint("LEFT", row, "LEFT", 128 + (j - 1) * 80, 0)
+			tip(cell, "msg.pallypower.tip.cell")
 			row.cells[b] = cell
 		end
 		if i == 1 then
@@ -805,6 +849,12 @@ function M.PaintCells()
 				else
 					cell:SetBackdropBorderColor(bc[1], bc[2], bc[3], bc[4] or 1)
 				end
+				if not cell.ten then
+					cell.ten = T.Text(cell, 10, T.c.text, "CENTER")
+					cell.ten:SetPoint("CENTER", cell, "CENTER", 0, 0)
+				end
+				local aa = cell.who and M.assign[cell.who]
+				cell.ten:SetText((aa and M.IsSingle(aa, cell.bless)) and "10 min" or EMPTY)
 			end
 		end
 	end
@@ -950,6 +1000,7 @@ end
 function M.AutoOne(r)
 	local a = asg(r.name)
 	for j = 1, getn(M.BLESS) do a[M.BLESS[j]] = nil end
+	a.sg = nil
 	local set = M.AutoSet(r)
 	for i = 1, getn(set) do a[set[i]] = true end
 	if C.Get("pallypower.autosingle") and (a.tank or M.HYBRID[r.file]) then a.single = true end
@@ -1115,7 +1166,7 @@ function M.ReportLines()
 	local sg = {}
 	for i = 1, M.nrost do
 		local a = M.assign[M.roster[i].name]
-		if a and a.single then tinsert(sg, M.roster[i].name) end
+		if M.AnySingle(a) then tinsert(sg, M.roster[i].name) end
 	end
 	if getn(sg) > 0 then tinsert(lines, L("msg.pallypower.rep.single") .. " : " .. table.concat(sg, ", ")) end
 	return lines
@@ -1150,7 +1201,7 @@ function M.WhisperText(name)
 	end
 	if getn(t) == 0 then return nil end
 	local s = L("msg.pallypower.whisper", table.concat(t, ", "))
-	if a.single then s = s .. " " .. L("msg.pallypower.whisper.single") end
+	if M.AnySingle(a) then s = s .. " " .. L("msg.pallypower.whisper.single") end
 	return s
 end
 
@@ -1380,7 +1431,7 @@ function M.MiniScan()
 					if ok and not M.HasTex(r.unit, b) then
 						tinsert(s.miss, r.name)
 						tinsert(s.units, r.unit)
-						tinsert(s.singles, a.single and true or false)
+						tinsert(s.singles, M.IsSingle(a, b))
 					end
 				end
 			end
