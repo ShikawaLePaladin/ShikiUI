@@ -26,6 +26,7 @@ local M = {}
 SUI.PallyPower = M
 
 local getn, tinsert = table.getn, table.insert
+local max = math.max
 local floor, mmin, mmax = math.floor, math.min, math.max
 local sfind, slower, sgsub, strsub = string.find, string.lower, string.gsub, string.sub
 local EMPTY = ""
@@ -432,11 +433,28 @@ local function tip(b, key)
 	b:SetScript("OnLeave", function() GameTooltip:Hide() end)
 end
 
+
+
+-- Dimensions de la fenetre classique : 6 colonnes de bene (74 px + 6 d ecart) + colonne de noms, hauteur
+-- selon le nombre de LIGNES affichees (fini la moitie d ecran vide avec 4 joueurs).
+local COLW, COLGAP = 74, 6
+function M.WinW()
+	return 10 + 74 + getn(M.BLESS) * (COLW + COLGAP) + 10
+end
+function M.WinH()
+	local rows = 0
+	for i = 1, M.ROWS do
+		local r = M.list and M.list[i]
+		if r and r.name then rows = rows + 1 end
+	end
+	if rows < 1 then rows = 1 end
+	return 30 + 18 + 6 + rows * (14 + 4) + 16 + 4 * 24 + 10
+end
 function M.Build()
 	if M.win then return end
 	local f = CreateFrame("Frame", "ShikiUI_PallyPowerWin", UIParent)
-	f:SetWidth(540)
-	f:SetHeight(520)
+	f:SetWidth(M.WinW())
+	f:SetHeight(M.WinH())
 	T.Backdrop(f, T.c.panel, T.c.border)
 	f:SetFrameStrata("HIGH")
 	f:EnableMouse(true)
@@ -478,7 +496,7 @@ function M.Build()
 	for i = 1, M.ROWS do
 		local row = CreateFrame("Frame", nil, f)
 		row:SetHeight(14)
-		row:SetWidth(520)
+		row:SetWidth(M.WinW() - 16)
 		row.name = T.Text(row, 10, T.c.text, "LEFT", true)
 		row.name:SetPoint("LEFT", row, "LEFT", 40, 0)
 		row.name:SetWidth(84)
@@ -506,7 +524,7 @@ function M.Build()
 			cell:SetScript("OnClick", function()
 				if arg1 == "RightButton" then cellRClick() else cellClick() end
 			end)
-			cell:SetPoint("LEFT", row, "LEFT", 128 + (j - 1) * 80, 0)
+			cell:SetPoint("LEFT", row, "LEFT", 128 + (j - 1) * 80, 0)   -- aligne sur les boutons de colonne (80 px de pas)
 			tip(cell, "msg.pallypower.tip.cell")
 			row.cells[b] = cell
 		end
@@ -806,6 +824,13 @@ function M.PaintRows()
 	local f = M.win
 	if not f then return end
 	if M.Compact() then return end
+	-- hauteur ADAPTEE : la fenetre epouse le nombre de joueurs affiches (fini la moitie d ecran vide)
+	local vis = 0
+	for i2 = M.offset + 1, M.offset + M.view do
+		if M.roster[i2] then vis = vis + 1 end
+	end
+	local want = 30 + 18 + 6 + max(vis, 1) * (14 + 4) + 16 + 4 * 24 + 10
+	if f:GetHeight() ~= want then f:SetHeight(want) end
 	for i = 1, M.ROWS do
 		local row = f.rows[i]
 		local r = M.roster[i]
@@ -1460,6 +1485,28 @@ function M.MiniScan()
 end
 
 -- Pose UNE benediction manquante (celle demandee, sinon la premiere dans l'ordre Rois, Sagesse...). Renvoie vrai si lancee.
+-- Bene SUPERIEURE (30 min) forcee sur la premiere unite manquante : la superieure s'applique a toute
+-- la classe a portee (comportement serveur), donc un seul lancement couvre tous les membres presents.
+function M.CastGreater(b)
+	if not M.on then return false end
+	if UnitIsDeadOrGhost("player") then return false end
+	if M.nrost == 0 then M.ScanRoster() end
+	local st = M.MiniScan()
+	local s = st[b]
+	if not s or getn(s.units) == 0 then SUI.Print(L("msg.pallypower.allset")) return false end
+	-- nom SUPERIEUR force (independant de l'option pallypower.greater) : EN ou FR selon le client
+	local nm
+	if GAMEFR and M.SPELLS_FR[b] then
+		nm = M.SPELLS_GFR[b] or (M.GREATER_FR .. M.SPELLS_FR[b])
+	else
+		nm = M.GREATERPFX .. M.SPELLS[b]
+	end
+	castOn(s.units[1], nm)
+	M.lastCast = s.miss[1]
+	if M.mini then M.MiniPaint() end
+	return true
+end
+
 function M.CastNext(b)
 	if not M.on then return false end
 	if UnitIsDeadOrGhost("player") then return false end
@@ -1507,7 +1554,7 @@ function M.BuildMini()
 		b.cnt = T.Text(b, 12, T.c.text, "RIGHT", true)
 		b.cnt:SetPoint("BOTTOMRIGHT", b, "BOTTOMRIGHT", -2, 2)
 		b:SetScript("OnClick", function()
-			if arg1 == "RightButton" then M.Open() else M.CastNext(this.bless) end
+			if arg1 == "RightButton" then M.Open() else M.CastGreater(this.bless) end
 		end)
 		b:SetScript("OnEnter", function()
 			local s = M.miniState[this.bless]
