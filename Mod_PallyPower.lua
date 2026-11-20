@@ -1554,7 +1554,8 @@ function M.BuildMini()
 		b.cnt = T.Text(b, 12, T.c.text, "RIGHT", true)
 		b.cnt:SetPoint("BOTTOMRIGHT", b, "BOTTOMRIGHT", -2, 2)
 		b:SetScript("OnClick", function()
-			if arg1 == "RightButton" then M.Open() else M.CastGreater(this.bless) end
+			if arg1 == "RightButton" then return end   -- (menu ouvre par le petit bouton o)
+			M.CastGreater(this.bless)
 		end)
 		b:SetScript("OnEnter", function()
 			local s = M.miniState[this.bless]
@@ -1579,7 +1580,8 @@ function M.BuildMini()
 	g.txt = T.Text(g, 13, T.c.text, "CENTER", true)
 	g.txt:SetPoint("CENTER", g, "CENTER", 0, 0)
 	g:SetScript("OnClick", function()
-		if arg1 == "RightButton" then M.Open() else M.CastNext() end
+		if arg1 == "RightButton" then return end
+		M.CastNext()
 	end)
 	g:SetScript("OnEnter", function()
 		GameTooltip:SetOwner(this, "ANCHOR_RIGHT")
@@ -1589,6 +1591,20 @@ function M.BuildMini()
 	end)
 	g:SetScript("OnLeave", function() GameTooltip:Hide() end)
 	f.go = g
+	local oBtn = iconBtn(f, "InterfaceIconsSpell_Magic_PolymorphPorc")
+	oBtn:SetWidth(16)
+	oBtn:SetHeight(16)
+	oBtn.txt = T.Text(oBtn, 11, T.c.text, "CENTER", true)
+	oBtn.txt:SetPoint("CENTER", oBtn, "CENTER", 0, 0)
+	oBtn.txt:SetText("o")
+	oBtn:SetScript("OnClick", function() M.Open() end)
+	oBtn:SetScript("OnEnter", function()
+		GameTooltip:SetOwner(this, "ANCHOR_RIGHT")
+		GameTooltip:SetText(L("msg.pallypower.open"))
+		GameTooltip:Show()
+	end)
+	f.oBtn = oBtn
+
 	SUI.Layout.Register(f, "pallypower.mini", "LEFT", 8, 120)
 	M.DragWire(f, "pallypower.mini")
 	M.mini = f
@@ -1624,12 +1640,15 @@ function M.MiniPaint()
 		f:Hide()
 		return
 	end
-	f.go:ClearAllPoints()
+	f.oBtn:Show()
+		f.go:ClearAllPoints()
 	f.go:SetPoint("TOPLEFT", f, "TOPLEFT", 4 + shown * (mc + gap), -4)
 	f.go.txt:SetText(total > 0 and total or EMPTY)
 	local col = (total > 0) and tc.warn or tc.good
 	f.go:SetBackdropBorderColor(col[1], col[2], col[3], 1)
-	f:SetWidth(8 + (shown + 1) * mc + shown * gap)
+	-- petit bouton o : ouvre la grille, a droite du bouton suivant (16 px, centre verticalement)
+	f.oBtn:SetPoint("TOPLEFT", f, "TOPLEFT", 4 + (shown + 1) * (mc + gap) + 2, -4 + (mc - 16) / 2)
+	f:SetWidth(8 + (shown + 2) * mc + shown * gap + 4)
 	f:SetHeight(mc + 8)
 	f:Show()
 end
