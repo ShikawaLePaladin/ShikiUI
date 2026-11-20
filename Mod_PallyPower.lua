@@ -66,9 +66,9 @@ M.buffNames = {}         -- [unite] = { ["blessing of kings"] = true, ... } : no
 M.tip = nil              -- infobulle cachee pour lire les noms de buffs (creee hors combat, voir EnsureTip)
 
 -- Benedictions attribuables (noms EN du client) ; ordre de pose. [donnees du jeu]
-M.BLESS = { "kings", "wisdom", "might", "salvation", "light" }
+M.BLESS = { "kings", "wisdom", "might", "salvation", "light", "sanctuary" }
 M.SPELLS = { kings = "Blessing of Kings", wisdom = "Blessing of Wisdom", might = "Blessing of Might",
-	salvation = "Blessing of Salvation", light = "Blessing of Light" }
+	salvation = "Blessing of Salvation", light = "Blessing of Light", sanctuary = "Blessing of Sanctuary" }
 -- Jeux par defaut d'une classe (bouton de classe). [donnees du jeu]
 M.CLASSDEF = {
 	WARRIOR = { kings = true, might = true }, ROGUE = { kings = true, might = true }, HUNTER = { kings = true, might = true },
@@ -80,9 +80,9 @@ M.GREATERPFX = "Greater "
 -- Noms FR (client frFR depuis OctoWow) : incantations, jugements et lecture d'infobulle selon la langue du jeu.
 -- Sequences d'echappement ASCII : \195\169 = e accentue, etc. (comparaisons faites en plie, voir fold plus bas).
 M.SPELLS_FR = { kings = "Ben\195\169diction des Rois", wisdom = "Ben\195\169diction de Sagesse", might = "Ben\195\169diction de Puissance",
-	salvation = "Ben\195\169diction de Salut", light = "Ben\195\169diction de Lumi\195\168re" }
+	salvation = "Ben\195\169diction de Salut", light = "Ben\195\169diction de Lumi\195\168re", sanctuary = "Ben\195\169diction de Sanctuaire" }
 M.GREATER_FR = "Ben\195\169diction sup\195\169rieure "
-M.SPELLS_GFR = { kings = "Ben\195\169diction sup\195\169rieure des Rois", wisdom = "Ben\195\169diction sup\195\169rieure de Sagesse", might = "Ben\195\169diction sup\195\169rieure de Puissance", salvation = "Ben\195\169diction sup\195\169rieure de Salut", light = "Ben\195\169diction sup\195\169rieure de Lumi\195\168re" }
+M.SPELLS_GFR = { kings = "Ben\195\169diction sup\195\169rieure des Rois", wisdom = "Ben\195\169diction sup\195\169rieure de Sagesse", might = "Ben\195\169diction sup\195\169rieure de Puissance", salvation = "Ben\195\169diction sup\195\169rieure de Salut", light = "Ben\195\169diction sup\195\169rieure de Lumi\195\168re", sanctuary = "Ben\195\169diction sup\195\169rieure de Sanctuaire" }
 M.JUDGES_FR = { light = "Jugement de Lumi\195\168re", wisdom = "Jugement de Sagesse", crusader = "Jugement du crois\195\169" }
 M.ROWS = 40
 M.MAXCLASS = 10
@@ -569,7 +569,7 @@ end
 -- ---------------------------------------------------------------- vue compacte : une icone par benediction et par classe
 -- (dans l'esprit de la grille d'icones de l'addon PallyPower : colonnes = classes presentes, lignes = benedictions)
 M.BICON = { kings = "Spell_Magic_MageArmor", wisdom = "Spell_Holy_SealOfWisdom", might = "Spell_Holy_FistOfJustice",
-	salvation = "Spell_Holy_SealOfSalvation", light = "Spell_Holy_PrayerOfHealing02" }
+	salvation = "Spell_Holy_SealOfSalvation", light = "Spell_Holy_PrayerOfHealing02", sanctuary = "Spell_Holy_GreaterBlessingofSanctuary" }
 M.CORDER = { "WARRIOR", "ROGUE", "HUNTER", "MAGE", "WARLOCK", "PRIEST", "DRUID", "SHAMAN", "PALADIN" }
 M.CCOORD = { WARRIOR = { 0, 0.25, 0, 0.25 }, MAGE = { 0.25, 0.5, 0, 0.25 }, ROGUE = { 0.5, 0.75, 0, 0.25 }, DRUID = { 0.75, 1, 0, 0.25 },
 	HUNTER = { 0, 0.25, 0.25, 0.5 }, SHAMAN = { 0.25, 0.5, 0.25, 0.5 }, PRIEST = { 0.5, 0.75, 0.25, 0.5 }, WARLOCK = { 0.75, 1, 0.25, 0.5 },
@@ -925,7 +925,7 @@ end
 -- ---------------------------------------------------------------- attribution automatique, tanks, benedictions de 10 min
 -- Drapeaux par joueur (dans M.assign[nom]) : tank = recoit Rois + Puissance + Lumiere (jamais Salut) ; single = benedictions
 -- SIMPLES (10 min) posees a ce joueur au lieu des benedictions superieures (utile pour un tank, un hybride, un joueur precis).
-M.TANKSET = { "kings", "might", "light" }
+M.TANKSET = { "kings", "might", "light", "sanctuary" }   -- (2026-11-19) Sanctuary : la bene tank ajoutee aux tanks
 M.HYBRID = { PALADIN = true, SHAMAN = true, DRUID = true }
 
 -- Sorts connus du paladin (livre de sorts) : on n'attribue jamais une benediction qu'il ne possede pas.
@@ -1004,6 +1004,12 @@ function M.AutoOne(r)
 	local set = M.AutoSet(r)
 	for i = 1, getn(set) do
 		if not M.PeerCovers(r.file, set[i]) then a[set[i]] = true end
+	end
+	-- PRIORITE PALATANK sur la Salut (2026-11-19) : un paladin avec le drapeau tank recoit la Salut
+	-- (il s'en sert pour son swap OctoManaSwap) EN PLUS de son set tank (Sanctuary incluse depuis le TANKSET).
+	-- Les autres tanks gardent Sanctuary sans Salut (la Salut sur un vrai tank = perte de menace).
+	if r.file == "PALADIN" and a.tank and C.Get("pallypower.autosalv") and M.Knows("salvation") then
+		a.salvation = true
 	end
 	if C.Get("pallypower.autosingle") and (a.tank or M.HYBRID[r.file]) then a.single = true end
 end
@@ -1241,7 +1247,7 @@ end
 -- ---------------------------------------------------------------- synchro entre paladins (meme canal que PallyPowerTW : prefixe PLPWR)
 M.SYNC_PREFIX = "PLPWR"
 M.SYNC_CLS = { WARRIOR = 0, ROGUE = 1, PRIEST = 2, DRUID = 3, PALADIN = 4, HUNTER = 5, MAGE = 6, WARLOCK = 7, SHAMAN = 8 }
-M.SYNC_BID = { wisdom = 0, might = 1, salvation = 2, light = 3, kings = 4 }
+M.SYNC_BID = { wisdom = 0, might = 1, salvation = 2, light = 3, kings = 4, sanctuary = 5 }
 M.peers = {}
 
 local function syncChan()
