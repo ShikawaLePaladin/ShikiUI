@@ -306,6 +306,7 @@ function M.WizInit()
 	sel.style = C.Get("style.name")
 	sel.scale = C.Get("ui.scale")
 	sel.layout = SUI.Layout and SUI.Layout.Current() or nil
+	if SUI.layouts and SUI.layouts.shiki and (sel.layout == nil or sel.layout == "classic") then sel.layout = "shiki" end   -- installation neuve : disposition recommandee
 	sel.modeauto = C.Get("mode.auto")
 	sel.role = C.GetRole()
 	for i = 1, getn(SUI.moduleOrder) do
