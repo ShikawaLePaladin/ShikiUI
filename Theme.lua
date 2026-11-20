@@ -679,7 +679,8 @@ end
 local function gearShown()
 	local p = this
 	local list = p.suiGears
-	if p.suiGearOldShow then p.suiGearOldShow() end
+	if p.suiGearOldShow then pcall(p.suiGearOldShow)   -- (2026-11-20) un script absent ne doit pas tuer le chainage
+end
 	if not list then return end
 	for i = 1, getn(list) do T.GearLevel(list[i]) end
 	SUI.After(0.3, function()
