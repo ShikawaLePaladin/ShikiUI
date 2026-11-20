@@ -416,7 +416,12 @@ local function layoutGroup(g, size, perrow, spacing, growLeft, count)
 	if cnt < perrow then cols = cnt end
 	g.holder:SetWidth(cols * step)
 	g.holder:SetHeight(rows * (step + 10))
-	local anchor = growLeft and "TOPRIGHT" or "TOPLEFT"
+	-- groupe lie AU-DESSUS de son parent (cote TOP) : les icones partent du BAS du conteneur et montent, sinon les lignes inutilisees
+	-- (la grille est de taille fixe) laissent un grand vide entre les icones et le cadre.
+	local lk, side = nil, nil
+	if SUI.Layout and SUI.Layout.GetLink then lk, side = SUI.Layout.GetLink("auras." .. tostring(g.key)) end
+	local up = (side == "TOP")
+	local anchor = (up and "BOTTOM" or "TOP") .. (growLeft and "RIGHT" or "LEFT")
 	for n = 1, g.max do
 		local b = g.btns[n]
 		local col = SUI.Mod(n - 1, perrow)
@@ -424,7 +429,8 @@ local function layoutGroup(g, size, perrow, spacing, growLeft, count)
 		b:SetWidth(size)
 		b:SetHeight(size)
 		b:ClearAllPoints()
-		b:SetPoint(anchor, g.holder, anchor, growLeft and -col * step or col * step, -row * (step + 10))
+		local oy = row * (step + 10)
+		b:SetPoint(anchor, g.holder, anchor, growLeft and -col * step or col * step, up and (oy + 10) or -oy)
 	end
 end
 

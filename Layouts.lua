@@ -47,21 +47,33 @@ function Layout.Label(id)
 	return tostring(id)
 end
 
+-- Etendue reelle de UIParent (GetWidth peut etre plus petit que l ecran quand l echelle UI est reduite)
+function Layout.ScreenSize()
+	local w, h = UIParent:GetWidth(), UIParent:GetHeight()
+	local r, t = UIParent:GetRight(), UIParent:GetTop()
+	if r and t and r > w and t > h then w, h = r - (UIParent:GetLeft() or 0), t - (UIParent:GetBottom() or 0) end
+	return w, h
+end
+
 local function place(key, e)
 	if type(key) ~= "string" or type(e) ~= "table" then return false end
 	local ax, ay, dx, dy = e[1], e[2], e[3] or 0, e[4] or 0
 	if type(ax) ~= "number" or type(ay) ~= "number" then return false end
-	local w, h = UIParent:GetWidth(), UIParent:GetHeight()
+	local w, h = Layout.ScreenSize()
 	C.ClearPosAll(key)
 	if Layout.ClearLink then Layout.ClearLink(key) end       -- une mise en page place le cadre : plus de lien explicite (le lien conseille cede a la position)
 	local x = ax * w + dx
 	-- 5e valeur : "c" = centre horizontal du cadre sur x, "r" = bord DROIT sur x (le cadre garde sa taille reelle, barres et cadres de toute largeur)
 	local it = Layout.items[key]
-	if it and it.frame and (e[5] == "c" or e[5] == "r") then
-		local fw = (it.frame:GetWidth() or 0) * (it.frame:GetEffectiveScale() or 1) / (UIParent:GetEffectiveScale() or 1)
-		x = x - ((e[5] == "c") and fw / 2 or fw)
+	local y = ay * h + dy
+	local fl = type(e[5]) == "string" and e[5] or ""
+	if it and it.frame and fl ~= "" then
+		local k = (it.frame:GetEffectiveScale() or 1) / (UIParent:GetEffectiveScale() or 1)
+		local fw, fh = (it.frame:GetWidth() or 0) * k, (it.frame:GetHeight() or 0) * k
+		if string.find(fl, "c", 1, true) then x = x - fw / 2 elseif string.find(fl, "r", 1, true) then x = x - fw end
+		if string.find(fl, "t", 1, true) then y = y - fh end
 	end
-	C.SetPos(key, x, ay * h + dy)
+	C.SetPos(key, x, y)
 	if it then Layout.Apply(key) end
 	return true
 end
@@ -121,6 +133,18 @@ function Layout.ApplyPreset(id, role)
 			end
 		end
 	end
+	-- liens propres au preset (ecrits APRES les liens d'origine, qu'ils remplacent) : { enfant, parent, cote [, dx, dy] }
+	if def.links and Layout.WriteLink then
+		local li
+		for li = 1, table.getn(def.links) do
+			local l = def.links[li]
+			if Layout.items[l[1]] and Layout.items[l[2]] then
+				if Layout.ResetLink then Layout.ResetLink(l[1]) end
+				Layout.WriteLink(l[1], l[2], l[3], l[4], l[5])
+			end
+		end
+	end
+	if SUI.Auras and SUI.Auras.ApplyOptions then pcall(SUI.Auras.ApplyOptions) end     -- les icones d'auras suivent le cote de leur lien (au-dessus / dessous)
 	return true, "msg.layout.applied", ok, bad
 end
 
@@ -450,7 +474,8 @@ resolve = function(key, depth)
 	local l, b = C.GetPos(Layout.ReadKey(key))
 	if l then return l, b, w, h, sc end
 	local ax, ay = anchorFrac(it.point)
-	return UIParent:GetWidth() * ax + (it.x or 0) * sc - w * ax, UIParent:GetHeight() * ay + (it.y or 0) * sc - h * ay, w, h, sc
+	local pw, ph = Layout.ScreenSize()
+	return pw * ax + (it.x or 0) * sc - w * ax, ph * ay + (it.y or 0) * sc - h * ay, w, h, sc
 end
 
 function Layout.Rect(key)
@@ -783,15 +808,23 @@ D("bars.bar5", "bars.bar4", "LEFT", -4, 0)
 -- SHIKI (disposition recommandee a l'installation) : cadres joueur / cible centres en bas juste au-dessus des barres, compteur et menace
 -- cote a cote en bas a droite, micro-menu puis bijoux / jeux d'equipement en haut a gauche, groupe / raid a gauche, minimap en haut a droite.
 SUI.RegisterLayout("shiki", { label = "mod.layout.name.shiki", reset = true,
-	v = { ["units.width"] = 170, ["meter.width"] = 190, ["meter.height"] = 140, ["threat.width"] = 170, ["threat.height"] = 140 },
+	v = { ["units.width"] = 170, ["actionbars.size"] = 30, ["meter.width"] = 190, ["meter.height"] = 140, ["threat.width"] = 170, ["threat.height"] = 140 },
 	pos = {
-		["bars.main"] = { 0.5, 0.0, 0, 6, "c" },
-		["unit.player"] = { 0.5, 0.0, -90, 150, "r" }, ["unit.target"] = { 0.5, 0.0, 90, 150 },
-		["bars.micro"] = { 0.0, 1.0, 10, -38 }, ["items"] = { 0.0, 1.0, 10, -100 },
+		["bars.stance"] = { 0.5, 0.0, 0, 6, "c" }, ["bars.main"] = { 0.5, 0.0, 0, 42, "c" },
+		["unit.player"] = { 0.5, 0.0, -90, 170, "r" }, ["unit.target"] = { 0.5, 0.0, 90, 170 },
+		["bars.micro"] = { 0.0, 1.0, 6, -6, "t" }, ["hud"] = { 0.5, 1.0, 0, -2, "ct" },
+		["minimap"] = { 1.0, 1.0, -6, -6, "rt" },
+		["meter.win1"] = { 1.0, 0.0, -6, 6, "r" },
 		["group"] = { 0.0, 0.5, 12, 0 }, ["raid"] = { 0.0, 0.5, 12, 0 },
-		["threat.win"] = { 1.0, 0.0, -350, 8 }, ["meter.win1"] = { 1.0, 0.0, -160, 8 },
-		["bossmods.win"] = { 1.0, 0.99, -260, -230 }, ["marks.bar"] = { 0.5, 1.0, -110, -40 },
-		["minimap"] = { 1.0, 1.0, -170, -170 },
+		["bossmods.win"] = { 1.0, 0.99, -260, -230 },
+	},
+	links = {
+		{ "bars.bar3", "bars.main", "LEFT" }, { "bars.pet", "bars.bar2", "TOP" },
+		{ "threat.win", "meter.win1", "LEFT" }, { "datatext.win", "minimap", "BOTTOM" }, { "items", "bars.micro", "BOTTOM" },
+		{ "chat.tabs", "chat.main", "TOP" }, { "marks.bar", "chat.tabs", "TOP" },
+		{ "auras.pb", "unit.player", "TOP" }, { "auras.pw", "auras.pb", "TOP" }, { "castbar.player", "unit.player", "BOTTOM" },
+		{ "auras.pd", "castbar.player", "BOTTOM" }, { "auras.tb", "unit.target", "TOP" }, { "castbar.target", "unit.target", "BOTTOM" },
+		{ "auras.td", "castbar.target", "BOTTOM" },
 	} })
 
 -- ESPORT DPS : concu pour les raids - barres compactees en bas, cadres perso au centre-bas,

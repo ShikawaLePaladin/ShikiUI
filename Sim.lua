@@ -225,6 +225,64 @@ local function damage()
 	end
 end
 
+-- ---------------------------------------------------------------- auras fictives (joueur + cible) : /sui sim buffs
+local AUR = { on = false, orig = {} }
+local ICON = "Interface" .. string.char(92) .. "Icons" .. string.char(92)
+local BUFFS = { "Spell_Holy_WordFortitude", "Spell_Nature_Regeneration", "Spell_Holy_SealOfMight", "Spell_Nature_Lightning",
+	"Spell_Magic_MageArmor", "Ability_Warrior_BattleShout", "Spell_Holy_PrayerOfHealing02", "Spell_Nature_Rejuvenation" }
+local DEBUFFS = { "Spell_Shadow_ShadowWordPain", "Ability_Warrior_Sunder", "Spell_Nature_Slow", "Spell_Shadow_CurseOfTounges" }
+
+local function auraStop()
+	for name, o in pairs(AUR.orig) do
+		_G[name] = o
+		AUR.orig[name] = nil
+	end
+	AUR.on = false
+	fire("PLAYER_AURAS_CHANGED")
+	fire("UNIT_AURA", "target")
+end
+
+local function auraStart()
+	local function wrap(name, fn)
+		AUR.orig[name] = _G[name]
+		_G[name] = fn
+	end
+	-- indices du joueur : 0..7 = buffs, 100..103 = debuffs
+	wrap("GetPlayerBuff", function(i, filter)
+		if filter == "HARMFUL" then
+			if i < getn(DEBUFFS) then return 100 + i, 0 end
+		elseif i < getn(BUFFS) then
+			return i, 0
+		end
+		return -1
+	end)
+	wrap("GetPlayerBuffTexture", function(idx)
+		if idx >= 100 then return ICON .. DEBUFFS[idx - 99] end
+		return ICON .. BUFFS[idx + 1]
+	end)
+	wrap("GetPlayerBuffApplications", function(idx) return (idx >= 100 and idx == 101) and 3 or 0 end)
+	wrap("GetPlayerBuffDispelType", function(idx) return (idx >= 100) and "Magic" or nil end)
+	wrap("GetPlayerBuffTimeLeft", function(idx) return 30 + idx * 7 end)
+	local oB, oD = _G.UnitBuff, _G.UnitDebuff
+	wrap("UnitBuff", function(u, i, a)
+		if u == "target" or u == "player" then
+			if BUFFS[i] then return ICON .. BUFFS[i], (i == 2) and 2 or 0 end
+			return nil
+		end
+		return oB(u, i, a)
+	end)
+	wrap("UnitDebuff", function(u, i, a)
+		if u == "target" or u == "player" then
+			if DEBUFFS[i] then return ICON .. DEBUFFS[i], (i == 2) and 3 or 0, "Magic" end
+			return nil
+		end
+		return oD(u, i, a)
+	end)
+	AUR.on = true
+	fire("PLAYER_AURAS_CHANGED")
+	fire("UNIT_AURA", "target")
+end
+
 local function cmd(rest)
 	local _, _, sub, a, b = string.find(rest or "", "^%s*(%S*)%s*(%S*)%s*(%S*)")
 	sub = sub or ""
@@ -233,6 +291,9 @@ local function cmd(rest)
 	elseif sub == "off" then
 		stop()
 		SUI.Print(L("msg.sim.off"))
+	elseif sub == "buffs" then
+		if AUR.on then auraStop() else auraStart() end
+		SUI.Print(L(AUR.on and "msg.sim.buffs.on" or "msg.sim.buffs.off"))
 	elseif not S.on then
 		SUI.Print(L("help.sim"))
 	elseif sub == "dmg" then
