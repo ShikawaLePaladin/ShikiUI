@@ -67,6 +67,7 @@ function M.ReadConfig()
 	cfg.unitid = C.Get("tooltip.unitid")
 	cfg.itemid = C.Get("tooltip.itemid")
 	cfg.itemlevel = C.Get("tooltip.itemlevel")
+	if SUI.TooltipCompare then SUI.TooltipCompare.Apply() end
 	cfg.hpvalue = C.Get("tooltip.hpvalue")
 	cfg.hpbar = C.Get("tooltip.hpbar")
 	cfg.combathide = C.Get("tooltip.combathide")
@@ -641,6 +642,8 @@ SUI.RegisterModule("tooltip", {
 		opt("vendor", "bool", 82, true, { simple = true }),
 		opt("owned", "bool", 83, true, { simple = true }),
 		opt("combathide", "bool", 90, false),
+		opt("compare", "bool", 95, true, { simple = true }),
+		opt("compareauto", "bool", 96, false),
 	},
 	enable = function() M.Enable() end,
 	disable = function() M.Disable() end,

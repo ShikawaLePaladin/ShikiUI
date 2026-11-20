@@ -53,6 +53,7 @@ StyleUI.lua
 Cmd.lua
 GameMenu.lua
 Sim.lua
+TooltipCompare.lua
 
 # -- styles supplementaires (generes : Style_<Nom>.lua, ordre alphabetique ; ajouter un style = ajouter un fichier)
 Style_Blizzard.lua
