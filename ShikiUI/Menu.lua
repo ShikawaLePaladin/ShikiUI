@@ -410,10 +410,21 @@ local DROP_ROWS, DROP_W = 10, 210
 function M.RaiseDrop()
 	local f = M.frame
 	if not f or not f.drop or not f.catcher then return end
+	-- le parcours de tout le volet coute cher (arbre d apercus profond) : une fois par demi-seconde au plus
+	local now = GetTime and GetTime() or 0
+	if M.dropScanAt and M.dropWant and now - M.dropScanAt < 0.5 then
+		local b0 = f:GetFrameLevel()
+		f.catcher:SetFrameLevel(b0 + M.dropWant - 10)
+		f.drop:SetFrameLevel(b0 + M.dropWant)
+		return
+	end
+	M.dropScanAt = now
 	local maxLvl = 0
 	local seen = {}
+	local nseen = 0
 	local function scan(fr)
-		if not fr or seen[fr] then return end
+		if not fr or seen[fr] or nseen >= 250 then return end
+		nseen = nseen + 1
 		seen[fr] = true
 		local lv = fr.GetFrameLevel and fr:GetFrameLevel() or 0
 		if lv > maxLvl then maxLvl = lv end
@@ -422,9 +433,12 @@ function M.RaiseDrop()
 			for i = 1, getn(kids) do scan(kids[i]) end
 		end
 	end
-	scan(f)
+	-- scanner seulement le VOLET d apercu : c est la que vivent les enfants profonds
+	local pane = SUI.Preview and SUI.Preview.pane
+	if pane then scan(pane) else scan(f) end
 	local base = f:GetFrameLevel()
 	local want = mmax(maxLvl + 5 - base, 50)
+	M.dropWant = want
 	f.catcher:SetFrameLevel(base + want - 10)
 	f.drop:SetFrameLevel(base + want)
 end
@@ -1314,7 +1328,6 @@ function M.Render()
 		M.FocusKey(M.focus)
 		M.focus = nil
 	end
-	M.RaiseDrop()
 end
 
 -- Amene la ligne / la carte de la cle dans la zone visible.
