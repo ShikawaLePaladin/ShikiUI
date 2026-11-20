@@ -908,7 +908,7 @@ function M.Open()
 	SUI.WhenSafe(function()
 		if not M.on then return end
 		M.Build()
-		M.ScanRoster()
+		if not M.demo then M.ScanRoster() end      -- en demonstration le groupe simule est conserve
 		M.win:Show()
 		M.Rebuild()
 	end)
