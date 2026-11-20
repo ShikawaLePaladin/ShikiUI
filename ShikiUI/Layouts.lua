@@ -69,11 +69,13 @@ local function place(key, e)
 	local fl = type(e[5]) == "string" and e[5] or ""
 	if it and it.frame and fl ~= "" then
 		local k = (it.frame:GetEffectiveScale() or 1) / (UIParent:GetEffectiveScale() or 1)
-		local fw, fh = (it.frame:GetWidth() or 0) * k, (it.frame:GetHeight() or 0) * k
+		local r = 1
+		if type(e[6]) == "number" then r = (C.Get("ui.scale") or 1) * e[6] / (it.frame:GetScale() or 1) end
+		local fw, fh = (it.frame:GetWidth() or 0) * k * r, (it.frame:GetHeight() or 0) * k * r
 		if string.find(fl, "c", 1, true) then x = x - fw / 2 elseif string.find(fl, "r", 1, true) then x = x - fw end
 		if string.find(fl, "t", 1, true) then y = y - fh end
 	end
-	C.SetPos(key, x, y)
+	C.SetPos(key, x, y, type(e[6]) == "number" and e[6] or nil)
 	if it then Layout.Apply(key) end
 	return true
 end
@@ -808,11 +810,17 @@ D("bars.bar5", "bars.bar4", "LEFT", -4, 0)
 -- SHIKI (disposition recommandee a l'installation) : cadres joueur / cible centres en bas juste au-dessus des barres, compteur et menace
 -- cote a cote en bas a droite, micro-menu puis bijoux / jeux d'equipement en haut a gauche, groupe / raid a gauche, minimap en haut a droite.
 SUI.RegisterLayout("shiki", { label = "mod.layout.name.shiki", reset = true,
-	v = { ["units.width"] = 170, ["actionbars.size"] = 30, ["meter.width"] = 190, ["meter.height"] = 140, ["threat.width"] = 170, ["threat.height"] = 140 },
+	v = { ["units.width"] = 170, ["actionbars.size"] = 30, ["meter.width"] = 190, ["meter.height"] = 140, ["threat.width"] = 170, ["threat.height"] = 140,
+		["actionbars.micro.scale"] = 65, ["items.size"] = 28,
+		["auras.size"] = 24, ["auras.perrow"] = 6, ["auras.tsize"] = 24, ["auras.tperrow"] = 6 },
 	pos = {
 		["bars.stance"] = { 0.5, 0.0, 0, 6, "c" }, ["bars.main"] = { 0.5, 0.0, 0, 42, "c" },
-		["unit.player"] = { 0.5, 0.0, -90, 170, "r" }, ["unit.target"] = { 0.5, 0.0, 90, 170 },
-		["bars.micro"] = { 0.0, 1.0, 6, -6, "t" }, ["hud"] = { 0.5, 1.0, 0, -2, "ct" },
+		["unit.player"] = { 0.5, 0.0, -110, 170, "r" }, ["unit.target"] = { 0.5, 0.0, 110, 170 },
+		["chat.main"] = { 0.0, 0.0, 6, 34 },
+		["lootroll"] = { 0.68, 0.66, 0, 0 }, ["lootwin"] = { 0.68, 0.46, 0, 0 }, ["loot"] = { 0.68, 0.30, 0, 0 },
+		["bossmods.msg"] = { 0.5, 0.62, 0, 0 }, ["bossmods.bwbars"] = { 0.5, 1.0, 0, -120 }, ["bossmods.bwemph"] = { 0.5, 1.0, 0, -260 },
+		["bossmods.bwmsg"] = { 0.5, 0.62, 0, 0 },
+		["bars.micro"] = { 0.0, 1.0, 6, -6, "t" }, ["items"] = { 0.0, 1.0, 6, -50, "t", 0.75 }, ["hud"] = { 0.5, 1.0, 0, -2, "ct" },
 		["minimap"] = { 1.0, 1.0, -6, -6, "rt" },
 		["meter.win1"] = { 1.0, 0.0, -6, 6, "r" },
 		["group"] = { 0.0, 0.5, 12, 0 }, ["raid"] = { 0.0, 0.5, 12, 0 },
@@ -820,8 +828,9 @@ SUI.RegisterLayout("shiki", { label = "mod.layout.name.shiki", reset = true,
 	},
 	links = {
 		{ "bars.bar3", "bars.main", "LEFT" }, { "bars.pet", "bars.bar2", "TOP" },
-		{ "threat.win", "meter.win1", "LEFT" }, { "datatext.win", "minimap", "BOTTOM" }, { "items", "bars.micro", "BOTTOM" },
-		{ "chat.tabs", "chat.main", "TOP" }, { "marks.bar", "chat.tabs", "TOP" },
+		{ "threat.win", "meter.win1", "LEFT" }, { "datatext.win", "minimap", "BOTTOM" }, 
+		{ "chat.tabs", "chat.main", "TOP" }, { "marks.bar", "chat.tabs", "TOP" }, { "chat.copybtn", "chat.tabs", "RIGHT" }, { "chat.menubtn", "chat.copybtn", "TOP" },
+		{ "unit.targettarget", "unit.target", "LEFT" },
 		{ "auras.pb", "unit.player", "TOP" }, { "auras.pw", "auras.pb", "TOP" }, { "castbar.player", "unit.player", "BOTTOM" },
 		{ "auras.pd", "castbar.player", "BOTTOM" }, { "auras.tb", "unit.target", "TOP" }, { "castbar.target", "unit.target", "BOTTOM" },
 		{ "auras.td", "castbar.target", "BOTTOM" },

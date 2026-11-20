@@ -810,6 +810,7 @@ function M.ApplyOptions()
 	local cfg = M.cfg
 	if M.bar then
 		if M.on and cfg.tabs then M.bar:Show() else M.bar:Hide() end
+		if M.copyBtn then if M.on and cfg.tabs then M.copyBtn:Show() else M.copyBtn:Hide() end end
 	end
 	for i = 1, M.num do
 		local f = M.frames[i]
@@ -1153,6 +1154,27 @@ function M.Build()
 		if GameTooltip and GameTooltip.Hide then GameTooltip:Hide() end
 	end)
 	M.copyBtn = cb
+	-- le bouton devient un cadre a part (deplacable, "chat.copybtn") ; il suit la visibilite de la barre d onglets
+	cb:SetParent(UIParent)
+	cb:SetFrameStrata(bar:GetFrameStrata())
+	cb:SetFrameLevel((bar:GetFrameLevel() or 1) + 3)
+	cb.sep:Hide()
+	cb:ClearAllPoints()
+	SUI.Layout.Register(cb, "chat.copybtn", "BOTTOMLEFT", 600, 40)
+	if bar:IsVisible() then cb:Show() else cb:Hide() end
+	-- bulle du menu de chat (emotes, langues...) : cadre Blizzard rendu deplacable ("chat.menubtn")
+	local mb = getglobal("ChatFrameMenuButton")
+	if mb and not M.menuBtn then
+		M.menuBtn = mb
+		local okm, errm = pcall(function()
+			mb:SetParent(UIParent)
+			mb:SetFrameStrata(bar:GetFrameStrata())
+			mb:SetFrameLevel((bar:GetFrameLevel() or 1) + 3)
+			mb:ClearAllPoints()
+			SUI.Layout.Register(mb, "chat.menubtn", "BOTTOMLEFT", 630, 40)
+		end)
+		if not okm then SUI.Report("chat menubtn", errm) end
+	end
 	-- fenetre de copie (texte de l'historique ou adresse web)
 	local cp = T.Panel(UIParent, 520, 300)
 	cp:SetFrameStrata("DIALOG")

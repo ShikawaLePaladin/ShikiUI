@@ -147,6 +147,8 @@ SUI.AddStrings("fr", {
 	["mod.mover.n.mail"] = "Courrier",
 	["mod.mover.n.auction"] = "Hotel des ventes",
 	["mod.mover.n.chat.copy"] = "Copie du chat",
+	["mod.mover.n.chat.copybtn"] = "Chat : bouton copier",
+	["mod.mover.n.chat.menubtn"] = "Chat : bouton menu (emotes)",
 	["mod.mover.n.hud"] = "Barre de performance",
 	["mod.mover.n.boss"] = "Boss",
 })
@@ -296,6 +298,8 @@ SUI.AddStrings("en", {
 	["mod.mover.n.mail"] = "Mail",
 	["mod.mover.n.auction"] = "Auction house",
 	["mod.mover.n.chat.copy"] = "Chat copy",
+	["mod.mover.n.chat.copybtn"] = "Chat: copy button",
+	["mod.mover.n.chat.menubtn"] = "Chat: menu button (emotes)",
 	["mod.mover.n.hud"] = "Performance bar",
 	["mod.mover.n.boss"] = "Boss",
 })
