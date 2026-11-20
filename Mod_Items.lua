@@ -2237,8 +2237,10 @@ function M.ApplyOptions()
 		w = bx + 48
 		if not showT and w < 60 then w = 60 end
 	end
-	if shown > 0 and 8 + (shown > 5 and 5 or shown) * 46 > w then w = 8 + (shown > 5 and 5 or shown) * 46 end
-	if w < 60 then w = 60 end
+	local setw = 8 + (shown > 5 and 5 or shown) * 46
+	local hov = C.Get("items.hover") and shown > 0 and (showT or showB)
+	if not hov and shown > 0 and setw > w then w = setw end
+	if not showB and not showT and w < 60 then w = 60 end
 	f:SetWidth(w)
 	-- survol : les lignes de builds ne s'affichent que sous la souris (le cadre ne garde que la rangee des bijoux)
 	M.hoverOn = C.Get("items.hover") and shown > 0 and (showT or showB)
@@ -2246,7 +2248,7 @@ function M.ApplyOptions()
 		f:SetHeight(top)
 		f.setbg:ClearAllPoints()
 		f.setbg:SetPoint("TOPLEFT", f, "BOTTOMLEFT", 0, 1)
-		f.setbg:SetWidth(w)
+		f.setbg:SetWidth(setw)
 		f.setbg:SetHeight(rows * 18 + 6)
 	else
 		f:SetHeight(top + rows * 18 + 4)

@@ -75,7 +75,9 @@ local function place(key, e)
 		if string.find(fl, "c", 1, true) then x = x - fw / 2 elseif string.find(fl, "r", 1, true) then x = x - fw end
 		if string.find(fl, "t", 1, true) then y = y - fh end
 	end
-	C.SetPos(key, x, y, type(e[6]) == "number" and e[6] or nil)
+	local cx
+	if fl ~= "" and string.find(fl, "c", 1, true) then cx = ax * w + dx end
+	C.SetPos(key, x, y, type(e[6]) == "number" and e[6] or nil, cx)
 	if it then Layout.Apply(key) end
 	return true
 end
@@ -985,3 +987,29 @@ for i = 1, table.getn(SUI.layoutOrder) do
 		end
 	end
 end
+
+-- ---------------------------------------------------------------- cadres centres : suivent un changement de largeur
+-- (barre de formes / d'auras selon la classe, redimensionnement) : le centre memorise reste le centre a l'ecran.
+C.cxWidth = function(key)
+	local it = Layout.items[key]
+	if not it or not it.frame then return nil end
+	local w = it.frame:GetWidth()
+	if not w or w <= 1 then return nil end
+	return w * (it.frame:GetScale() or 1)
+end
+local function cxWatch()
+	local key, it
+	for key, it in pairs(Layout.items) do
+		local p = C.cur and C.cur.pos and C.cur.pos[Layout.ReadKey(key)]
+		if p and type(p.cx) == "number" and it.frame and not Layout.LinkedParent(key) then
+			local w = C.cxWidth(key)
+			if w and it.cxw ~= w then
+				local first = (it.cxw == nil)
+				it.cxw = w
+				if not first then Layout.Apply(key) end
+			end
+		end
+	end
+end
+SUI.On("PLAYER_ENTERING_WORLD", function() SUI.After(3, cxWatch, "layout.cx0") end)
+SUI.Every(2, cxWatch, "layout.cx", true)
