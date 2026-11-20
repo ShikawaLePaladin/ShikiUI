@@ -145,7 +145,7 @@ local DEFAULTS = {
 		shift = { left = "target", right = "menu" }, ctrl = { left = "Power Word: Fortitude", right = "dispel" } },
 	DRUID = { none = { left = "Rejuvenation", middle = "Regrowth", right = "Healing Touch" },
 		shift = { left = "target", right = "menu" }, ctrl = { left = "Mark of the Wild", right = "dispel" } },
-	PALADIN = { none = { left = "Flash of Light", right = "Holy Light" },
+	PALADIN = { none = { left = "Flash of Light", middle = "Holy Shock", right = "Holy Light" },
 		shift = { left = "target", right = "menu" }, ctrl = { right = "dispel" } },
 	SHAMAN = { none = { left = { "Healing Wave", "Lesser Healing Wave" }, right = "Chain Heal" },
 		shift = { left = "target", right = "menu" }, ctrl = { right = "dispel" } },

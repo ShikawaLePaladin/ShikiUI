@@ -77,8 +77,8 @@ M.mt = {}                 -- nom -> vrai : main tanks du raid
 M.thrOn = false
 M.pktAt, M.reqAt, M.targetAt = -100, -100, -100
 M.nPkt, M.nReq = 0, 0
-M.cfg = { width = 110, height = 10, hptext = true, name = true, level = true, classcolor = false, threat = true, tmode = "tank",
-	targetglow = true, targetscale = 1.2, debuffs = true, debuffmax = 4, debufftimer = true, debuffsize = 14, castbar = true,
+M.cfg = { width = 90, height = 10, hptext = true, name = true, level = true, classcolor = false, threat = true, tmode = "tank",
+	targetglow = true, outline = "auto", targetscale = 1.2, debuffs = true, debuffmax = 4, debufftimer = true, debuffsize = 14, castbar = true,
 	castheight = 8, casticon = true, castname = true, markers = true, markersize = 20, distance = "target", friendly = false,
 	maxplates = 40, rate = 0.1, threatpct = true, threatwarn = 80, threatpos = "right", threatrequest = true, threattank = true,
 	dpssafe = true, threatnone = true, threattaunt = true }
@@ -102,6 +102,7 @@ function M.ReadConfig()
 	cfg.threat = C.Get("nameplates.threat")
 	cfg.tmode = C.Get("nameplates.threatmode")
 	cfg.targetglow = C.Get("nameplates.targetglow")
+	cfg.outline = C.Get("nameplates.outline")
 	cfg.targetscale = C.Get("nameplates.targetscale")
 	cfg.debuffs = C.Get("nameplates.debuffs")
 	cfg.debuffmax = C.Get("nameplates.debuffmax")
@@ -563,7 +564,9 @@ end
 
 function M.Assign(plate)
 	if M.nFree == 0 or M.nUsed >= M.cfg.maxplates then
-		M.Skin(plate)    -- plaque en trop (gros pull) : on masque quand meme la plaque du jeu, sinon elle double la notre
+		-- plaque en trop : en combat (gros pull) on masque quand meme la plaque du jeu, sinon elle double la notre ;
+		-- hors combat (ville pleine) on la laisse telle quelle : elle reste lisible et passera chez nous des qu'une place se libere
+		if UnitAffectingCombat and UnitAffectingCombat("player") then M.Skin(plate) else M.Unskin(plate) end
 		return nil
 	end
 	M.Skin(plate)
@@ -920,17 +923,34 @@ function M.UpdateTarget(s, plate)
 	if scale ~= s.lastScale then
 		s.lastScale = scale
 		s.f:SetScale(scale)
-		if s.boxHidden then
-			-- plaque amie sans cadre : la bordure reste invisible
-		elseif isT and cfg.targetglow then
-			local r, g, b = T.Accent()
-			s.f:SetBackdropBorderColor(r, g, b, 1)
-		else
-			local c = T.c.border
-			s.f:SetBackdropBorderColor(c[1], c[2], c[3], c[4])
-		end
 	end
+	M.PaintBorder(s, isT)
 	return isT
+end
+
+-- Contour : en mode "auto" il suit la couleur de la barre (sombre pour les plaques ordinaires, clair pour la cible), de sorte que
+-- la cible ressorte parmi plusieurs plaques et que le contour ne jure jamais avec l'interieur. Mode "style" : bordure du style.
+function M.PaintBorder(s, isT)
+	if s.boxHidden then return end      -- plaque amie sans cadre : la bordure reste invisible
+	local cfg = M.cfg
+	local auto = (cfg.outline ~= "style")
+	local r, g, b = s.lastR, s.lastG, s.lastB
+	if not auto or not r then r, g, b = 0, 0, 0 end
+	if isT == s.bT and r == s.bR and g == s.bG and b == s.bB and auto == s.bAuto then return end
+	s.bT, s.bR, s.bG, s.bB, s.bAuto = isT, r, g, b, auto
+	if auto and s.lastR then
+		if isT then
+			s.f:SetBackdropBorderColor(0.8 + r * 0.2, 0.8 + g * 0.2, 0.8 + b * 0.2, 1)  -- style:ok contour derive de la barre
+		else
+			s.f:SetBackdropBorderColor(r * 0.3, g * 0.3, b * 0.3, 1)  -- style:ok contour derive de la barre
+		end
+	elseif isT and cfg.targetglow then
+		local ar, ag, ab = T.Accent()
+		s.f:SetBackdropBorderColor(ar, ag, ab, 1)
+	else
+		local c = T.c.border
+		s.f:SetBackdropBorderColor(c[1], c[2], c[3], c[4])
+	end
 end
 
 function M.UpdateDebuffs(s, isT, now)
@@ -1242,7 +1262,7 @@ end
 local function tokText(o, v) return L("choice.nameplates.tok." .. v) end
 
 local NP_OPTIONS = {
-		opt("width", "number", 10, 110, { min = 50, max = 200, step = 5, simple = true }),
+		opt("width", "number", 10, 90, { min = 50, max = 200, step = 5, simple = true }),
 		opt("height", "number", 20, 10, { min = 4, max = 24, step = 1, simple = true }),
 		opt("hptext", "bool", 30, true, { simple = true }),
 		opt("name", "bool", 40, true),
@@ -1266,6 +1286,7 @@ local NP_OPTIONS = {
 		opt("threatpos", "choice", 87, "right", { choices = { "right", "left" } }),
 		opt("threatrequest", "bool", 88, true),
 		opt("targetglow", "bool", 90, true),
+		opt("outline", "choice", 91, "auto", { choices = { "auto", "style" }, choiceText = function(o2, v) return L("choice.nameplates.outline." .. v) end, simple = true }),
 		opt("targetscale", "number", 100, 1.2, { min = 1, max = 1.6, step = 0.1 }),
 		opt("debuffs", "bool", 110, true, { simple = true }),
 		opt("debuffmax", "number", 120, 4, { min = 1, max = 6, step = 1 }),

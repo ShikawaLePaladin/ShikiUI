@@ -218,79 +218,12 @@ SUI.RegisterCommand("layout", cmd, "help.layout")
 -- ---------------------------------------------------------------- presets livres (dispositions de depart, modifiables a la main)
 SUI.RegisterLayout("classic", { label = "mod.layout.name.classic", reset = true })
 
-SUI.RegisterLayout("center", { label = "mod.layout.name.center",
-	pos = { ["unit.player"] = { 0.5, 0.32, -300, 0 }, ["unit.target"] = { 0.5, 0.32, 60, 0 }, ["unit.targettarget"] = { 0.5, 0.32, 60, -46 } },
-	roles = {
-		tank = { v = { ["units.width"] = 200, ["units.height"] = 30 } },
-		heal = { pos = { ["unit.player"] = { 0.5, 0.22, -300, 0 }, ["unit.target"] = { 0.5, 0.22, 60, 0 }, ["unit.targettarget"] = { 0.5, 0.22, 60, -46 } } },
-		pvp = { v = { ["units.width"] = 190 } },
-	} })
 
-SUI.RegisterLayout("compact", { label = "mod.layout.name.compact",
-	v = { ["units.width"] = 150, ["units.height"] = 22, ["units.powerheight"] = 3 },
-	pos = { ["unit.player"] = { 0.5, 0.28, -240, 0 }, ["unit.target"] = { 0.5, 0.28, 90, 0 }, ["unit.targettarget"] = { 0.5, 0.28, 90, -38 } } })
 
-SUI.RegisterLayout("sides", { label = "mod.layout.name.sides",
-	pos = { ["unit.player"] = { 0.18, 0.45, 0, 0 }, ["unit.target"] = { 0.82, 0.45, -180, 0 }, ["unit.targettarget"] = { 0.82, 0.45, -180, -46 } } })
 
-SUI.RegisterLayout("low", { label = "mod.layout.name.low",
-	pos = { ["unit.player"] = { 0.5, 0.17, -270, 0 }, ["unit.target"] = { 0.5, 0.17, 80, 0 }, ["unit.targettarget"] = { 0.5, 0.17, 80, -44 } } })
 
-SUI.RegisterLayout("high", { label = "mod.layout.name.high",
-	pos = { ["unit.player"] = { 0.5, 0.74, -270, 0 }, ["unit.target"] = { 0.5, 0.74, 80, 0 }, ["unit.targettarget"] = { 0.5, 0.74, 80, -44 } } })
 
-SUI.RegisterLayout("wide", { label = "mod.layout.name.wide",
-	v = { ["units.width"] = 230, ["units.height"] = 32 },
-	pos = { ["unit.player"] = { 0.5, 0.3, -330, 0 }, ["unit.target"] = { 0.5, 0.3, 100, 0 }, ["unit.targettarget"] = { 0.5, 0.3, 100, -50 } } })
 
-SUI.RegisterLayout("healer", { label = "mod.layout.name.healer",
-	v = { ["units.width"] = 170 },
-	pos = { ["unit.player"] = { 0.5, 0.2, -250, 0 }, ["unit.target"] = { 0.5, 0.2, 80, 0 }, ["unit.targettarget"] = { 0.5, 0.2, 80, -44 },
-		["meter.win"] = { 0.84, 0.2, 0, 0 }, ["threat.win"] = { 0.84, 0.42, 0, 0 } } })
-
--- ================================================================ dispositions groupe / raid (v2)
--- raidleft : groupe et raid colles a gauche, joueur/cible en bas-gauche, compteur en bas-droite.
-SUI.RegisterLayout("raidleft", { label = "mod.layout.name.raidleft",
-	v = { ["units.width"] = 170 },
-	pos = { ["group"] = { 0.0, 0.72, 12, 0 }, ["raid"] = { 0.0, 0.98, 12, 0 },
-		["unit.player"] = { 0.0, 0.24, 12, 0 }, ["unit.target"] = { 0.0, 0.24, 190, 0 }, ["unit.targettarget"] = { 0.0, 0.24, 190, -46 },
-		["meter.win1"] = { 0.99, 0.24, -250, 0 }, ["threat.win"] = { 0.99, 0.46, -250, 0 } } })
-
--- healcenter : soigneur en raid = raid en colonnes au centre-gauche, cadres perso en bas-centre, compteur et menace a gauche.
-SUI.RegisterLayout("healcenter", { label = "mod.layout.name.healcenter",
-	v = { ["units.width"] = 180 },
-	pos = { ["group"] = { 0.28, 0.95, 0, 0 }, ["raid"] = { 0.28, 0.99, 0, 0 },
-		["unit.player"] = { 0.5, 0.16, -270, 0 }, ["unit.target"] = { 0.5, 0.16, 90, 0 }, ["unit.targettarget"] = { 0.5, 0.16, 90, -46 },
-		["meter.win1"] = { 0.0, 0.7, 12, 0 }, ["threat.win"] = { 0.0, 0.45, 12, 0 } } })
-
--- tankui : tank = raid haut-gauche, cadres perso haut-centre, menace en bas-droite pres des barres.
-SUI.RegisterLayout("tankui", { label = "mod.layout.name.tankui",
-	v = { ["units.width"] = 200, ["units.height"] = 30 },
-	pos = { ["group"] = { 0.0, 0.98, 12, 0 }, ["raid"] = { 0.0, 0.98, 12, 0 },
-		["unit.player"] = { 0.5, 0.88, -280, 0 }, ["unit.target"] = { 0.5, 0.88, 90, 0 }, ["unit.targettarget"] = { 0.5, 0.88, 90, -46 },
-		["threat.win"] = { 0.99, 0.2, -250, 0 }, ["meter.win1"] = { 0.99, 0.42, -250, 0 },
-		["bossmods.win"] = { 0.99, 0.7, -250, 0 } } })
-
--- dpsui : dps = meter et menace a droite, raid a gauche, cadres perso en bas-gauche.
-SUI.RegisterLayout("dpsui", { label = "mod.layout.name.dpsui",
-	pos = { ["group"] = { 0.0, 0.95, 12, 0 }, ["raid"] = { 0.0, 0.99, 12, 0 },
-		["unit.player"] = { 0.3, 0.16, -90, 0 }, ["unit.target"] = { 0.3, 0.16, 100, 0 }, ["unit.targettarget"] = { 0.3, 0.16, 100, -46 },
-		["meter.win1"] = { 0.99, 0.55, -250, 0 }, ["threat.win"] = { 0.99, 0.32, -250, 0 },
-		["bossmods.win"] = { 0.99, 0.14, -250, 0 } } })
-
--- pvpui : pvp = cadres perso au centre-bas, groupe compact a gauche, ennemis epingles au centre, meter discret en bas-droite.
-SUI.RegisterLayout("pvpui", { label = "mod.layout.name.pvpui",
-	v = { ["units.width"] = 190, ["units.height"] = 28 },
-	pos = { ["unit.player"] = { 0.5, 0.2, -280, 0 }, ["unit.target"] = { 0.5, 0.2, 100, 0 }, ["unit.targettarget"] = { 0.5, 0.2, 100, -46 },
-		["group"] = { 0.0, 0.55, 12, 0 }, ["group.enemies"] = { 0.5, 0.62, 0, 0 },
-		["meter.win1"] = { 0.99, 0.12, -240, 0 } } })
-
--- arenabox : arene = ennemis epingles au centre (bien visibles), cadres perso juste en dessous, groupe a gauche.
-SUI.RegisterLayout("arenabox", { label = "mod.layout.name.arenabox",
-	v = { ["units.width"] = 200, ["units.height"] = 30 },
-	pos = { ["group.enemies"] = { 0.5, 0.72, 0, 0 }, ["unit.player"] = { 0.5, 0.52, -290, 0 }, ["unit.target"] = { 0.5, 0.52, 100, 0 },
-		["unit.targettarget"] = { 0.5, 0.52, 100, -48 }, ["group"] = { 0.0, 0.7, 12, 0 },
-		["meter.win1"] = { 0.99, 0.3, -250, 0 } } })
 
 
 -- ================================================================ LIENS entre modules
@@ -842,99 +775,66 @@ SUI.RegisterLayout("shiki", { label = "mod.layout.name.shiki", reset = true,
 	links = {
 		{ "bars.bar3", "bars.main", "LEFT" }, { "bars.pet", "bars.bar2", "TOP" },
 		{ "threat.win", "meter.win1", "LEFT" }, { "tracker", "meter.win1", "BOTTOM" }, { "datatext.win", "minimap", "BOTTOM" }, 
-		{ "chat.tabs", "chat.main", "TOP" }, { "marks.bar", "chat.tabs", "TOP" }, { "chat.copybtn", "chat.tabs", "RIGHT", -26, 0 }, { "chat.menubtn", "chat.copybtn", "LEFT", -3, 0 },
+		{ "chat.tabs", "chat.main", "TOP" }, { "marks.bar", "chat.tabs", "TOP" }, { "chat.copybtn", "chat.tabs", "RIGHT", -26, 5 }, { "chat.menubtn", "chat.copybtn", "LEFT", -3, 0 },
 		{ "unit.targettarget", "unit.target", "LEFT" },
 		{ "auras.pb", "minimap", "LEFT", -40, 0 }, { "auras.pw", "auras.pb", "BOTTOM" }, { "castbar.player", "unit.player", "BOTTOM" },
 		{ "auras.pd", "castbar.player", "BOTTOM" }, { "auras.tb", "unit.target", "TOP" }, { "castbar.target", "unit.target", "BOTTOM" },
 		{ "auras.td", "castbar.target", "BOTTOM" },
 	} })
 
--- ESPORT DPS : concu pour les raids - barres compactees en bas, cadres perso au centre-bas,
--- raid a gauche, compteur/menace a droite, alarmes en haut-droite. Le centre de l'ecran reste libre.
-SUI.RegisterLayout("esportdps", { label = "mod.layout.name.esportdps", reset = true,
-	v = { ["units.width"] = 180, ["units.height"] = 26 },
-	pos = {
-		["bars.main"] = { 0.5, 0.02, -226, 4 }, ["bars.bar2"] = { 0.5, 0.02, -226, 60 }, ["bars.bar3"] = { 0.5, 0.02, -226, 116 },
-		["bars.stance"] = { 0.5, 0.02, -410, 60 }, ["bars.pet"] = { 0.5, 0.02, 260, 60 },
-		["bars.micro"] = { 0.99, 0.02, -240, 4 },
-		["unit.player"] = { 0.5, 0.16, -240, 0 }, ["unit.target"] = { 0.5, 0.16, 60, 0 }, ["unit.targettarget"] = { 0.5, 0.16, 60, -46 },
-		["group"] = { 0.0, 0.95, 12, 0 }, ["raid"] = { 0.0, 0.99, 12, 0 },
-		["meter.win1"] = { 0.99, 0.6, -260, 0 }, ["threat.win"] = { 0.99, 0.35, -260, 0 },
-		["bossmods.win"] = { 0.99, 0.99, -260, -24 }, ["marks.bar"] = { 0.5, 0.99, -110, -24 },
-		["minimap"] = { 0.99, 0.99, -180, -20 }, ["esport.win"] = { 0.99, 0.18, -260, 0 },
-	} })
 
--- ESPORT HEAL : concu pour soigner en raid - raid en colonnes au centre-gauche (oeil dessus),
--- cadres perso en bas-centre, totems/tanktools a portee, compteur relegue en bas-gauche.
-SUI.RegisterLayout("esportheal", { label = "mod.layout.name.esportheal", reset = true,
-	v = { ["units.width"] = 180, ["units.height"] = 26 },
-	pos = {
-		["bars.main"] = { 0.5, 0.02, -226, 4 }, ["bars.bar2"] = { 0.5, 0.02, -226, 60 },
-		["bars.stance"] = { 0.5, 0.02, -410, 60 }, ["bars.pet"] = { 0.5, 0.02, 260, 60 },
-		["unit.player"] = { 0.5, 0.16, -240, 0 }, ["unit.target"] = { 0.5, 0.16, 60, 0 }, ["unit.targettarget"] = { 0.5, 0.16, 60, -46 },
-		["raid"] = { 0.22, 0.99, 0, 0 }, ["group"] = { 0.22, 0.95, 0, 0 },
-		["meter.win1"] = { 0.0, 0.35, 12, 0 },
-		["totems.bar"] = { 0.99, 0.02, -170, 8 }, ["tanktools.bar"] = { 0.99, 0.02, -400, 8 },
-		["bossmods.win"] = { 0.99, 0.99, -260, -24 }, ["marks.bar"] = { 0.5, 0.99, -110, -24 },
-		["minimap"] = { 0.99, 0.99, -180, -20 },
-	} })
 
--- TANK RAID : tout ce qui compte en haut de l'ecran - cadres perso au centre-haut, raid a gauche,
--- menace en bas-droite pres de la barre, alarmes de boss juste sous les cadres.
-SUI.RegisterLayout("tankraid", { label = "mod.layout.name.tankraid", reset = true,
-	v = { ["units.width"] = 200, ["units.height"] = 30 },
-	pos = {
-		["bars.main"] = { 0.5, 0.02, -226, 4 }, ["bars.bar2"] = { 0.5, 0.02, -226, 60 }, ["bars.bar3"] = { 0.5, 0.02, -226, 116 },
-		["bars.stance"] = { 0.5, 0.02, -410, 116 },
-		["unit.player"] = { 0.5, 0.8, -300, 0 }, ["unit.target"] = { 0.5, 0.8, 80, 0 }, ["unit.targettarget"] = { 0.5, 0.8, 80, -50 },
-		["raid"] = { 0.0, 0.99, 12, 0 }, ["group"] = { 0.0, 0.95, 12, 0 },
-		["threat.win"] = { 0.99, 0.15, -250, 0 }, ["meter.win1"] = { 0.99, 0.45, -250, 0 },
-		["bossmods.win"] = { 0.5, 0.56, 80, 0 }, ["marks.bar"] = { 0.0, 0.45, 12, 0 },
-		["minimap"] = { 0.99, 0.99, -180, -20 }, ["tanktools.bar"] = { 0.5, 0.02, -420, 4 },
-	} })
+-- ---------------------------------------------------------------- variantes DERIVEES de "shiki" (meme base, quelques reglages par role)
+local function copyT(t)
+	if type(t) ~= "table" then return t end
+	local r = {}
+	for k, v in pairs(t) do r[k] = copyT(v) end
+	return r
+end
 
--- PVP ARENE / BG : ennemis epingles au centre, suivi esport a droite (DR visibles en permanence),
--- barres en bas-gauche pour liberer le centre, groupe compact a gauche.
-SUI.RegisterLayout("pvparena", { label = "mod.layout.name.pvparena", reset = true,
-	v = { ["units.width"] = 190, ["units.height"] = 28 },
-	pos = {
-		["bars.main"] = { 0.14, 0.02, -230, 4 }, ["bars.bar2"] = { 0.14, 0.02, -230, 60 },
-		["bars.stance"] = { 0.14, 0.02, -410, 60 },
-		["unit.player"] = { 0.5, 0.18, -290, 0 }, ["unit.target"] = { 0.5, 0.18, 100, 0 }, ["unit.targettarget"] = { 0.5, 0.18, 100, -48 },
-		["group.enemies"] = { 0.5, 0.68, 0, 0 }, ["group"] = { 0.0, 0.6, 12, 0 },
-		["esport.win"] = { 0.99, 0.72, -230, 0 },
-		["meter.win1"] = { 0.99, 0.1, -260, 0 }, ["threat.win"] = { 0.99, 0.4, -260, 0 },
-		["marks.bar"] = { 0.0, 0.35, 12, 0 }, ["minimap"] = { 0.99, 0.99, -180, -20 },
-	} })
+local function derive(id, over)
+	local base = SUI.layouts["shiki"]
+	local def = { label = "mod.layout.name." .. id, reset = true, v = copyT(base.v), pos = copyT(base.pos), rpos = copyT(base.rpos), links = copyT(base.links) }
+	if over.v then for k, v in pairs(over.v) do def.v[k] = v end end
+	if over.pos then for k, v in pairs(over.pos) do def.pos[k] = v end end
+	if over.rpos then for k, v in pairs(over.rpos) do def.rpos[k] = v end end
+	if over.norpos then for i = 1, table.getn(over.norpos) do def.rpos[over.norpos[i]] = nil end end
+	SUI.RegisterLayout(id, def)
+end
 
--- MINIMALISTE : l'essentiel colle aux bords, le centre entier est libre pour le jeu.
--- Barres en bas, cadres perso en bas-gauche, raid en colonne fine a gauche, compteur/menace masques en coin.
-SUI.RegisterLayout("minimal", { label = "mod.layout.name.minimal", reset = true,
-	v = { ["units.width"] = 150, ["units.height"] = 20, ["units.powerheight"] = 3 },
-	pos = {
-		["bars.main"] = { 0.5, 0.02, -226, 4 },
-		["bars.stance"] = { 0.0, 0.02, 12, 8 }, ["bars.pet"] = { 0.5, 0.02, 260, 60 },
-		["bars.micro"] = { 0.99, 0.02, -240, 4 },
-		["unit.player"] = { 0.0, 0.16, 12, 0 }, ["unit.target"] = { 0.0, 0.16, 170, 0 }, ["unit.targettarget"] = { 0.0, 0.16, 170, -38 },
-		["raid"] = { 0.0, 0.99, 12, 0 }, ["group"] = { 0.0, 0.95, 12, 0 },
-		["meter.win1"] = { 0.99, 0.99, -190, -24 }, ["threat.win"] = { 0.99, 0.8, -190, 0 },
-		["bossmods.win"] = { 0.99, 0.6, -190, 0 }, ["marks.bar"] = { 0.0, 0.02, 12, 60 },
-		["minimap"] = { 0.99, 0.99, -180, -20 },
-	} })
+-- Soigneur : le groupe et le raid se rapprochent du centre (au-dessus du chat), compteur et menace inchanges.
+derive("shikiheal", { pos = { ["group"] = { 0.12, 0.30, 0, 0 }, ["raid"] = { 0.12, 0.30, 0, 0 } }, norpos = { "raid" } })
+-- Tank : fenetre de menace plus grande, compteur plus petit, outils de tank affiches.
+derive("shikitank", { v = { ["threat.width"] = 230, ["threat.height"] = 170, ["meter.height"] = 110, ["tanktools.show"] = true } })
+-- Compact : tout en plus petit, pour un ecran moins grand ou un jeu plus degage.
+derive("shikicompact", { v = { ["units.width"] = 170, ["actionbars.size"] = 26, ["meter.width"] = 160, ["meter.height"] = 110, ["threat.width"] = 150,
+	["threat.height"] = 110, ["items.size"] = 24, ["auras.size"] = 20, ["auras.tsize"] = 20, ["chat.width"] = 340, ["chat.height"] = 120 } })
 
--- ECRAN LARGE 16/9 : tout reparti sur les bords d'un ecran large - bars en bas a droite,
--- cadres perso a gauche, raid en colonnes centre-gauche, compteur centre-droit. Le centre reste le jeu.
-SUI.RegisterLayout("wideui", { label = "mod.layout.name.wideui", reset = true,
-	v = { ["units.width"] = 190 },
-	pos = {
-		["bars.main"] = { 0.5, 0.02, -226, 4 }, ["bars.bar2"] = { 0.5, 0.02, -226, 60 }, ["bars.bar3"] = { 0.5, 0.02, -226, 116 },
-		["bars.stance"] = { 0.24, 0.02, -180, 4 }, ["bars.pet"] = { 0.76, 0.02, -60, 4 },
-		["unit.player"] = { 0.0, 0.3, 12, 0 }, ["unit.target"] = { 0.0, 0.3, 200, 0 }, ["unit.targettarget"] = { 0.0, 0.3, 200, -48 },
-		["raid"] = { 0.3, 0.99, 0, 0 }, ["group"] = { 0.3, 0.95, 0, 0 },
-		["meter.win1"] = { 0.99, 0.75, -260, 0 }, ["threat.win"] = { 0.99, 0.5, -260, 0 },
-		["bossmods.win"] = { 0.99, 0.3, -260, 0 }, ["marks.bar"] = { 0.99, 0.15, -230, 0 },
-		["minimap"] = { 0.99, 0.99, -180, -20 }, ["totems.bar"] = { 0.76, 0.02, -260, 4 },
-	} })
+-- Profil de DEPART (installation neuve) : les modules et les reglages du profil de reference, sans donnees personnelles.
+SUI.STARTER = {
+	modules = { "esport", "nameplates", "groupfx", "auction", "group", "items", "messages", "buffwatch", "macros", "loot", "vendor", "cooldowns",
+		"clickheal", "social", "actionbars", "datatext", "raid", "finder", "pallypower", "tracker", "castbar", "meter", "threat", "cursor",
+		"powerauras", "mail", "auras", "tanktools", "skin", "bags", "bulletin" },
+	v = { ["style.name"] = "graphite", ["group.manabar"] = "healers", ["chat.shortchan"] = true, ["chat.quiet"] = true, ["chat.stamp"] = false,
+		["raid.dispelsize"] = 22, ["raid.dispelmode"] = "all", ["raid.iconsize"] = 16, ["raid.lowhp"] = 35, ["raid.hots"] = 3, ["raid.tankhots"] = 3,
+		["raid.debuffs"] = 3, ["raid.roletag"] = true, ["raid.powerheight"] = 4, ["raid.dispelonly"] = false,
+		["group.iconsize"] = 16, ["group.dispelmode"] = "all", ["group.dispelsize"] = 22, ["group.dispelonly"] = true, ["group.hots"] = 3,
+		["group.tankhots"] = 3, ["group.lowhp"] = 35, ["group.solo"] = true,
+		["minimap.shape"] = "square", ["minimap.clock"] = "local", ["castbar.width"] = 160, ["castbar.owidth"] = 160,
+		["actionbars.bar3.perrow"] = 4, ["actionbars.bar3.scale"] = 90, ["actionbars.bar4.enabled"] = true, ["actionbars.bar4.show"] = "hover",
+		["actionbars.bar5.enabled"] = true, ["actionbars.bar5.show"] = "hover", ["actionbars.stance.scale"] = 75, ["actionbars.tooltips"] = "safe",
+		["actionbars.keybinds"] = false, ["actionbars.macrotext"] = false,
+		["tooltip.bordercolor"] = false, ["tooltip.combathide"] = true, ["tooltip.scale"] = 0.7, ["tanktools.show"] = false,
+		["units.height"] = 32, ["units.powerheight"] = 3, ["units.hptext"] = "both", ["units.focus.enabled"] = true,
+		["perf.auto"] = true, ["perf.autofps"] = 45, ["perf.hud"] = true, ["meter.view1"] = "dps", ["layout.followrole"] = false,
+		["social.mark"] = true, ["social.keyword"] = "inv;+1", ["loot.announcewinner"] = true, ["mover.snap"] = false, ["mover.grid"] = true },
+}
+
+function SUI.ApplyStarter()
+	local st = SUI.STARTER
+	for i = 1, getn(st.modules) do C.SetBase("modules." .. st.modules[i], true) end
+	for k, v in pairs(st.v) do C.SetBase(k, v) end
+end
 
 -- ================================================================ COMPLEMENT : TOUS LES MODULES
 -- Les 6 presets d'ecran ci-dessus placent l'essentiel ; ce bloc ajoute TOUS les autres modules positionnables
@@ -968,12 +868,8 @@ local EXTRAS = {
 	["meter.win2"] = { 0.99, 0.60, -520, 0 },
 	["meter.win3"] = { 0.99, 0.60, -780, 0 },
 }
--- Exceptions par preset : la colonne droite de pvparena et tankraid est chargee, on serre les ajouts.
-local EXTRA_TWEAK = {
-	pvparena = { ["bags.window"] = { 0.99, 0.30, -24, 0 }, ["tracker.win"] = { 0.99, 0.86, -24, 0 },
-		["messages.badge"] = { 0.99, 0.90, -60, 0 }, ["messages.toasts"] = { 0.35, 0.68, 0, 0 } },
-	tankraid = { ["bags.window"] = { 0.99, 0.30, -24, 0 }, ["tracker.win"] = { 0.99, 0.58, -24, 0 } },
-}
+-- Exceptions par preset (aucune pour l'instant).
+local EXTRA_TWEAK = {}
 for i = 1, table.getn(SUI.layoutOrder) do
 	local id = SUI.layoutOrder[i]
 	local def = SUI.layouts[id]

@@ -80,7 +80,7 @@ end
 local function newSlot(i)
 	local f = CreateFrame("Button", "ShikiUI_GroupPet" .. i, M.holder)
 	f:EnableMouse(true)
-	f:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+	f:RegisterForClicks("LeftButtonUp", "RightButtonUp", "MiddleButtonUp")
 	f:SetScript("OnClick", onClick)
 	f:SetScript("OnEnter", onEnter)
 	f:SetScript("OnLeave", onLeave)
