@@ -14,7 +14,7 @@
 -- il bouge, change d'echelle ou de taille. Un lien est un reglage du profil, PAR MODE : cle "@enfant>parent*C[|mode]" dans profil.pos
 -- (l = dx, b = dy ; C = T B L R, ou N = detache explicitement). Sans entree, le lien conseille (Layout.DefaultLinks) s'applique tant que
 -- l'enfant n'a PAS de position enregistree : les anciennes positions sont respectees. Un lien detache le reste (marqueur N).
--- Une entree de position est { ax, ay, dx, dy } : fractions de l'ecran (0..1) plus decalage en unites d'UIParent, evalue a
+-- Une entree de position est { ax, ay, dx, dy [, "c" | "r"] } (c = centre le cadre sur le point, r = bord droit) : fractions de l'ecran (0..1) plus decalage en unites d'UIParent, evalue a
 -- l'application (independant de la resolution). Une entree "reset" efface toutes les positions.
 ShikiUI = ShikiUI or {}
 local SUI = ShikiUI
@@ -54,8 +54,15 @@ local function place(key, e)
 	local w, h = UIParent:GetWidth(), UIParent:GetHeight()
 	C.ClearPosAll(key)
 	if Layout.ClearLink then Layout.ClearLink(key) end       -- une mise en page place le cadre : plus de lien explicite (le lien conseille cede a la position)
-	C.SetPos(key, ax * w + dx, ay * h + dy)
-	if Layout.items[key] then Layout.Apply(key) end
+	local x = ax * w + dx
+	-- 5e valeur : "c" = centre horizontal du cadre sur x, "r" = bord DROIT sur x (le cadre garde sa taille reelle, barres et cadres de toute largeur)
+	local it = Layout.items[key]
+	if it and it.frame and (e[5] == "c" or e[5] == "r") then
+		local fw = (it.frame:GetWidth() or 0) * (it.frame:GetEffectiveScale() or 1) / (UIParent:GetEffectiveScale() or 1)
+		x = x - ((e[5] == "c") and fw / 2 or fw)
+	end
+	C.SetPos(key, x, ay * h + dy)
+	if it then Layout.Apply(key) end
 	return true
 end
 
@@ -778,8 +785,8 @@ D("bars.bar5", "bars.bar4", "LEFT", -4, 0)
 SUI.RegisterLayout("shiki", { label = "mod.layout.name.shiki", reset = true,
 	v = { ["units.width"] = 170, ["meter.width"] = 190, ["meter.height"] = 140, ["threat.width"] = 170, ["threat.height"] = 140 },
 	pos = {
-		["bars.main"] = { 0.5, 0.0, -226, 6 },
-		["unit.player"] = { 0.5, 0.0, -300, 150 }, ["unit.target"] = { 0.5, 0.0, 90, 150 }, ["unit.targettarget"] = { 0.5, 0.0, 270, 150 },
+		["bars.main"] = { 0.5, 0.0, 0, 6, "c" },
+		["unit.player"] = { 0.5, 0.0, -90, 150, "r" }, ["unit.target"] = { 0.5, 0.0, 90, 150 },
 		["bars.micro"] = { 0.0, 1.0, 10, -38 }, ["items"] = { 0.0, 1.0, 10, -100 },
 		["group"] = { 0.0, 0.5, 12, 0 }, ["raid"] = { 0.0, 0.5, 12, 0 },
 		["threat.win"] = { 1.0, 0.0, -350, 8 }, ["meter.win1"] = { 1.0, 0.0, -160, 8 },
