@@ -658,6 +658,8 @@ end
 -- Recale le volet sur le niveau reel du contenu (voir M.SyncLevel : le client change le niveau du cadre defilant apres sa creation).
 function P.SyncLevel()
 	M.SyncLevel()
+	-- la liste deroulante du menu doit rester AU-DESSUS du contenu du volet (niveaux dynamiques)
+	if M.RaiseDrop then M.RaiseDrop() end
 	local pv = P.pane
 	if not pv or not M.lvl or not M.child then return end
 	local want = M.lvl

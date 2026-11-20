@@ -153,11 +153,11 @@ local function token(i)
 	return "party" .. (i - 1)
 end
 
-local function fire(ev, a1)
+local function fire(ev, a1, a2)
 	local f = _G.ShikiUI_Events
 	local h = f and f:GetScript("OnEvent")
 	if not h then return end
-	_G.event, _G.arg1 = ev, a1
+	_G.event, _G.arg1, _G.arg2 = ev, a1, a2
 	h()
 end
 
@@ -283,6 +283,32 @@ local function auraStart()
 	fire("UNIT_AURA", "target")
 end
 
+-- jets de butin fictifs (ids 9001-9003) : GetLootRollItemInfo / Link / TimeLeft / RollOnLoot sont enveloppes une fois pour toutes
+local ROLLS = {
+	[9001] = { "Spell_Holy_SealOfMight", "Lame du Crepuscule", 4, 1 },
+	[9002] = { "INV_Misc_Gem_Ruby_01", "Rubis du Matin", 3, 0 },
+	[9003] = { "INV_Misc_Bone_HumanSkull_01", "Crane Poussiereux", 2, 0 },
+}
+local rollWrapped = false
+local function rollStart()
+	if not rollWrapped then
+		rollWrapped = true
+		local function w(name, fn)
+			local o = _G[name]
+			_G[name] = function(id, a, b)
+				if ROLLS[id] then return fn(id, a, b) end
+				if o then return o(id, a, b) end
+			end
+		end
+		w("GetLootRollItemInfo", function(id) local r = ROLLS[id] return ICON .. r[1], r[2], 1, r[3], r[4] == 1, true, true, false end)
+		w("GetLootRollItemLink", function(id) local r = ROLLS[id] return "|cffa335ee|Hitem:" .. id .. ":0:0:0|h[" .. r[2] .. "]|h|r" end)
+		w("GetLootRollTimeLeft", function() return 45000 end)
+		w("RollOnLoot", function(id, t) SUI.Print("Sim : jet " .. id .. " choix " .. tostring(t)) end)
+	end
+	local id
+	for id = 9001, 9003 do fire("START_LOOT_ROLL", id, 60000) end
+end
+
 local function cmd(rest)
 	local _, _, sub, a, b = string.find(rest or "", "^%s*(%S*)%s*(%S*)%s*(%S*)")
 	sub = sub or ""
@@ -291,6 +317,8 @@ local function cmd(rest)
 	elseif sub == "off" then
 		stop()
 		SUI.Print(L("msg.sim.off"))
+	elseif sub == "roll" then
+		rollStart()
 	elseif sub == "buffs" then
 		if AUR.on then auraStop() else auraStart() end
 		SUI.Print(L(AUR.on and "msg.sim.buffs.on" or "msg.sim.buffs.off"))

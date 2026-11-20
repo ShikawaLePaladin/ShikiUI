@@ -2701,6 +2701,8 @@ SUI.RegisterCommand("bossmods", function(rest)
 		M.Close()
 	elseif rest == "test" then
 		M.Test()
+	elseif rest == "bwtest" then
+		B.Test()
 	elseif rest == "bw" then
 		B.OpenOptions()
 	elseif rest == "status" then
