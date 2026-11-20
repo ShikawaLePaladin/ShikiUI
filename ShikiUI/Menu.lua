@@ -12,6 +12,7 @@ local M = {}
 SUI.Menu = M
 
 local getn, tinsert = table.getn, table.insert
+local mmax = math.max
 local floor = math.floor
 
 -- geometrie (unites de la fenetre, avant mise a l'echelle)
@@ -403,6 +404,31 @@ end
 -- ---------------------------------------------------------------- liste deroulante (fenetre commune, 10 lignes, molette)
 local DROP_ROWS, DROP_W = 10, 210
 
+-- Liste deroulante + capture : niveaux DYNAMIQUES. Le volet d apercu empile des enfants de plus en plus
+-- profonds (apercus imbriques) ; les offsets fixes (+40/+50) finissaient SOUS le contenu. Recale a chaque ouverture
+-- ET a chaque rendu (le contenu peut monter apres le drop).
+function M.RaiseDrop()
+	local f = M.frame
+	if not f or not f.drop or not f.catcher then return end
+	local maxLvl = 0
+	local seen = {}
+	local function scan(fr)
+		if not fr or seen[fr] then return end
+		seen[fr] = true
+		local lv = fr.GetFrameLevel and fr:GetFrameLevel() or 0
+		if lv > maxLvl then maxLvl = lv end
+		local kids = fr.GetChildren and { fr:GetChildren() } or nil
+		if kids then
+			for i = 1, getn(kids) do scan(kids[i]) end
+		end
+	end
+	scan(f)
+	local base = f:GetFrameLevel()
+	local want = mmax(maxLvl + 5 - base, 50)
+	f.catcher:SetFrameLevel(base + want - 10)
+	f.drop:SetFrameLevel(base + want)
+end
+
 function M.BuildDrop(f)
 	local lvl = f:GetFrameLevel()
 	local cat = CreateFrame("Button", nil, f)
@@ -487,6 +513,7 @@ function M.OpenDrop(ctl)
 		if o.choices[i] == cur then idx = i end
 	end
 	M.dropOpt, M.dropCtl = o, ctl
+	M.RaiseDrop()
 	M.dropOff = idx - 1
 	if M.dropOff > n - DROP_ROWS then M.dropOff = n - DROP_ROWS end
 	if M.dropOff < 0 then M.dropOff = 0 end
@@ -1287,6 +1314,7 @@ function M.Render()
 		M.FocusKey(M.focus)
 		M.focus = nil
 	end
+	M.RaiseDrop()
 end
 
 -- Amene la ligne / la carte de la cle dans la zone visible.
