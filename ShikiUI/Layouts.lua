@@ -1004,9 +1004,8 @@ local function cxWatch()
 		if p and type(p.cx) == "number" and it.frame and not Layout.LinkedParent(key) then
 			local w = C.cxWidth(key)
 			if w and it.cxw ~= w then
-				local first = (it.cxw == nil)
 				it.cxw = w
-				if not first then Layout.Apply(key) end
+				Layout.Apply(key)
 			end
 		end
 	end
