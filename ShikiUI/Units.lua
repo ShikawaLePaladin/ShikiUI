@@ -1154,7 +1154,7 @@ function U.Create(unit)
 	for j = 1, getn(SPEC) do f.cf[SPEC[j].name] = specDefault(unit, SPEC[j]) end
 	f:SetFrameStrata("LOW")
 	f:EnableMouse(true)
-	f:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+	f:RegisterForClicks("LeftButtonUp", "RightButtonUp", "MiddleButtonUp")
 	T.Backdrop(f, T.c.bg, T.c.border)
 	-- Barre de pre-soin (soins entrants) SOUS la barre de vie : tout sauf les petits cadres sans ressource
 	if caps.power then

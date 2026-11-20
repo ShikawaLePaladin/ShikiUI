@@ -102,13 +102,14 @@ function P.Sample()
 	end
 	P.allocRate = (getn(h) > 1) and (grow / (getn(h) - 1)) or 0
 	if SUI.Config.Get("perf.auto") then
-		local th = SUI.Config.Get("perf.autofps")
+		local th = SUI.Config.Get("perf.autofps") or 25
+		if th > 45 then th = 45 end          -- un seuil au-dessus de 45 serait toujours atteint (jeu plafonne a 60 fps)
 		if fps > 0 and fps < th then
 			P.lowCount = P.lowCount + 1
 			P.highCount = 0
 		else
 			P.lowCount = 0
-			if fps >= th + 15 then P.highCount = P.highCount + 1 else P.highCount = 0 end
+			if fps >= th + 5 then P.highCount = P.highCount + 1 else P.highCount = 0 end
 		end
 		if not SUI.emergency and P.lowCount >= 8 then
 			P.SetEmergency(true, true)
@@ -170,7 +171,7 @@ SUI.RegisterModule("perf", {
 		{ key = "perf.hud", type = "bool", cat = "perf", label = "opt.perf.hud", tip = "tip.perf.hud", default = false, simple = true, order = 10 },
 		{ key = "perf.auto", type = "bool", cat = "perf", label = "opt.perf.auto", tip = "tip.perf.auto", default = false, simple = true, order = 20 },
 		{ key = "perf.autofps", type = "number", cat = "perf", label = "opt.perf.autofps", tip = "tip.perf.autofps",
-			min = 10, max = 60, step = 5, default = 25, order = 30 },
+			min = 10, max = 45, step = 5, default = 25, order = 30 },
 	},
 	enable = function()
 		P.task = SUI.Every(1, P.Sample, "perf.sample")

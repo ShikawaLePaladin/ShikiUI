@@ -394,7 +394,10 @@ local function onLogin()
 	if SUI.Config.GetGlobal("firstRun") then
 		-- premiere installation : la mise en page "Shiki : classique" est appliquee d office (l assistant peut en choisir une autre)
 		SUI.After(1.5, function()
-			if not SUI.noAutoPreset and SUI.Layout and SUI.Layout.ApplyPreset and not (SUI.Config.cur and SUI.Config.cur.layout) then pcall(SUI.Layout.ApplyPreset, "shiki") end
+			if not SUI.noAutoPreset and SUI.Layout and SUI.Layout.ApplyPreset and not (SUI.Config.cur and SUI.Config.cur.layout) then
+				pcall(SUI.Layout.ApplyPreset, "shiki")
+				if SUI.ApplyStarter then pcall(SUI.ApplyStarter) end
+			end
 			SUI.Menu.ShowWizard()
 		end, "wizard")
 	end

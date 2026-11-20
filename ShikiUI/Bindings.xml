@@ -3,6 +3,9 @@
 	<Binding name="SHIKIUI_PALLYPOWER" header="SHIKIUI">
 		if ShikiUI and ShikiUI.PallyPower and ShikiUI.PallyPower.CastAll then ShikiUI.PallyPower.CastAll() end
 	</Binding>
+	<Binding name="SHIKIUI_PALLYPOWER_NEXT">
+		if ShikiUI and ShikiUI.PallyPower and ShikiUI.PallyPower.CastNext then ShikiUI.PallyPower.CastNext() end
+	</Binding>
 	<Binding name="SHIKIUI_CLICKHEAL_1" header="SHIKIUI_CLICKHEAL">
 		if ShikiUI and ShikiUI.ClickHeal and ShikiUI.ClickHeal.Key then ShikiUI.ClickHeal.Key(1) end
 	</Binding>

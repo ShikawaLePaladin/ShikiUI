@@ -112,7 +112,10 @@ function M.Has(name, b)
 end
 
 local function saveAssign()
+	if M.demo then return end      -- demonstration : jamais ecrite dans la base
 	C.SetGlobal("pallypower.assign", M.assign)
+	if M.mini and M.MiniPaint then M.MiniPaint() end
+	if M.SyncSoon then M.SyncSoon() end
 end
 
 function M.Toggle(name, b, want)
@@ -129,7 +132,7 @@ function M.SetClass(file, attr)
 		local r = M.roster[i]
 		if r.file == file then
 			local a = asg(r.name)
-			for k in pairs(a) do a[k] = nil end
+			for j = 1, getn(M.BLESS) do a[M.BLESS[j]] = nil end
 			if attr then
 				local d = M.CLASSDEF[file]
 				if d then
@@ -215,7 +218,7 @@ function M.ScanRoster()
 end
 
 function M.OnRoster()
-	if M.on then M.ScanRoster() end
+	if M.on and not M.demo then M.ScanRoster() end
 end
 
 -- ---------------------------------------------------------------- benedictions posees ?
@@ -257,13 +260,14 @@ end
 
 -- ---------------------------------------------------------------- cycle de benediction
 -- Nom reel du sort selon la langue du jeu (frFR chez OctoWow : "Ben959diction sup959rieure des Rois"), sinon EN.
-function M.SpellName(b)
+function M.SpellName(b, single)
+	local gr = C.Get("pallypower.greater") and not single
 	if GAMEFR and M.SPELLS_FR[b] then
-		if C.Get("pallypower.greater") then return M.SPELLS_GFR[b] or (M.GREATER_FR .. M.SPELLS_FR[b]) end
+		if gr then return M.SPELLS_GFR[b] or (M.GREATER_FR .. M.SPELLS_FR[b]) end
 		return M.SPELLS_FR[b]
 	end
 	local base = M.SPELLS[b]
-	if C.Get("pallypower.greater") then return M.GREATERPFX .. base end
+	if gr then return M.GREATERPFX .. base end
 	return base
 end
 
@@ -279,7 +283,7 @@ function M.BuildPairs()
 				local b = M.BLESS[j]
 				if a[b] and not M.HasBuff(r.unit, M.SPELLS[b]) then
 					M.npairs = M.npairs + 1
-					M.pairs[M.npairs] = { unit = r.unit, name = M.SpellName(b), base = M.SPELLS[b], frb = GAMEFR and M.SPELLS_FR[b] or nil, who = r.name }
+					M.pairs[M.npairs] = { unit = r.unit, name = M.SpellName(b, a.single), base = M.SPELLS[b], frb = GAMEFR and M.SPELLS_FR[b] or nil, who = r.name }
 				end
 			end
 		end
@@ -371,6 +375,15 @@ local function mkBtn(parent, label, w, h, fn, rfn)
 	return b
 end
 
+local function tip(b, key)
+	b:SetScript("OnEnter", function()
+		GameTooltip:SetOwner(this, "ANCHOR_TOP")
+		GameTooltip:AddLine(L(key), 1, 1, 1, 1)
+		GameTooltip:Show()
+	end)
+	b:SetScript("OnLeave", function() GameTooltip:Hide() end)
+end
+
 function M.Build()
 	if M.win then return end
 	local f = CreateFrame("Frame", "ShikiUI_PallyPowerWin", UIParent)
@@ -419,8 +432,20 @@ function M.Build()
 		row:SetHeight(14)
 		row:SetWidth(520)
 		row.name = T.Text(row, 10, T.c.text, "LEFT", true)
-		row.name:SetPoint("LEFT", row, "LEFT", 4, 0)
-		row.name:SetWidth(110)
+		row.name:SetPoint("LEFT", row, "LEFT", 40, 0)
+		row.name:SetWidth(84)
+		row.bT = mkBtn(row, "T", 16, 13, function()
+			local r = this:GetParent()
+			if r._n then M.ToggleFlag(r._n, "tank") end
+		end)
+		row.bT:SetPoint("LEFT", row, "LEFT", 2, 0)
+		tip(row.bT, "msg.pallypower.tip.rowtank")
+		row.bS = mkBtn(row, "10", 18, 13, function()
+			local r = this:GetParent()
+			if r._n then M.ToggleFlag(r._n, "single") end
+		end)
+		row.bS:SetPoint("LEFT", row, "LEFT", 20, 0)
+		tip(row.bS, "msg.pallypower.tip.rowsingle")
 		row.cells = {}
 		for j = 1, getn(M.BLESS) do
 			local b = M.BLESS[j]
@@ -445,7 +470,7 @@ function M.Build()
 		f.rows[i] = row
 	end
 	-- pied : defauts, vider, BENIR
-	f.bDef = mkBtn(f, L("msg.pallypower.defauts"), 96, 20, function()
+	f.bDef = mkBtn(f, L("msg.pallypower.b.def"), 80, 20, function()
 		for i = 1, M.nrost do
 			local r = M.roster[i]
 			local d = M.CLASSDEF[r.file]
@@ -461,10 +486,20 @@ function M.Build()
 		M.PaintCells()
 	end)
 	f.bDef:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", 10, 8)
-	f.bClear = mkBtn(f, L("msg.pallypower.clear"), 70, 20, function() M.ClearAll() end)
+	f.bClear = mkBtn(f, L("msg.pallypower.b.clear"), 80, 20, function() M.ClearAll() end)
 	f.bClear:SetPoint("LEFT", f.bDef, "RIGHT", 6, 0)
 	f.bCast = mkBtn(f, L("msg.pallypower.cast"), 110, 20, function() M.CastAll() end)
 	f.bCast:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -10, 8)
+	f.bAuto = mkBtn(f, L("msg.pallypower.b.auto"), 80, 20, function() M.AutoAssign() end)
+	tip(f.bAuto, "msg.pallypower.tip.auto")
+	f.bTank = mkBtn(f, L("msg.pallypower.b.tank"), 80, 20, function() M.TargetFlag("tank") end)
+	tip(f.bTank, "msg.pallypower.tip.tank")
+	f.bOne = mkBtn(f, L("msg.pallypower.b.single"), 80, 20, function() M.TargetFlag("single") end)
+	tip(f.bOne, "msg.pallypower.tip.single")
+	f.bRep = mkBtn(f, L("msg.pallypower.b.report"), 80, 20, function() M.Report() end)
+	tip(f.bRep, "msg.pallypower.tip.report")
+	f.bWis = mkBtn(f, L("msg.pallypower.b.whisper"), 80, 20, function() M.WhisperAll() end)
+	tip(f.bWis, "msg.pallypower.tip.whisper")
 	M.BuildMatrix(f)
 	f.bView = mkBtn(f, EMPTY, 96, 20, function() C.Set("pallypower.compact", not M.Compact()) end)
 	f.bView:SetPoint("BOTTOM", f, "BOTTOM", 0, 8)
@@ -476,6 +511,7 @@ function M.Build()
 	if SUI.Mover and SUI.Mover.Register then
 		SUI.Mover.Register("pp.win", f, { label = L("mod.pallypower.title"), scale = false })
 	end
+	M.DragWire(f, "pp.win")
 	T.OnAccent(function()
 		if M.win and M.win:IsShown() then M.PaintCells() end
 	end)
@@ -661,9 +697,21 @@ function M.ApplyView()
 	if compact then
 		local n = 0
 		for _ in pairs(M.classes) do n = n + 1 end
-		if n < 3 then n = 3 end
-		f:SetWidth(10 + 96 + n * (CELL + GAP) + 10)
-		f:SetHeight(34 + CELL + 10 + getn(M.BLESS) * (CELL + GAP) + 44)
+		if n < 4 then n = 4 end
+		local W = 10 + 96 + n * (CELL + GAP) + 10
+		f:SetWidth(W)
+		f:SetHeight(34 + CELL + 10 + getn(M.BLESS) * (CELL + GAP) + 4 + 4 * 24 + 6)
+		local w3 = floor((W - 28) / 3)
+		local w2 = floor((W - 24) / 2)
+		M.Put(f.bRep, 10, 80, w2)
+		M.Put(f.bWis, 14 + w2, 80, w2)
+		M.Put(f.bTank, 10, 56, w2)
+		M.Put(f.bOne, 14 + w2, 56, w2)
+		M.Put(f.bAuto, 10, 32, w3)
+		M.Put(f.bDef, 14 + w3, 32, w3)
+		M.Put(f.bClear, 18 + 2 * w3, 32, w3)
+		M.Put(f.bView, 10, 8, w2)
+		M.Put(f.bCast, 14 + w2, 8, w2)
 		f.mx:Show()
 		for _, b in pairs(f.allB) do b:Hide() end
 		for i = 1, M.MAXCLASS do f.classB[i]:Hide() end
@@ -672,6 +720,15 @@ function M.ApplyView()
 	else
 		f:SetWidth(540)
 		f:SetHeight(520)
+		M.Put(f.bDef, 10, 8, 80)
+		M.Put(f.bClear, 94, 8, 80)
+		M.Put(f.bAuto, 178, 8, 80)
+		M.Put(f.bView, 300, 8, 96)
+		M.Put(f.bCast, 420, 8, 110)
+		f.bTank:Hide()
+		f.bOne:Hide()
+		M.Put(f.bRep, 10, 36, 100)
+		M.Put(f.bWis, 114, 36, 100)
 		f.mx:Hide()
 		for _, b in pairs(f.allB) do b:Show() end
 		f.bView.txt:SetText(L("msg.pallypower.viewclass"))
@@ -708,6 +765,9 @@ function M.PaintRows()
 			local cc = RAID_CLASS_COLORS[r.file]
 			if cc then row.name:SetTextColor(cc.r, cc.g, cc.b) end
 			row._n = r.name
+			local fa = M.assign[r.name]
+			M.PaintFlag(row.bT, fa and fa.tank)
+			M.PaintFlag(row.bS, fa and fa.single)
 			row:Show()
 			for j = 1, getn(M.BLESS) do
 				row.cells[M.BLESS[j]].who = r.name
@@ -807,6 +867,656 @@ function M.ToggleWin()
 	if M.win and M.win:IsShown() then M.Close() else M.Open() end
 end
 
+-- ---------------------------------------------------------------- attribution automatique, tanks, benedictions de 10 min
+-- Drapeaux par joueur (dans M.assign[nom]) : tank = recoit Rois + Puissance + Lumiere (jamais Salut) ; single = benedictions
+-- SIMPLES (10 min) posees a ce joueur au lieu des benedictions superieures (utile pour un tank, un hybride, un joueur precis).
+M.TANKSET = { "kings", "might", "light" }
+M.HYBRID = { PALADIN = true, SHAMAN = true, DRUID = true }
+
+-- Sorts connus du paladin (livre de sorts) : on n'attribue jamais une benediction qu'il ne possede pas.
+function M.ScanKnown()
+	local gsn = getglobal("GetSpellName")
+	local known = {}
+	local any = false
+	if type(gsn) == "function" then
+		for i = 1, 300 do
+			local nm = gsn(i, "spell")
+			if not nm then break end
+			any = true
+			known[fold(nm)] = true
+		end
+	end
+	M.known = any and known or nil
+end
+
+function M.Knows(b)
+	if not M.known then return true end
+	local nm = (GAMEFR and M.SPELLS_FR[b]) or M.SPELLS[b]
+	return M.known[fold(nm)] and true or false
+end
+
+function M.SetFlag(name, flag, want)
+	local a = asg(name)
+	if want == nil then want = not a[flag] end
+	if want then a[flag] = true else a[flag] = nil end
+	saveAssign()
+	M.PaintCells()
+	M.PaintRows()
+	return want
+end
+
+-- Jeu de benedictions conseille pour un joueur de la liste (selon sa classe, sa jauge de ressource et le drapeau tank).
+function M.AutoSet(r)
+	local a = M.assign and M.assign[r.name]
+	local file = r.file
+	local set
+	local melee = false
+	if a and a.tank then
+		set = M.TANKSET
+		melee = true
+	elseif file == "WARRIOR" or file == "ROGUE" then
+		set = { "kings", "might" }
+		melee = true
+	elseif file == "HUNTER" then
+		set = { "kings", "might", "wisdom" }
+		melee = true
+	elseif file == "MAGE" or file == "WARLOCK" or file == "PRIEST" then
+		set = { "kings", "wisdom" }
+	else
+		-- druide / chaman / paladin : rage ou energie = au corps a corps (puissance), mana = soutien (sagesse)
+		local pt = 0
+		local upt = getglobal("UnitPowerType")
+		if type(upt) == "function" then pt = upt(r.unit) or 0 end
+		if pt == 1 or pt == 3 then
+			set = { "kings", "might" }
+			melee = true
+		else
+			set = { "kings", "wisdom" }
+		end
+	end
+	local out = {}
+	for i = 1, getn(set) do
+		if M.Knows(set[i]) then tinsert(out, set[i]) end
+	end
+	if C.Get("pallypower.autosalv") and not (a and a.tank) and M.Knows("salvation") then tinsert(out, "salvation") end
+	return out
+end
+
+function M.AutoOne(r)
+	local a = asg(r.name)
+	for j = 1, getn(M.BLESS) do a[M.BLESS[j]] = nil end
+	local set = M.AutoSet(r)
+	for i = 1, getn(set) do a[set[i]] = true end
+	if C.Get("pallypower.autosingle") and (a.tank or M.HYBRID[r.file]) then a.single = true end
+end
+
+function M.AutoAssign()
+	if M.nrost == 0 then M.ScanRoster() end
+	for i = 1, M.nrost do M.AutoOne(M.roster[i]) end
+	saveAssign()
+	M.PaintCells()
+	M.PaintRows()
+	SUI.Print(L("msg.pallypower.autodone", M.nrost))
+end
+
+function M.ToggleFlag(n, flag)
+	if M.nrost == 0 then M.ScanRoster() end
+	local rr
+	for i = 1, M.nrost do
+		if M.roster[i].name == n then rr = M.roster[i] end
+	end
+	if not rr then
+		SUI.Print(L("msg.pallypower.notinraid", n))
+		return nil
+	end
+	local want = M.SetFlag(n, flag)
+	if flag == "tank" and want then
+		M.AutoOne(rr)
+		saveAssign()
+		M.PaintCells()
+		M.PaintRows()
+	end
+	SUI.Print(L(want and ("msg.pallypower.flag." .. flag .. ".on") or ("msg.pallypower.flag." .. flag .. ".off"), n))
+	return want
+end
+
+-- Joueur cible (le "focus" du 1.12) : bascule tank / 10 min sur lui, s il fait partie du groupe.
+function M.TargetFlag(flag)
+	local n = UnitName("target")
+	if not n or not UnitExists("target") then
+		SUI.Print(L("msg.pallypower.notarget"))
+		return
+	end
+	M.ToggleFlag(n, flag)
+end
+
+function M.Put(b, x, y, w)
+	b:ClearAllPoints()
+	b:SetWidth(w)
+	b:SetPoint("BOTTOMLEFT", M.win, "BOTTOMLEFT", x, y)
+	b:Show()
+end
+
+function M.PaintFlag(b, on)
+	local ar, ag, ab = T.Accent()
+	local bc = T.c.border
+	if on then
+		b:SetBackdropBorderColor(ar, ag, ab, 1)
+	else
+		b:SetBackdropBorderColor(bc[1], bc[2], bc[3], bc[4] or 1)
+	end
+end
+
+-- Deplacement a la souris : glisser sur le fond (les boutons gardent leur clic). Meme enregistrement que le mode "Deplacer".
+local function dragWire(f, key)
+	local function stop()
+		local fr = M.dragf
+		if not fr then return end
+		M.dragf = nil
+		fr:StopMovingOrSizing()
+		local l, b = fr:GetLeft(), fr:GetBottom()
+		if not (l and b) then return end
+		local sc = fr:GetScale() or 1
+		local rec = SUI.Mover and SUI.Mover.items and SUI.Mover.items[key]
+		if rec and SUI.Mover.Commit then
+			SUI.Mover.Commit(rec, l * sc, b * sc)
+		elseif SUI.Layout then
+			local _, _, s = C.GetPos(SUI.Layout.ReadKey(key))
+			C.SetPos(SUI.Layout.WriteKey(key), l * sc, b * sc, s)
+			SUI.Layout.Apply(key)
+		end
+	end
+	f:EnableMouse(true)
+	f:SetScript("OnMouseDown", function()
+		if arg1 ~= "LeftButton" or SUI.InCombat() then return end
+		this:StartMoving()
+		M.dragf = this
+	end)
+	f:SetScript("OnMouseUp", stop)
+	f:SetScript("OnHide", stop)
+end
+M.DragWire = dragWire
+
+-- ---------------------------------------------------------------- demonstration (/sui pp demo) : raid simule, vos attributions ne sont pas touchees
+M.DEMOCLASS = { "WARRIOR", "WARRIOR", "ROGUE", "ROGUE", "HUNTER", "HUNTER", "MAGE", "MAGE", "MAGE", "MAGE", "WARLOCK", "WARLOCK", "WARLOCK",
+	"PRIEST", "PRIEST", "PRIEST", "PRIEST", "DRUID", "DRUID", "DRUID", "SHAMAN", "SHAMAN", "SHAMAN" }
+
+function M.Demo(on)
+	if on == false then
+		if not M.demo then return end
+		M.demo = false
+		M.assign = M.realAssign or M.assign
+		M.realAssign = nil
+		M.ScanRoster()
+		M.PaintCells()
+		SUI.Print(L("msg.pallypower.demo.off"))
+		return
+	end
+	if not M.on then return end
+	if not M.demo then M.realAssign = M.assign end
+	M.demo = true
+	M.assign = {}
+	M.nrost = 0
+	local n = 0
+	for i = 1, 5 do
+		n = n + 1
+		M.roster[n] = { name = "Paladin" .. i, unit = "raid" .. n, file = "PALADIN" }
+	end
+	for i = 1, getn(M.DEMOCLASS) do
+		n = n + 1
+		M.roster[n] = { name = "Joueur" .. i, unit = "raid" .. n, file = M.DEMOCLASS[i] }
+	end
+	M.nrost = n
+	M.ScanClasses()
+	M.offset = 0
+	asg("Joueur1").tank = true
+	asg("Paladin3").tank = true
+	M.AutoAssign()
+	M.Build()
+	M.win:Show()
+	M.Rebuild()
+	SUI.Print(L("msg.pallypower.demo.on", n))
+end
+
+-- ---------------------------------------------------------------- rapport : dire aux joueurs qui recoit quoi
+local function className(file)
+	local t = getglobal("LOCALIZED_CLASS_NAMES_MALE")
+	return (t and t[file]) or file
+end
+
+-- Lignes du rapport : une par benediction, avec les classes completes puis les joueurs isoles ; derniere ligne : les 10 minutes.
+function M.ReportLines()
+	local lines = {}
+	for j = 1, getn(M.BLESS) do
+		local b = M.BLESS[j]
+		local full, solo = {}, {}
+		for _, file in ipairs(M.CORDER) do
+			local n, have = M.ClassState(file, b)
+			if n > 0 and have == n then
+				tinsert(full, className(file))
+			elseif have > 0 then
+				for i = 1, M.nrost do
+					local r = M.roster[i]
+					if r.file == file and M.Has(r.name, b) then tinsert(solo, r.name) end
+				end
+			end
+		end
+		if getn(full) + getn(solo) > 0 then
+			local who = table.concat(full, ", ")
+			if getn(solo) > 0 then who = who .. (who ~= EMPTY and " + " or EMPTY) .. table.concat(solo, ", ") end
+			tinsert(lines, L("msg.pallypower.bless." .. b) .. " : " .. who)
+		end
+	end
+	local sg = {}
+	for i = 1, M.nrost do
+		local a = M.assign[M.roster[i].name]
+		if a and a.single then tinsert(sg, M.roster[i].name) end
+	end
+	if getn(sg) > 0 then tinsert(lines, L("msg.pallypower.rep.single") .. " : " .. table.concat(sg, ", ")) end
+	return lines
+end
+
+-- Envoie le rapport au chat du raid (sinon du groupe) ; hors groupe il s'affiche chez toi seulement.
+function M.Report()
+	local lines = M.ReportLines()
+	if getn(lines) == 0 then
+		SUI.Print(L("msg.pallypower.rep.none"))
+		return 0
+	end
+	local ch
+	if GetNumRaidMembers and GetNumRaidMembers() > 0 then ch = "RAID" elseif GetNumPartyMembers and GetNumPartyMembers() > 0 then ch = "PARTY" end
+	local head = L("msg.pallypower.rep.head")
+	if ch then SendChatMessage(head, ch) else SUI.Print(head) end
+	for i = 1, getn(lines) do
+		local t = lines[i]
+		if string.len(t) > 250 then t = strsub(t, 1, 247) .. "..." end
+		if ch then SendChatMessage(t, ch) else SUI.Print(t) end
+	end
+	return getn(lines)
+end
+
+-- Texte prive d'un joueur : ses benedictions (et "10 min" si besoin), nil s'il n'en a aucune.
+function M.WhisperText(name)
+	local a = M.assign[name]
+	if not a then return nil end
+	local t = {}
+	for j = 1, getn(M.BLESS) do
+		if a[M.BLESS[j]] then tinsert(t, L("msg.pallypower.bless." .. M.BLESS[j])) end
+	end
+	if getn(t) == 0 then return nil end
+	local s = L("msg.pallypower.whisper", table.concat(t, ", "))
+	if a.single then s = s .. " " .. L("msg.pallypower.whisper.single") end
+	return s
+end
+
+-- Un message prive par joueur, espaces (anti-flood) : 1 toutes les 0,6 s.
+function M.WhisperAll()
+	if M.wtask then SUI.Cancel(M.wtask) M.wtask = nil end
+	M.wq = {}
+	local me = UnitName("player")
+	for i = 1, M.nrost do
+		local r = M.roster[i]
+		if r.name ~= me then
+			local t = M.WhisperText(r.name)
+			if t then tinsert(M.wq, { r.name, t }) end
+		end
+	end
+	M.wi = 0
+	if getn(M.wq) == 0 then
+		SUI.Print(L("msg.pallypower.rep.none"))
+		return 0
+	end
+	SUI.Print(L("msg.pallypower.rep.wsent", getn(M.wq)))
+	M.wtask = SUI.Every(0.6, function()
+		M.wi = M.wi + 1
+		local e = M.wq[M.wi]
+		if not e then
+			SUI.Cancel(M.wtask)
+			M.wtask = nil
+			return
+		end
+		SendChatMessage(e[2], "WHISPER", nil, e[1])
+	end, "pp.whisper")
+	return getn(M.wq)
+end
+
+-- ---------------------------------------------------------------- synchro entre paladins (meme canal que PallyPowerTW : prefixe PLPWR)
+M.SYNC_PREFIX = "PLPWR"
+M.SYNC_CLS = { WARRIOR = 0, ROGUE = 1, PRIEST = 2, DRUID = 3, PALADIN = 4, HUNTER = 5, MAGE = 6, WARLOCK = 7, SHAMAN = 8 }
+M.SYNC_BID = { wisdom = 0, might = 1, salvation = 2, light = 3, kings = 4 }
+M.peers = {}
+
+local function syncChan()
+	if GetNumRaidMembers and GetNumRaidMembers() > 0 then return "RAID" end
+	if GetNumPartyMembers and GetNumPartyMembers() > 0 then return "PARTY" end
+	return nil
+end
+
+local function syncSend(msg)
+	local ch = syncChan()
+	local sam = getglobal("SendAddonMessage")
+	if not ch or type(sam) ~= "function" then return false end
+	sam(M.SYNC_PREFIX, msg, ch, UnitName("player"))
+	return true
+end
+
+-- Texte "SELF" : rangs des benedictions connues puis, par classe (0-9), la benediction que JE donne ("n" = aucune).
+function M.SyncSelfText()
+	local s = "SELF "
+	local order = { "wisdom", "might", "salvation", "light", "kings" }
+	for i = 1, 5 do
+		s = s .. (M.Knows(order[i]) and "10" or "nn")
+	end
+	s = s .. "nn@"
+	for id = 0, 9 do
+		local ch = "n"
+		for file, cid in pairs(M.SYNC_CLS) do
+			if cid == id then
+				for j = 1, getn(M.BLESS) do
+					local n, have = M.ClassState(file, M.BLESS[j])
+					if n > 0 and have == n then ch = tostring(M.SYNC_BID[M.BLESS[j]]) break end
+				end
+			end
+		end
+		s = s .. ch
+	end
+	return s
+end
+
+-- Envoie mes attributions aux autres paladins (utile seulement si je suis paladin et qu'il y a un groupe).
+function M.SyncSend()
+	if M.demo or C.Get("pallypower.sync") == false then return false end
+	local _, cls = UnitClass("player")
+	if cls ~= "PALADIN" then return false end
+	return syncSend(M.SyncSelfText())
+end
+
+-- Envoi differe (regroupe plusieurs clics en un seul message).
+function M.SyncSoon()
+	if M.demo or C.Get("pallypower.sync") == false then return end
+	if M.stask then SUI.Cancel(M.stask) end
+	M.stask = SUI.After(1.2, function() M.stask = nil M.SyncSend() end, "pp.sync")
+end
+
+local function classNameById(id)
+	for file, cid in pairs(M.SYNC_CLS) do
+		if cid == id then return className(file) end
+	end
+	return "?"
+end
+
+local function blessNameById(bid)
+	for b, id in pairs(M.SYNC_BID) do
+		if id == bid then return L("msg.pallypower.bless." .. b) end
+	end
+	return "?"
+end
+
+-- "Rois : Mage, Pretre ; Sagesse : Druide" pour un paladin pair.
+function M.PeerText(name)
+	local p = M.peers[name]
+	if not p then return nil end
+	local by = {}
+	for id = 0, 9 do
+		local bid = p[id]
+		if bid and bid >= 0 then
+			if not by[bid] then by[bid] = {} end
+			tinsert(by[bid], classNameById(id))
+		end
+	end
+	local parts = {}
+	for bid = 0, 5 do
+		if by[bid] then tinsert(parts, blessNameById(bid) .. " : " .. table.concat(by[bid], ", ")) end
+	end
+	if getn(parts) == 0 then return nil end
+	return table.concat(parts, " ; ")
+end
+
+-- Liste lisible de ce que font les autres paladins (une ligne par paladin).
+function M.PeerLines()
+	local out = {}
+	for name in pairs(M.peers) do
+		local t = M.PeerText(name)
+		tinsert(out, name .. " -> " .. (t or L("msg.pallypower.sync.none")))
+	end
+	table.sort(out)
+	return out
+end
+
+function M.OnAddon(ev, a1, a2, a3, a4)
+	if not M.on or a1 ~= M.SYNC_PREFIX or type(a2) ~= "string" or C.Get("pallypower.sync") == false then return end
+	local sender = a4
+	if not sender or sender == UnitName("player") then return end
+	if a2 == "REQ" then
+		M.SyncSoon()
+		return
+	end
+	local before = M.PeerText(sender)
+	local changed = false
+	if strsub(a2, 1, 5) == "SELF " then
+		local _, _, rest = string.find(a2, "^SELF [%w]*@?([%w]*)")
+		local p = {}
+		for id = 0, 9 do
+			local ch = strsub(rest or "", id + 1, id + 1)
+			p[id] = tonumber(ch) or -1
+		end
+		M.peers[sender] = p
+		changed = true
+	elseif strsub(a2, 1, 7) == "ASSIGN " then
+		local _, _, name, class, skill = string.find(a2, "^ASSIGN (%S+) (%S+) (%S+)")
+		if name == sender and class and skill then
+			local p = M.peers[sender] or {}
+			p[tonumber(class) or 0] = tonumber(skill) or -1
+			M.peers[sender] = p
+			changed = true
+		end
+	elseif a2 == "CLEAR" then
+		if M.peers[sender] then M.peers[sender] = nil changed = true end
+	end
+	if changed then
+		local now = M.PeerText(sender)
+		if now ~= before and C.Get("pallypower.syncmsg") ~= false then
+			SUI.Print(L("msg.pallypower.sync.changed", sender, now or L("msg.pallypower.sync.none")))
+		end
+		if M.win and M.win:IsShown() and M.PaintCells then M.PaintCells() end
+	end
+end
+
+function M.SyncReq()
+	syncSend("REQ")
+end
+
+-- ---------------------------------------------------------------- mini-panneau (facon "Pally Buffs" de l'addon d'origine)
+-- Une icone par benediction attribuee : le chiffre = nombre de joueurs visibles qui la manquent, bordure rouge (aucun),
+-- jaune (partiel), verte (complet). Clic = pose cette benediction au joueur suivant qui la manque ; clic droit = grille ;
+-- bouton "Benir" / touche SHIKIUI_PALLYPOWER_NEXT = prochaine benediction manquante (une par appui, GCD respecte).
+-- Lecture par TEXTURE (UnitBuff, pas d'infobulle) : quelques lectures par joueur toutes les 2 s, sans cout notable.
+M.TEXPAT = { kings = { "magearmor", "spell_magic_greaterblessingofkings" }, wisdom = { "sealofwisdom", "greaterblessingofwisdom" },
+	might = { "fistofjustice", "spell_holy_greaterblessingofkings" }, salvation = { "sealofsalvation", "greaterblessingofsalvation" },
+	light = { "prayerofhealing02", "greaterblessingoflight" } }
+M.miniState = {}
+M.MINIGAP = 4
+
+function M.HasTex(unit, b)
+	local pats = M.TEXPAT[b]
+	local ub = getglobal("UnitBuff")
+	if type(ub) ~= "function" or not pats then return false end
+	for i = 1, 32 do
+		local tex = ub(unit, i)
+		if not tex then break end
+		tex = slower(tex)
+		for j = 1, getn(pats) do
+			if sfind(tex, pats[j], 1, true) then return true end
+		end
+	end
+	return false
+end
+
+-- Etat par benediction : n = joueurs attribues, miss = noms qui la manquent, units = unites correspondantes.
+function M.MiniScan()
+	local st = {}
+	M.miniState = st
+	local vis = getglobal("UnitIsVisible")
+	for i = 1, M.nrost do
+		local r = M.roster[i]
+		local a = M.assign and M.assign[r.name]
+		if a then
+			for j = 1, getn(M.BLESS) do
+				local b = M.BLESS[j]
+				if a[b] then
+					local s = st[b]
+					if not s then
+						s = { n = 0, miss = {}, units = {}, singles = {} }
+						st[b] = s
+					end
+					s.n = s.n + 1
+					local ok = UnitExists(r.unit) and not UnitIsDeadOrGhost(r.unit)
+					if ok and type(vis) == "function" and not vis(r.unit) then ok = false end
+					if ok and not M.HasTex(r.unit, b) then
+						tinsert(s.miss, r.name)
+						tinsert(s.units, r.unit)
+						tinsert(s.singles, a.single and true or false)
+					end
+				end
+			end
+		end
+	end
+	return st
+end
+
+-- Pose UNE benediction manquante (celle demandee, sinon la premiere dans l'ordre Rois, Sagesse...). Renvoie vrai si lancee.
+function M.CastNext(b)
+	if not M.on then return false end
+	if UnitIsDeadOrGhost("player") then return false end
+	if M.nrost == 0 then M.ScanRoster() end
+	local st = M.MiniScan()
+	for j = 1, getn(M.BLESS) do
+		local bb = M.BLESS[j]
+		if b == nil or b == bb then
+			local s = st[bb]
+			if s and s.units[1] then
+				castOn(s.units[1], M.SpellName(bb, s.singles[1]))
+				M.lastCast = s.miss[1]
+				if M.mini then M.MiniPaint() end
+				return true
+			end
+		end
+	end
+	SUI.Print(L("msg.pallypower.allset"))
+	return false
+end
+
+M.MC = 28          -- cote d'une icone du mini-panneau
+
+function M.BuildMini()
+	if M.mini then return M.mini end
+	local f = CreateFrame("Frame", "ShikiUI_PPMini", UIParent)
+	f:SetFrameStrata("MEDIUM")
+	f:SetWidth(40)
+	f:SetHeight(M.MC + 8)
+	T.Backdrop(f, T.c.bg, T.c.border)
+	f.btn = {}
+	for j = 1, getn(M.BLESS) do
+		local b = iconBtn(f, "Interface\\Icons\\" .. M.BICON[M.BLESS[j]])
+		b:SetWidth(M.MC)
+		b:SetHeight(M.MC)
+		b.bless = M.BLESS[j]
+		b.cnt = T.Text(b, 12, T.c.text, "RIGHT", true)
+		b.cnt:SetPoint("BOTTOMRIGHT", b, "BOTTOMRIGHT", -2, 2)
+		b:SetScript("OnClick", function()
+			if arg1 == "RightButton" then M.Open() else M.CastNext(this.bless) end
+		end)
+		b:SetScript("OnEnter", function()
+			local s = M.miniState[this.bless]
+			GameTooltip:SetOwner(this, "ANCHOR_RIGHT")
+			GameTooltip:SetText(L("msg.pallypower.bless." .. this.bless))
+			if s and s.miss[1] then
+				for k = 1, mmin(getn(s.miss), 10) do GameTooltip:AddLine(s.miss[k], 1, 0.6, 0.6) end
+				if getn(s.miss) > 10 then GameTooltip:AddLine("...", 0.7, 0.7, 0.7) end
+			else
+				GameTooltip:AddLine(L("msg.pallypower.mini.ok"), 0.5, 1, 0.5)
+			end
+			GameTooltip:AddLine(L("msg.pallypower.mini.hint"), 0.6, 0.6, 0.6)
+			GameTooltip:Show()
+		end)
+		b:SetScript("OnLeave", function() GameTooltip:Hide() end)
+		f.btn[j] = b
+	end
+	-- dernier bouton : "benir le suivant" (affiche le total qui manque)
+	local g = iconBtn(f, nil)
+	g:SetWidth(M.MC)
+	g:SetHeight(M.MC)
+	g.txt = T.Text(g, 13, T.c.text, "CENTER", true)
+	g.txt:SetPoint("CENTER", g, "CENTER", 0, 0)
+	g:SetScript("OnClick", function()
+		if arg1 == "RightButton" then M.Open() else M.CastNext() end
+	end)
+	g:SetScript("OnEnter", function()
+		GameTooltip:SetOwner(this, "ANCHOR_RIGHT")
+		GameTooltip:SetText(L("msg.pallypower.bind.next"))
+		GameTooltip:AddLine(L("msg.pallypower.mini.hint"), 0.6, 0.6, 0.6)
+		GameTooltip:Show()
+	end)
+	g:SetScript("OnLeave", function() GameTooltip:Hide() end)
+	f.go = g
+	SUI.Layout.Register(f, "pallypower.mini", "LEFT", 8, 120)
+	M.DragWire(f, "pallypower.mini")
+	M.mini = f
+	return f
+end
+
+function M.MiniPaint()
+	local f = M.mini
+	if not f then return end
+	local st = M.MiniScan()
+	local shown, total = 0, 0
+	local tc = T.c
+	local mc, gap = M.MC, 3
+	for j = 1, getn(M.BLESS) do
+		local b = f.btn[j]
+		local s = st[M.BLESS[j]]
+		if s and s.n > 0 then
+			shown = shown + 1
+			b:ClearAllPoints()
+			b:SetPoint("TOPLEFT", f, "TOPLEFT", 4 + (shown - 1) * (mc + gap), -4)
+			local nm = getn(s.miss)
+			total = total + nm
+			local col = tc.good
+			if nm >= s.n then col = tc.bad elseif nm > 0 then col = tc.warn end
+			b:SetBackdropBorderColor(col[1], col[2], col[3], 1)
+			b.cnt:SetText(nm > 0 and nm or EMPTY)
+			b:Show()
+		else
+			b:Hide()
+		end
+	end
+	if shown == 0 then
+		f:Hide()
+		return
+	end
+	f.go:ClearAllPoints()
+	f.go:SetPoint("TOPLEFT", f, "TOPLEFT", 4 + shown * (mc + gap), -4)
+	f.go.txt:SetText(total > 0 and total or EMPTY)
+	local col = (total > 0) and tc.warn or tc.good
+	f.go:SetBackdropBorderColor(col[1], col[2], col[3], 1)
+	f:SetWidth(8 + (shown + 1) * mc + shown * gap)
+	f:SetHeight(mc + 8)
+	f:Show()
+end
+
+function M.MiniTick()
+	if not M.on then return end
+	if not C.Get("pallypower.mini") then
+		if M.mini then M.mini:Hide() end
+		return
+	end
+	if not M.mini then
+		if SUI.InCombat() then return end
+		M.BuildMini()
+	end
+	M.MiniPaint()
+end
+
 -- ---------------------------------------------------------------- cycle de vie
 function M.OnKey(key)
 	if key == nil or sfind(key or EMPTY, "^pallypower%.") then
@@ -815,6 +1525,7 @@ function M.OnKey(key)
 			M.PaintCells()
 		end
 		if M.win and M.win:IsShown() then M.PaintStatus() end
+		if key == "pallypower.mini" then M.MiniTick() end
 	end
 end
 
@@ -837,6 +1548,9 @@ function M.Enable()
 	SUI.On("RAID_ROSTER_UPDATE", M.OnRoster)
 	SUI.On("PARTY_MEMBERS_CHANGED", M.OnRoster)
 	SUI.On("PLAYER_ENTERING_WORLD", M.OnRoster)
+	SUI.On("SPELLS_CHANGED", M.ScanKnown)
+	SUI.On("CHAT_MSG_ADDON", M.OnAddon)
+	SUI.WhenSafe(M.ScanKnown)
 	if not M.watching then
 		M.watching = true
 		C.Watch("pallypower.", M.OnKey)
@@ -847,14 +1561,25 @@ function M.Enable()
 		SUI.Print(L("msg.pallypower.nopaladin"))
 	end
 	M.ScanRoster()
+	if not M.miniTask then M.miniTask = SUI.Every(2, M.MiniTick, "pp.mini") end
+	SUI.WhenSafe(M.MiniTick)
+	M.rtask = SUI.After(3, function() M.rtask = nil if M.on then M.SyncReq() M.SyncSoon() end end, "pp.syncreq")
 end
 
 function M.Disable()
+	if M.demo then M.Demo(false) end
+	if M.wtask then SUI.Cancel(M.wtask) M.wtask = nil end
 	M.on = false
 	M.Stop()
+	if M.miniTask then SUI.Cancel(M.miniTask) M.miniTask = nil end
+	if M.mini then M.mini:Hide() end
 	SUI.Off("RAID_ROSTER_UPDATE", M.OnRoster)
 	SUI.Off("PARTY_MEMBERS_CHANGED", M.OnRoster)
 	SUI.Off("PLAYER_ENTERING_WORLD", M.OnRoster)
+	SUI.Off("SPELLS_CHANGED", M.ScanKnown)
+	SUI.Off("CHAT_MSG_ADDON", M.OnAddon)
+	if M.stask then SUI.Cancel(M.stask) M.stask = nil end
+	if M.rtask then SUI.Cancel(M.rtask) M.rtask = nil end
 	M.Close()
 end
 
@@ -877,6 +1602,11 @@ SUI.RegisterModule("pallypower", {
 	options = {
 		opt("greater", "bool", 10, true, { simple = true }),
 		opt("compact", "bool", 15, true, { simple = true }),
+		opt("mini", "bool", 16, true, { simple = true }),
+		opt("autosingle", "bool", 17, true, { simple = true }),
+		opt("autosalv", "bool", 18, false),
+		opt("sync", "bool", 19, true),
+		opt("syncmsg", "bool", 19.5, true),
 		opt("judge", "choice", 20, "none", { choices = { "none", "light", "wisdom", "crusader" }, choiceText = judgeText, simple = true }),
 	},
 	enable = function() M.Enable() end,
@@ -895,6 +1625,26 @@ SUI.RegisterCommand("pp", function(rest)
 		M.Close()
 	elseif rest == "cast" then
 		M.CastAll()
+	elseif rest == "next" then
+		M.CastNext()
+	elseif rest == "sync" then
+		M.SyncReq()
+		M.SyncSend()
+		local pl = M.PeerLines()
+		if getn(pl) == 0 then SUI.Print(L("msg.pallypower.sync.nopeer")) end
+		for i = 1, getn(pl) do SUI.Print(pl[i]) end
+	elseif rest == "report" then
+		M.Report()
+	elseif rest == "whisper" then
+		M.WhisperAll()
+	elseif rest == "demo" then
+		M.Demo()
+	elseif rest == "demooff" then
+		M.Demo(false)
+	elseif rest == "auto" then
+		M.AutoAssign()
+	elseif rest == "tank" or rest == "single" then
+		M.TargetFlag(rest)
 	elseif rest == "clear" then
 		M.ClearAll()
 		SUI.Print(L("msg.pallypower.cleared"))
@@ -902,3 +1652,6 @@ SUI.RegisterCommand("pp", function(rest)
 		M.ToggleWin()
 	end
 end, "help.pallypower")
+
+setglobal("BINDING_NAME_SHIKIUI_PALLYPOWER_NEXT", L("msg.pallypower.bind.next"))
+setglobal("BINDING_NAME_SHIKIUI_PALLYPOWER", L("msg.pallypower.bind.all"))
