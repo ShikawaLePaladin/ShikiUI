@@ -125,8 +125,9 @@ function G.Install()
 	for i = 1, getn(below) do isBelow[below[i]] = true end
 	for i = 1, getn(below) do
 		local x = below[i]
-		local p, rel, rp, ox, oy = x:GetPoint(1)
-		if p then
+		-- FIX 2026-11-20 : un bouton sans ancre (DeleteRegion entre-temps) levait ici et tuait le menu Echap
+		local okP, p, rel, rp, ox, oy = pcall(x.GetPoint, x, 1)
+		if okP and p then
 			-- selon les clients, relativeTo arrive en chaine : normalise vers l'objet ancre
 			if type(rel) == "string" then rel = getglobal(rel) end
 			if rel == model then

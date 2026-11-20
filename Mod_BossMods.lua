@@ -151,14 +151,7 @@ M.BOSSES = {
 			{ t = 18, every = 18, name = "Whirlwind CD", dur = 3, warn = true },
 		},
 	},
-	["brood queen araxxna"] = {
-		label = "Brood Queen Araxxna",
-		ev = {
-			{ t = 8, every = 8, name = "Brood Venom Volley", dur = 3, icon = "Interface\\Icons\\Spell_Nature_InsectSwarm", warn = true },
-			{ t = 10, every = 10, name = "Leeching Bite", dur = 3, icon = "Interface\\Icons\\ability_poisonsting", warn = true },
-			{ t = 20, every = 20, name = "Skitterweb Egg Hatch", dur = 3, icon = "Interface\\Icons\\inv_egg_02", warn = true },
-		},
-	},
+	-- (dedup 2026-11-20 : doublon retire, la definition suivante fait foi)
 	["broodlord lashlayer"] = {
 		label = "Broodlord Lashlayer",
 		ev = {
@@ -354,13 +347,7 @@ M.BOSSES = {
 			{ t = 10, every = 10, name = "Conflag", dur = 3, icon = "Interface\\Icons\\spell_fire_incinerate", warn = true },
 		},
 	},
-	["general rajaxx"] = {
-		label = "General Rajaxx",
-		ev = {
-			{ t = 34.72, every = 34.72, name = "Encounter begins", dur = 3, icon = "Interface\\Icons\\Inv_Misc_PocketWatch_01", warn = true },
-			{ t = 10, every = 10, name = "Marked", dur = 3, icon = "Interface\\Icons\\Ability_Hunter_SniperShot", warn = true },
-		},
-	},
+	-- (dedup 2026-11-20 : doublon retire, la definition suivante fait foi)
 	["gluth"] = {
 		label = "Gluth",
 		ev = {

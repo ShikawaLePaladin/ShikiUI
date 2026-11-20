@@ -124,6 +124,10 @@ end
 function M.ApplyOptions()
 	if not M.win then return end
 	M.ReadConfig()
+	-- scale (70-160) : applique au cadre ; la compensation d'echelle du Mover garde la place
+	if M.win.SetScale then
+		M.win:SetScale((cfg.scale or 100) / 100)
+	end
 	-- cellules creees une fois par bloc (pool) : on montre les actives dans l'ordre de BLOCKS
 	local x = 0
 	local wide = 0

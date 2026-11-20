@@ -32,7 +32,7 @@ U.focusGuid = nil
 
 local TOT_RATIO = 0.6
 local PET_RATIO = 0.8
-local FLUSH = 0.05
+local FLUSH = 0.10   -- (2026-11-20 : 0.05 = 20 Hz permanents pour rien ; le Flush ne fait rien sans dirty/animating)
 local POLL_TOT = 0.2
 local POLL_RANGE = 0.25
 local MAXA = 8
