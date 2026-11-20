@@ -278,6 +278,8 @@ function M.Begin(mine)
 	M.task = SUI.Every(TICK, M.Tick, "loot.tick")
 	M.Show()
 	M.Refresh()
+		-- son d'alerte : une session de jet commence, regarde la fenetre (RaidWarning : eprouve chez OctoWow)
+		if C.Get("loot.sound") ~= false and PlaySoundFile then pcall(PlaySoundFile, "Sound\\Interface\\RaidWarning.wav") end
 	return true
 end
 
@@ -622,6 +624,21 @@ end
 
 local function lookBar(bar, h)
 	if SUI.Look then SUI.Look.ApplyBar(bar, "loot", { height = h, segments = 10 }) end
+end
+
+-- Dimensions de la fenetre de jets : largeur selon les 6 colonnes, hauteur selon les lignes affichees.
+local COLW, COLGAP = 74, 6
+function M.WinW()
+	return 10 + 74 + getn(M.BLESS) * (COLW + COLGAP) + 10
+end
+function M.WinH()
+	local vis = 0
+	for i = 1, MAXROWS do
+		local row = M.frame and M.frame.rows and M.frame.rows[i]
+		if row and row.IsShown and row:IsShown() then vis = vis + 1 end
+	end
+	if vis < 3 then vis = 3 end
+	return 46 + vis * 15 + (C.Get("loot.buttons") and 26 or 4)
 end
 
 function M.Build()
@@ -1886,6 +1903,9 @@ local LOOT_OPTIONS = {
 		opt("rollmax", "number", 350, 4, { min = 1, max = 8, step = 1 }),
 		opt("rollscale", "number", 360, 100, { min = 60, max = 150, step = 10 }),
 		opt("scale", "number", 365, 100, { min = 60, max = 150, step = 10 }),
+		opt("icon", "bool", 366, true, { simple = true }),
+		opt("iconsize", "number", 367, 20, { min = 14, max = 32, step = 2 }),
+		opt("sound", "bool", 368, true, { simple = true }),
 		opt("rollhold", "number", 370, 4, { min = 2, max = 30, step = 1 }),
 		opt("keepblizz", "bool", 380, false),
 }
