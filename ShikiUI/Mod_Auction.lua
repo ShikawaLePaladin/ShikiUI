@@ -3132,7 +3132,7 @@ function M.Enable()
 	-- le wrapper est transparent : pose une fois, il reste pour toute la session (aucune restauration necessaire)
 	if not M.origBrowse then
 		local upd = getglobal("AuctionFrameBrowse_Update")
-		print("DBGH updtype=" .. type(upd) .. " orig=" .. tostring(M.origBrowse ~= nil) .. " on=" .. tostring(M.on))
+  -- (DBGH retire 2026-11-20 : residu de debug)
 		if type(upd) == "function" and not M.browseSafe then
 			M.origBrowse = upd
 			local wrapped = function(a, b, c, d, e)
