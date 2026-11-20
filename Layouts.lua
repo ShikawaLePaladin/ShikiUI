@@ -842,7 +842,7 @@ end
 -- annonces de boss, compteur 2/3) a CHAQUE preset qui ne les couvre pas deja. Zones choisies pour eviter les
 -- elements deja poses par les presets (centre libre, colonnes laterales moyennes).
 local EXTRA_KEYS = { "chat.main", "bags.window", "bags.bank", "chat.copy", "messages.win", "messages.hist", "messages.badge",
-	"messages.toasts", "finder.win", "tracker.win", "pp.win", "powerauras.banner", "loot",
+	"messages.toasts", "finder.win", "tracker.win", "pp.win", "powerauras.banner", "esport.win", "loot",
 	"lootwin", "lootroll", "items", "mail", "auction", "hud", "bossmods.msg", "meter.win2", "meter.win3" }
 local EXTRAS = {
 	["chat.main"] = { 0.0, 0.02, 12, 40 },          -- chat TOUJOURS visible en bas-gauche apres un preset (le reset effacait sa position)
@@ -854,6 +854,7 @@ local EXTRAS = {
 	["messages.badge"] = { 0.99, 0.70, -60, 0 },
 	["messages.toasts"] = { 0.99, 0.50, -40, 0 },
 	["finder.win"] = { 0.35, 0.80, 0, 0 },
+	["esport.win"] = { 0.99, 0.18, -24, 0 },          -- fenetre PvP esport (colonne droite, sous la durabilite)
 	["tracker.win"] = { 0.99, 0.58, -24, 0 },
 	["pp.win"] = { 0.65, 0.80, 0, 0 },
 	["powerauras.banner"] = { 0.5, 0.62, 0, 0 },
