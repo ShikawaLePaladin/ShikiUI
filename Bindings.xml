@@ -18,4 +18,7 @@
 	<Binding name="SHIKIUI_CLICKHEAL_5">
 		if ShikiUI and ShikiUI.ClickHeal and ShikiUI.ClickHeal.Key then ShikiUI.ClickHeal.Key(5) end
 	</Binding>
+	<Binding name="SHIKIUI_METERS">
+		if ShikiUI and ShikiUI.Meter and ShikiUI.Meter.ToggleAll then ShikiUI.Meter.ToggleAll() end
+	</Binding>
 </Bindings>

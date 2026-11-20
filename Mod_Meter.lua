@@ -3005,3 +3005,16 @@ SUI.RegisterCommand("meter", function(rest)
 		SUI.Print(L(M.np and "msg.meter.srcnp" or "msg.meter.srclog"))
 	end
 end, "help.meter")
+
+-- /sui meters [show|hide|toggle] : masque ou rouvre d un coup les compteurs (degats/soins ET menace) ; aussi accessible par un raccourci
+function M.ToggleAll(want)
+	local T = SUI.Threat
+	local anyOn = (M.on and M.AnyOpen()) or (T and T.on and C.Get("threat.show"))
+	if want == nil then want = not anyOn end
+	M.SetShown(want)
+	if T and T.SetShown then T.SetShown(want) end
+end
+SUI.RegisterCommand("meters", function(rest)
+	if rest == "show" then M.ToggleAll(true) elseif rest == "hide" then M.ToggleAll(false) else M.ToggleAll() end
+end, "help.meter.all")
+setglobal("BINDING_NAME_SHIKIUI_METERS", L("msg.meter.bind"))
