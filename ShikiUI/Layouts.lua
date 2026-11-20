@@ -818,7 +818,7 @@ D("bars.bar5", "bars.bar4", "LEFT", -4, 0)
 -- cote a cote en bas a droite, micro-menu puis bijoux / jeux d'equipement en haut a gauche, groupe / raid a gauche, minimap en haut a droite.
 SUI.RegisterLayout("shiki", { label = "mod.layout.name.shiki", reset = true,
 	v = { ["units.width"] = 200, ["actionbars.size"] = 30, ["meter.width"] = 190, ["meter.height"] = 140, ["threat.width"] = 170, ["threat.height"] = 140,
-		["actionbars.micro.scale"] = 65, ["items.size"] = 28,
+		["actionbars.micro.scale"] = 65, ["items.size"] = 28, ["items.hover"] = true,
 		["auras.size"] = 24, ["auras.perrow"] = 8, ["auras.tsize"] = 24, ["auras.tperrow"] = 8, ["auras.spacing"] = 2,
 		["chat.width"] = 400, ["chat.height"] = 150 },
 	pos = {

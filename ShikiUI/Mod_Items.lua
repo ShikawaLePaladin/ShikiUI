@@ -588,8 +588,14 @@ function M.RefreshWorn()
 		local link = GetInventoryItemLink("player", b.slot)
 		if b.link ~= (link or false) then
 			b.link = link or false
-			b.icon:SetTexture(GetInventoryItemTexture("player", b.slot))
-			if link then b.icon:Show() else b.icon:Hide() end
+			if link then
+				b.icon:SetTexture(GetInventoryItemTexture("player", b.slot))
+				b.icon:SetVertexColor(1, 1, 1, 1)  -- style:ok
+			else
+				b.icon:SetTexture("Interface\\PaperDoll\\UI-PaperDoll-Slot-Trinket")      -- emplacement vide : silhouette du slot, estompee
+				b.icon:SetVertexColor(0.55, 0.55, 0.55, 0.7)  -- style:ok
+			end
+			b.icon:Show()
 		end
 	end
 end
@@ -2234,7 +2240,17 @@ function M.ApplyOptions()
 	if shown > 0 and 8 + (shown > 5 and 5 or shown) * 46 > w then w = 8 + (shown > 5 and 5 or shown) * 46 end
 	if w < 60 then w = 60 end
 	f:SetWidth(w)
-	f:SetHeight(top + rows * 18 + 4)
+	-- survol : les lignes de builds ne s'affichent que sous la souris (le cadre ne garde que la rangee des bijoux)
+	M.hoverOn = C.Get("items.hover") and shown > 0 and (showT or showB)
+	if M.hoverOn then
+		f:SetHeight(top)
+		f.setbg:ClearAllPoints()
+		f.setbg:SetPoint("TOPLEFT", f, "BOTTOMLEFT", 0, 1)
+		f.setbg:SetWidth(w)
+		f.setbg:SetHeight(rows * 18 + 6)
+	else
+		f:SetHeight(top + rows * 18 + 4)
+	end
 	f:SetAlpha(C.Get("items.alpha"))
 	if not C.Get("items.cooldowns") then            -- temps de recharge coupes : les chiffres deja affiches disparaissent tout de suite
 		for i = 1, 2 do setText(f.worn[i].cd, "") end
@@ -2268,7 +2284,39 @@ function M.ApplyOptions()
 			M.cdTask = nil
 		end
 	end
+	if M.hoverOn then
+		if not M.hoverTask then M.hoverTask = SUI.Every(0.15, M.HoverTick, "items.hover", true) end
+	elseif M.hoverTask then
+		SUI.Cancel(M.hoverTask)
+		M.hoverTask = nil
+	end
+	M.hoverShown = nil
+	M.HoverTick()
 	M.dirty = true
+end
+
+-- Affiche les builds seulement quand la souris est sur la barre (ou sur leur cadre) ; sans l'option, ils restent toujours visibles.
+function M.HoverTick()
+	local f = M.frame
+	if not f or not f.setbg then return end
+	local want = true
+	if M.hoverOn then
+		want = false
+		if MouseIsOver then
+			if MouseIsOver(f) then want = true end
+			if not want and M.hoverShown and MouseIsOver(f.setbg) then want = true end
+		else
+			want = true
+		end
+	end
+	if M.hoverShown == want then return end
+	M.hoverShown = want
+	for k = 1, NSETS do
+		local b = f.sets[k]
+		local s = M.sets[k]
+		if want and C.Get("items.showsets") and s and s.name then b:Show() else b:Hide() end
+	end
+	if M.hoverOn and want then f.setbg:Show() else f.setbg:Hide() end
 end
 
 function M.Build()
@@ -2307,10 +2355,14 @@ function M.Build()
 	end)
 	f.builds.itemsQuick = true
 	M.Tip(f.builds, "mod.items.bar.buildstip", "mod.items.bar.buildshelp")
+	f.setbg = T.Panel(f, 100, 20)
+	f.setbg:SetFrameLevel(f:GetFrameLevel() + 1)
+	f.setbg:Hide()
 	f.sets = {}
 	for k = 1, NSETS do
 		local b = T.Button(f, "", 44, 16, function(btn, mouse) M.Equip(btn.setn) end)
 		b.setn = k
+		b:SetFrameLevel(f.setbg:GetFrameLevel() + 2)
 		b.itemsSet = k
 		b.label:SetWidth(40)
 		M.Tip(b, nil, nil, M.TipSet)
@@ -2601,6 +2653,7 @@ SUI.RegisterModule("items", {
 		opt("size", "number", 40, 30, { min = 20, max = 48, step = 2, simple = true }),
 		opt("cooldowns", "bool", 50, true),
 		opt("growup", "bool", 60, false),
+		opt("hover", "bool", 65, false, { simple = true }),
 		opt("menumax", "number", 70, 6, { min = 2, max = 8, step = 1 }),
 		opt("alpha", "number", 80, 1, { min = 0.3, max = 1, step = 0.1 }),
 		opt("tick", "number", 90, 0.5, { min = 0.2, max = 1, step = 0.1 }),

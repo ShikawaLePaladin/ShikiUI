@@ -219,6 +219,8 @@ SUI.AddStrings("fr", {
 	["msg.meter.srcnp"] = "Compteurs : source = evenements Nampower.",
 	["msg.meter.srclog"] = "Compteurs : source = journal de combat.",
 	["msg.meter.diag"] = "Fenetre %d : niveau %d, %d lignes recalees, %d lignes captent la souris. Clic sans effet ? Note ces chiffres.",
+	["help.meter.all"] = "/sui meters [show|hide] - affiche ou masque d un coup les compteurs (degats, soins et menace)",
+	["msg.meter.bind"] = "Afficher / masquer les compteurs",
 	["help.meter"] = "/sui meter [reset|report [canal] [n]|summary|export|deaths|diag|show [n]|hide [n]|toggle [n]|new|del [n]] - compteurs de degats, soins et morts",
 })
 
@@ -438,5 +440,7 @@ SUI.AddStrings("en", {
 	["msg.meter.srcnp"] = "Meters: source = Nampower events.",
 	["msg.meter.srclog"] = "Meters: source = combat log.",
 	["msg.meter.diag"] = "Window %d: level %d, %d rows re-levelled, %d rows catch the mouse. Click does nothing? Note these numbers.",
+	["help.meter.all"] = "/sui meters [show|hide] - show or hide all meters at once (damage, healing and threat)",
+	["msg.meter.bind"] = "Show / hide meters",
 	["help.meter"] = "/sui meter [reset|report [channel] [n]|summary|export|deaths|diag|show [n]|hide [n]|toggle [n]|new|del [n]] - damage, healing and death meters",
 })

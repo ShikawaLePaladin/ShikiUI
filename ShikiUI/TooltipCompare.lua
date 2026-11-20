@@ -150,6 +150,22 @@ end
 -- ---------------------------------------------------------------- lecture des infobulles
 local cache = {}
 
+-- GetItemInfo veut "item:id:..." (le lien colore complet ne marche pas) ; l'emplacement est le retour qui commence par INVTYPE_
+-- (sa position varie selon le serveur). Renvoie nom, qualite, emplacement, niveau.
+function K.Info(link)
+	if not link then return nil end
+	local _, _, code = strfind(link, "(item:[%-%d:]+)")
+	local r1, r2, r3, r4, r5, r6, r7, r8, r9, r10 = GetItemInfo(code or link)
+	if not r1 then return nil end
+	local loc
+	local list = { r5, r6, r7, r8, r9, r10 }
+	local i
+	for i = 1, 6 do
+		if type(list[i]) == "string" and strfind(list[i], "^INVTYPE_") then loc = list[i] end
+	end
+	return r1, r3, loc, r4
+end
+
 function K.Scanner()
 	if K.scan then return K.scan end
 	if not CreateFrame then return nil end
@@ -177,7 +193,9 @@ function K.StatsOfLink(link)
 	if not tip then return nil end
 	tip:SetOwner(UIParent, "ANCHOR_NONE")
 	tip:ClearLines()
-	tip:SetHyperlink(link)
+	-- SetHyperlink veut "item:id:..." (pas le lien colore complet) et doit etre sous pcall (AtlasLoot)
+	local _, _, code = strfind(link, "(item:[%-%d:]+)")
+	pcall(tip.SetHyperlink, tip, code or link)
 	local st = K.Parse(readLines(tip))
 	tip:Hide()
 	cache[link] = st
@@ -205,7 +223,7 @@ function K.PickSlot(equipLoc)
 	for i = 1, getn(list) do
 		local link = GetInventoryItemLink("player", list[i])
 		if not link then return list[i] end
-		local _, _, _, lv = GetItemInfo(link)
+		local _, _, _, lv = K.Info(link)
 		lv = lv or 0
 		if not bestLv or lv < bestLv then
 			best, bestLv = list[i], lv
@@ -245,7 +263,7 @@ end
 -- Montre la comparaison de l'objet du lien avec l'objet equipe
 function K.Show(link)
 	if not link or not K.on then return end
-	local _, _, q, lv, _, _, _, _, equipLoc = GetItemInfo(link)
+	local _, q, equipLoc, lv = K.Info(link)
 	local slot = K.PickSlot(equipLoc)
 	if not slot then
 		K.Hide()
@@ -262,8 +280,10 @@ function K.Show(link)
 	local old = K.StatsOfSlot(slot)
 	if not new or not old then return end
 	local f = K.Build()
-	local cname, _, cq = GetItemInfo(cur)
-	f.title:SetText(L("msg.tooltip.cmp.title", cname or "?"))
+	local cname, cq = K.Info(cur)
+	cname = cname or "?"
+	if string.len(cname) > 21 then cname = strsub(cname, 1, 20) .. "." end      -- une seule ligne (le titre ne doit pas deborder sur les statistiques)
+	f.title:SetText(L("msg.tooltip.cmp.title", cname))
 	local qc = getglobal("ITEM_QUALITY_COLORS")
 	local col = qc and cq and qc[cq]
 	if col then f.title:SetTextColor(col.r, col.g, col.b, 1) else setColor(f.title, T.c.text) end    -- style:ok couleur de qualite (donnee de jeu)
@@ -337,3 +357,18 @@ function K.Apply()
 	K.auto = C.Get("tooltip.compareauto") and true or false
 	if K.on then K.Watch() else K.Hide() end
 end
+
+-- /sui cmp : diagnostic de la comparaison (objet survole, emplacement, statistiques lues)
+SUI.RegisterCommand("cmp", function()
+	SUI.After(4, function()
+	local link = SUI.Tooltip and SUI.Tooltip.link
+	local _, _, el = K.Info(link)
+	local slot = K.PickSlot(el)
+	local n, o = K.StatsOfLink(link), K.StatsOfSlot(slot or 1)
+	local cnt = 0
+	if n then for _ in pairs(n) do cnt = cnt + 1 end end
+	SUI.Print("cmp link=" .. tostring(link) .. " loc=" .. tostring(el) .. " slot=" .. tostring(slot) .. " new=" .. cnt .. " old=" .. tostring(o ~= nil) .. " on=" .. tostring(K.on))
+	K.Show(link)
+	SUI.Print("cmp key=" .. tostring(K.shownKey) .. " frame=" .. tostring(K.frame and K.frame:IsShown()))
+	end, "cmpdebug")
+end)
