@@ -139,6 +139,16 @@ function M.ApplyOptions()
 				fs = T.Text(M.win, 11, T.c.text, "LEFT")
 				M.cells[e.key] = fs
 			end
+			-- clic sur un bloc : ouvre la fenetre correspondante (confort)
+			M.win:EnableMouse(true)
+			fs.clickKey = e.key
+			fs:SetScript("OnMouseDown", function()
+				local k = this.clickKey
+				if k == "money" and ToggleBackpack then ToggleBackpack() end
+				if k == "durab" and ToggleCharacter then ToggleCharacter("PaperDollFrame") end
+				if k == "xp" and ToggleCharacter then ToggleCharacter("PaperDollFrame") end
+				if k == "fps" and SUI.Perf and SUI.Perf.SetProfile then SUI.Perf.SetProfile(not SUI.Perf.profile) end
+			end)
 			fs:ClearAllPoints()
 			fs:SetPoint("LEFT", M.win, "LEFT", 6 + x, 0)
 			fs:SetHeight(16)

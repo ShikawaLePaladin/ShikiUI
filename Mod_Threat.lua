@@ -1385,6 +1385,11 @@ function M.Enable()
 	M.SyncVis(nil)
 	M.on = true
 	M.ReadConfig()
+	-- l'estimation locale est alimentee par le compteur (Mod_Meter.Feed) : sans compteur, pas de donnees.
+	if not (SUI.Meter and SUI.Meter.on) and not M.hintShown then
+		M.hintShown = true
+		SUI.Print(L("msg.threat.nometer"))
+	end
 	M.Prime()
 	M.player = UnitName("player")
 	M.ScanRoster()
