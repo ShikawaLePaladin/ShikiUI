@@ -310,9 +310,9 @@ function M.Finish(partial)
 		db.scan.partial = partial and true or false
 	end
 	M.Trim()
-	SUI.Print(L(partial and "msg.market.scan.partial" or "msg.market.scan.done", n, sc.lots))
+	if not sc.quiet then SUI.Print(L(partial and "msg.market.scan.partial" or "msg.market.scan.done", n, sc.lots)) end
 	M.Rebuild()
-	M.WatchReport()
+	M.WatchReport(sc.quiet)
 end
 
 function M.Stop(silent)
@@ -328,19 +328,19 @@ function M.Stop(silent)
 end
 
 -- names (facultatif) : liste de noms a chercher un par un au lieu de balayer tout l'hotel (scan cible)
-function M.Start(names)
+function M.Start(names, quiet)
 	if M.sc then return end
 	local au = SUI.Auction
 	if not (au and au.open) then
-		SUI.Print(L("msg.market.needah"))
+		if not quiet then SUI.Print(L("msg.market.needah")) end
 		return
 	end
 	if au.scan or au.loc then
-		SUI.Print(L("msg.market.busy"))
+		if not quiet then SUI.Print(L("msg.market.busy")) end
 		return
 	end
 	M.LoadDB()
-	M.sc = { page = 0, pages = 1, state = "query", sentAt = GetTime(), acc = {}, lots = 0, items = 0, names = names, ni = 1 }
+	M.sc = { page = 0, pages = 1, state = "query", sentAt = GetTime(), acc = {}, lots = 0, items = 0, names = names, ni = 1, quiet = quiet }
 	SUI.On("AUCTION_ITEM_LIST_UPDATE", M.OnList)
 	if M.task then SUI.Cancel(M.task) end
 	M.task = SUI.Every(TICK, M.Tick, "market.tick")
@@ -834,10 +834,12 @@ end
 
 function M.OnShow()
 	M.Attach()
+	M.SnipeRefresh()
 	if M.win and M.win:IsShown() then M.Refresh() end
 end
 
 function M.OnClose()
+	M.SnipeRefresh()
 	if M.sc then M.Stop(false) end
 	if M.win and M.win:IsShown() then M.Refresh() end
 end
@@ -883,13 +885,56 @@ function M.WatchHits()
 	return hits
 end
 
-function M.WatchReport()
+-- Points d'accroche pour les futures fonctions (achat, revente) : fn(hit) est appelee pour chaque alerte annoncee,
+-- hit = { id, n, mn, max } (prix unitaire le plus bas, prix voulu).
+M.hitHandlers = {}
+M.reported = {}          -- id -> dernier prix annonce (le sniper n'annonce qu'une nouveaute)
+function M.OnHit(fn)
+	tinsert(M.hitHandlers, fn)
+end
+
+function M.WatchReport(onlyNew)
 	if M.WatchCount() == 0 then return 0 end
 	local hits = M.WatchHits()
+	local seen = {}
+	local n = 0
 	for i = 1, getn(hits) do
-		SUI.Print(L("msg.market.watch.hit", hits[i].n, money(hits[i].mn), money(hits[i].max)))
+		local h = hits[i]
+		seen[h.id] = true
+		if not (onlyNew and M.reported[h.id] == h.mn) then
+			M.reported[h.id] = h.mn
+			n = n + 1
+			SUI.Print(L("msg.market.watch.hit", h.n, money(h.mn), money(h.max)))
+			for k = 1, getn(M.hitHandlers) do M.hitHandlers[k](h) end
+		end
 	end
-	return getn(hits)
+	for id in pairs(M.reported) do
+		if not seen[id] then M.reported[id] = nil end
+	end
+	return n
+end
+
+-- ---------------------------------------------------------------- sniper : rescan cible periodique pendant que l'hotel est ouvert
+function M.SnipeTick()
+	local au = SUI.Auction
+	if M.sc or not (au and au.open) or M.WatchCount() == 0 then return end
+	local names = {}
+	for _, it in pairs(M.WatchList()) do tinsert(names, it.n) end
+	tsort(names)
+	M.Start(names, true)
+end
+
+function M.SnipeRefresh()
+	if M.snipeTask then
+		SUI.Cancel(M.snipeTask)
+		M.snipeTask = nil
+	end
+	local au = SUI.Auction
+	if M.on and C.Get("market.snipe") and au and au.open then
+		local sec = C.Get("market.snipesec") or 30
+		if sec < 15 then sec = 15 end
+		M.snipeTask = SUI.Every(sec, M.SnipeTick, "market.snipe")
+	end
 end
 
 local function watchCmd(rest)
@@ -928,6 +973,7 @@ function M.Enable()
 	if not M.watching then
 		M.watching = true
 		C.Watch("market.", function()
+			M.SnipeRefresh()
 			if M.win and M.win:IsShown() then M.Rebuild() end
 		end)
 	end
@@ -935,6 +981,7 @@ end
 
 function M.Disable()
 	M.on = false
+	M.SnipeRefresh()
 	SUI.Off("AUCTION_HOUSE_SHOW", M.OnShow)
 	SUI.Off("AUCTION_HOUSE_CLOSED", M.OnClose)
 	if M.sc then M.Stop(true) end
@@ -961,6 +1008,8 @@ SUI.RegisterModule("market", {
 		opt("minquality", "number", 30, 0, { min = 0, max = 5, step = 1 }),
 		opt("cut", "number", 40, 5, { min = 0, max = 20, step = 1 }),
 		opt("tooltip", "bool", 50, true, { simple = true }),
+		opt("snipe", "bool", 60, false),
+		opt("snipesec", "number", 70, 30, { min = 15, max = 300, step = 5 }),
 	},
 	enable = function() M.Enable() end,
 	disable = function() M.Disable() end,
