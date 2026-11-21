@@ -400,6 +400,10 @@ function M.Equip(ref, quiet)
 		SUI.Print(L("msg.items.notfound", tostring(ref)))
 		return false
 	end
+	if M.bankBusy then return true end
+	if not quiet and k ~= PREV and M.bankOpen and M.Mode() == 0 and not M.busy and C.Get("items.bank") then
+		if M.BankSwap(k) then return true end
+	end
 	if M.busy then
 		M.nextSet = k
 		return true
@@ -407,6 +411,158 @@ function M.Equip(ref, quiet)
 	M.try = 0
 	if k ~= PREV then M.lastSet = k end
 	return M.Begin(k, quiet)
+end
+
+-- ---------------------------------------------------------------- banque ouverte : un clic sur un jeu prend / range ses objets
+-- Banque ouverte : si des objets du jeu manquent sur le personnage, ils sont pris en banque et vont dans les sacs ;
+-- si TOUT le jeu est porte, il est range en banque. Banque fermee : comportement normal (equiper).
+local BANKBAGS = { -1, 5, 6, 7, 8, 9, 10 }
+M.bankOpen = false
+M.bankBusy = false
+M.bq = {}               -- file : { kind = 1 range (porte -> banque) | 2 prend (banque -> sacs), a, b, c }
+M.bn, M.bi = 0, 1
+
+function M.OnBank(ev)
+	M.bankOpen = (ev == "BANKFRAME_OPENED")
+	if not M.bankOpen then M.BankStop() end
+end
+
+function M.BankStop()
+	if M.btask then
+		SUI.Cancel(M.btask)
+		M.btask = nil
+	end
+	M.bankBusy = false
+	M.bn, M.bi = 0, 1
+	M.bvt, M.bwait = nil, 0
+end
+
+-- Case libre de la banque non encore reservee (used : table "sac:case" -> vrai).
+function M.BankFreeSlot(used)
+	for i = 1, getn(BANKBAGS) do
+		local bag = BANKBAGS[i]
+		local size = GetContainerNumSlots(bag) or 0
+		for slot = 1, size do
+			local key = bag .. ":" .. slot
+			if not used[key] and not GetContainerItemLink(bag, slot) then
+				used[key] = true
+				return bag, slot
+			end
+		end
+	end
+	return nil
+end
+
+function M.BagFreeCount()
+	local n = 0
+	for bag = 0, 4 do
+		local size = GetContainerNumSlots(bag) or 0
+		for slot = 1, size do
+			if not GetContainerItemLink(bag, slot) then n = n + 1 end
+		end
+	end
+	return n
+end
+
+-- Prepare la file pour le jeu k ; vrai si la banque s'en occupe (rien d'autre a faire), faux = equipement normal.
+function M.BankSwap(k)
+	local set = getSet(k)
+	if not set then return false end
+	local wantN, wornN = 0, 0
+	local miss = {}
+	for s = 1, 19 do
+		local want = set.code[s]
+		if want then
+			wantN = wantN + 1
+			if M.Code(GetInventoryItemLink("player", s)) == want then wornN = wornN + 1 else miss[s] = want end
+		end
+	end
+	if wantN == 0 then return false end
+	local name = set.name or "?"
+	M.bn, M.bi = 0, 1
+	if wornN == wantN then
+		local used = {}
+		for s = 1, 19 do
+			if set.code[s] then
+				local bag, slot = M.BankFreeSlot(used)
+				if not bag then
+					M.bn = 0
+					SUI.Print(L("msg.items.bank.full", wantN))
+					return true
+				end
+				M.bn = M.bn + 1
+				M.bq[M.bn] = { kind = 1, a = s, b = bag, c = slot }
+			end
+		end
+		SUI.Print(L("msg.items.bank.store", name, M.bn))
+	else
+		-- objets manquants retrouves en banque (chaque objet de la banque ne sert qu'une fois)
+		local taken = {}
+		for s = 1, 19 do
+			local want = miss[s]
+			if want then
+				local found = false
+				for i = 1, getn(BANKBAGS) do
+					local bag = BANKBAGS[i]
+					local size = GetContainerNumSlots(bag) or 0
+					for slot = 1, size do
+						local key = bag .. ":" .. slot
+						if not found and not taken[key] and M.Code(GetContainerItemLink(bag, slot)) == want then
+							taken[key] = true
+							found = true
+							M.bn = M.bn + 1
+							M.bq[M.bn] = { kind = 2, a = bag, b = slot }
+						end
+					end
+				end
+			end
+		end
+		if M.bn == 0 then return false end              -- rien en banque : on equipe comme d'habitude
+		if M.BagFreeCount() < M.bn then
+			SUI.Print(L("msg.items.bank.full", M.bn))
+			M.bn = 0
+			return true
+		end
+		SUI.Print(L("msg.items.bank.fetch", name, M.bn))
+	end
+	M.bankBusy = true
+	M.bvt, M.bwait = nil, 0
+	if M.btask then SUI.Cancel(M.btask) end
+	M.btask = SUI.Every(0.3, M.BankStep, "items.bank")
+	return true
+end
+
+function M.BankStep()
+	if not M.bankBusy then return end
+	if not M.bankOpen or UnitIsDeadOrGhost("player") or SUI.InCombat() then
+		M.BankStop()
+		return
+	end
+	if CursorHasItem() then
+		M.bwait = (M.bwait or 0) + 1
+		if M.bwait > 20 then M.BankStop() end
+		return
+	end
+	M.bwait = 0
+	if M.bi > M.bn then
+		if not M.bvt then
+			M.bvt = GetTime() + 0.4
+			return
+		end
+		if GetTime() >= M.bvt then M.BankStop() end
+		return
+	end
+	local q = M.bq[M.bi]
+	if q.kind == 1 then
+		if IsInventoryItemLocked(q.a) then return end
+		PickupInventoryItem(q.a)
+		PickupContainerItem(q.b, q.c)
+	else
+		local _, _, locked = GetContainerItemInfo(q.a, q.b)
+		if locked then return end
+		UseContainerItem(q.a, q.b)                 -- banque ouverte : le clic droit envoie l'objet dans les sacs
+	end
+	M.bi = M.bi + 1
 end
 
 function M.Waiting()
@@ -2440,6 +2596,8 @@ function M.Enable()
 	SUI.On("ZONE_CHANGED_NEW_AREA", M.OnZone)
 	SUI.On("BAG_UPDATE", M.OnDirty)
 	SUI.On("UNIT_INVENTORY_CHANGED", M.OnDirty)
+	SUI.On("BANKFRAME_OPENED", M.OnBank)
+	SUI.On("BANKFRAME_CLOSED", M.OnBank)
 	M.zone = M.ZoneKind()
 	M.UpdateMountEvents()
 	M.UpdateSpecEvents()
@@ -2461,6 +2619,10 @@ function M.Disable()
 	SUI.Off("ZONE_CHANGED_NEW_AREA", M.OnZone)
 	SUI.Off("BAG_UPDATE", M.OnDirty)
 	SUI.Off("UNIT_INVENTORY_CHANGED", M.OnDirty)
+	SUI.Off("BANKFRAME_OPENED", M.OnBank)
+	SUI.Off("BANKFRAME_CLOSED", M.OnBank)
+	M.BankStop()
+	M.bankOpen = false
 	M.Stop()
 	M.pending, M.nextSet = nil, nil
 	M.UpdateMountEvents()                 -- M.on est faux : coupe les evenements d'aura
@@ -2660,6 +2822,7 @@ SUI.RegisterModule("items", {
 		opt("alpha", "number", 80, 1, { min = 0.3, max = 1, step = 0.1 }),
 		opt("tick", "number", 90, 0.5, { min = 0.2, max = 1, step = 0.1 }),
 		opt("queue", "bool", 100, true),
+		opt("bank", "bool", 105, true),
 		opt("announce", "bool", 110, true),
 		opt("auto.combat", "choice", 120, "none", { choices = M.choices, choiceText = setText2, simple = true }),
 		opt("auto.rest", "choice", 130, "none", { choices = M.choices, choiceText = setText2, simple = true }),
