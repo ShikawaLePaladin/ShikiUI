@@ -74,6 +74,10 @@ M.BLOCKS = {
 		if not p or not p.lat then return "" end
 		return sformat("%d ms", p.lat)
 	end },
+	{ key = "meters", fn = function()
+		if not (SUI.Meter and SUI.Meter.ToggleAll) then return "" end
+		return L("msg.datatext.meters")
+	end },
 	{ key = "xp", fn = function()
 		local ux, um = getglobal("UnitXP"), getglobal("UnitXPMax")
 		if not ux or not um then return "" end
@@ -146,6 +150,7 @@ function M.ApplyOptions()
 				local k = this.clickKey
 				if k == "money" and ToggleBackpack then ToggleBackpack() end
 				if k == "durab" and ToggleCharacter then ToggleCharacter("PaperDollFrame") end
+				if k == "meters" and SUI.Meter and SUI.Meter.ToggleAll then SUI.Meter.ToggleAll() end
 				if k == "xp" and ToggleCharacter then ToggleCharacter("PaperDollFrame") end
 				if k == "fps" and SUI.Perf and SUI.Perf.SetProfile then SUI.Perf.SetProfile(not SUI.Perf.profile) end
 			end)
@@ -229,6 +234,7 @@ SUI.RegisterModule("datatext", {
 		opt("fps", "bool", 40, false, { simple = true }),
 		opt("latency", "bool", 50, false, { simple = true }),
 		opt("xp", "bool", 60, false, { simple = true }),
+		opt("meters", "bool", 65, true, { simple = true }),
 		opt("scale", "number", 70, 100, { min = 70, max = 160, step = 5 }),
 	},
 	enable = function() M.Enable() end,
