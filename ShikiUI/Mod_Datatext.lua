@@ -17,6 +17,7 @@ SUI.Datatext = M
 M.on = false
 M.win = nil
 M.cells = {}            -- key -> FontString
+M.btns = {}             -- key -> Button (zone de clic du bloc)
 
 local cfg = {}
 
@@ -143,17 +144,22 @@ function M.ApplyOptions()
 				fs = T.Text(M.win, 11, T.c.text, "LEFT")
 				M.cells[e.key] = fs
 			end
-			-- clic sur un bloc : ouvre la fenetre correspondante (confort)
+			-- clic sur un bloc : ouvre la fenetre correspondante (confort). Un FontString n'a pas de SetScript en 1.12 : bouton dedie.
 			M.win:EnableMouse(true)
-			fs.clickKey = e.key
-			fs:SetScript("OnMouseDown", function()
-				local k = this.clickKey
-				if k == "money" and ToggleBackpack then ToggleBackpack() end
-				if k == "durab" and ToggleCharacter then ToggleCharacter("PaperDollFrame") end
-				if k == "meters" and SUI.Meter and SUI.Meter.ToggleAll then SUI.Meter.ToggleAll() end
-				if k == "xp" and ToggleCharacter then ToggleCharacter("PaperDollFrame") end
-				if k == "fps" and SUI.Perf and SUI.Perf.SetProfile then SUI.Perf.SetProfile(not SUI.Perf.profile) end
-			end)
+			local btn = M.btns[e.key]
+			if not btn then
+				btn = CreateFrame("Button", nil, M.win)
+				btn.clickKey = e.key
+				btn:SetScript("OnClick", function()
+					local k = this.clickKey
+					if k == "money" and ToggleBackpack then ToggleBackpack() end
+					if k == "durab" and ToggleCharacter then ToggleCharacter("PaperDollFrame") end
+					if k == "meters" and SUI.Meter and SUI.Meter.ToggleAll then SUI.Meter.ToggleAll() end
+					if k == "xp" and ToggleCharacter then ToggleCharacter("PaperDollFrame") end
+					if k == "fps" and SUI.Perf and SUI.Perf.SetProfile then SUI.Perf.SetProfile(not SUI.Perf.profile) end
+				end)
+				M.btns[e.key] = btn
+			end
 			fs:ClearAllPoints()
 			fs:SetPoint("LEFT", M.win, "LEFT", 6 + x, 0)
 			fs:SetHeight(16)
@@ -162,10 +168,16 @@ function M.ApplyOptions()
 			local w = fs:GetStringWidth() + 24
 			fs:SetWidth(w)
 			fs:Show()
+			btn:ClearAllPoints()
+			btn:SetPoint("LEFT", M.win, "LEFT", 6 + x, 0)
+			btn:SetWidth(w)
+			btn:SetHeight(16)
+			btn:Show()
 			x = x + w
 			wide = wide + w
 		elseif fs then
 			fs:Hide()
+			if M.btns[e.key] then M.btns[e.key]:Hide() end
 		end
 	end
 	M.win:SetWidth(max(wide, 20))
