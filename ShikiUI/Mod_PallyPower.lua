@@ -282,7 +282,7 @@ local function unitBuffNames(unit)
 		M.tip:SetUnitBuff(unit, i)
 		local fs = getglobal("ShikiUI_PPTipTextLeft1")
 		local nm = fs and fs:GetText()
-		if nm and nm ~= "" then names[slower(nm)] = true end
+		if nm and nm ~= "" then names[fold(nm)] = true end
 	end
 	return names
 end
@@ -290,14 +290,19 @@ end
 -- Vrai si l'unite porte deja cette benediction (simple OU greater : on ne repose jamais par-dessus).
 function M.HasBuff(unit, base)
 	local names = unitBuffNames(unit)
-	local want = fold(base)
-	local gw = fold(M.GREATERPFX .. base)
-	if GAMEFR and M.SPELLS_FR[base] then
-		want = fold(M.SPELLS_FR[base])
-		gw = fold(M.SPELLS_GFR[base] or (M.GREATER_FR .. M.SPELLS_FR[base]))
+	-- identifiant de la benediction (kings...) retrouve depuis son nom EN : les tables FR sont indexees par identifiant
+	local id
+	for j = 1, getn(M.BLESS) do
+		if M.SPELLS[M.BLESS[j]] == base then id = M.BLESS[j] break end
+	end
+	local want, gw = fold(base), fold(M.GREATERPFX .. base)
+	local fwant, fgw
+	if id and M.SPELLS_FR[id] then
+		fwant = fold(M.SPELLS_FR[id])
+		fgw = fold(M.SPELLS_GFR[id] or (M.GREATER_FR .. M.SPELLS_FR[id]))
 	end
 	for n in pairs(names) do
-		if n == want or n == gw or n == fold(base) or n == fold(M.GREATERPFX .. base) then return true end
+		if n == want or n == gw or n == fwant or n == fgw then return true end
 	end
 	return false
 end
@@ -331,7 +336,7 @@ function M.BuildPairs()
 					local b = M.BLESS[j]
 					if a[b] and (pass == 2) == M.IsSingle(a, b) and not M.HasBuff(r.unit, M.SPELLS[b]) then
 						M.npairs = M.npairs + 1
-						M.pairs[M.npairs] = { unit = r.unit, name = M.SpellName(b, M.IsSingle(a, b)), base = M.SPELLS[b], frb = GAMEFR and M.SPELLS_FR[b] or nil, who = r.name }
+						M.pairs[M.npairs] = { unit = r.unit, name = M.SpellName(b, M.IsSingle(a, b)), base = M.SPELLS[b], frb = GAMEFR and M.SPELLS_FR[b] or nil, who = r.name, tries = 0 }
 					end
 				end
 			end
@@ -355,13 +360,27 @@ end
 function M.CastStep()
 	if not M.on or not M.task then return end
 	if UnitIsDead("player") then return end      -- mort : le cycle attend (file gardee)
+	-- verification du dernier lancement (buffs relus a neuf) : le serveur ou le temps de recharge global a pu le refuser
+	local lp = M.lastp
+	if lp then
+		M.buffNames[lp.unit] = nil
+		if UnitExists(lp.unit) and not UnitIsDead(lp.unit) and not M.HasBuff(lp.unit, lp.base) and lp.tries < 2 then
+			lp.tries = lp.tries + 1
+			castOn(lp.unit, lp.name)
+			return
+		end
+		M.lastp = nil
+	end
 	while M.qi < M.npairs do
 		M.qi = M.qi + 1
 		local p = M.pairs[M.qi]
 		if p and UnitExists(p.unit) and not UnitIsDead(p.unit) then
-			-- entre-temps un autre paladin a pu poser la benediction : on ne repose jamais par-dessus
+			-- buffs relus a neuf : une benediction superieure posee plus haut couvre peut-etre deja toute la classe, ou un autre paladin est passe
+			M.buffNames[p.unit] = nil
 			if not M.HasBuff(p.unit, p.base) then
 				castOn(p.unit, p.name)
+				p.tries = 1
+				M.lastp = p
 				M.castn = M.castn + 1
 				M.PaintStatus()
 				return
@@ -388,14 +407,14 @@ function M.CastAll()
 		return
 	end
 	M.qi = 0
-	M.task = SUI.Every(1.1, M.CastStep, "pp.cast", true)
+	M.task = SUI.Every(1.7, M.CastStep, "pp.cast", true)
 	M.CastStep()
 	M.PaintStatus()
 end
 
 function M.Stop()
 	if M.task then SUI.Cancel(M.task) M.task = nil end
-	M.npairs, M.qi = 0, 0
+	M.npairs, M.qi, M.lastp = 0, 0, nil
 end
 
 -- ---------------------------------------------------------------- fenetre (grille)
