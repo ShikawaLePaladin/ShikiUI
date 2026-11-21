@@ -846,6 +846,12 @@ end
 function M.ApplyView()
 	local f = M.win
 	if not f then return end
+	if C.Get("pallypower.team") then
+		M.TeamApply()
+		return
+	end
+	if M.twin then M.twin:Hide() end
+	f.bTeam.txt:SetText(L("msg.pallypower.b.team"))
 	local compact = M.Compact()
 	if compact then
 		local n = 0
@@ -909,7 +915,7 @@ end
 function M.PaintRows()
 	local f = M.win
 	if not f then return end
-	if M.Compact() then return end
+	if M.Compact() or C.Get("pallypower.team") then return end
 	-- hauteur ADAPTEE : la fenetre epouse le nombre de joueurs affiches (fini la moitie d ecran vide)
 	local vis = 0
 	for i2 = M.offset + 1, M.offset + M.view do
@@ -1040,7 +1046,6 @@ end
 
 function M.Close()
 	if M.win then M.win:Hide() end
-	if M.twin then M.twin:Hide() end
 end
 
 function M.ToggleWin()
@@ -1816,24 +1821,12 @@ local TC, TG = 32, 4
 
 function M.TeamBuild()
 	if M.twin then return end
-	local f = CreateFrame("Frame", "ShikiUI_PallyTeam", UIParent)
-	f:SetWidth(320)
-	f:SetHeight(160)
-	T.Backdrop(f, T.c.panel, T.c.border)
-	f:SetFrameStrata("HIGH")
-	f:SetMovable(true)
-	f:EnableMouse(true)
-	f:SetClampedToScreen(true)
-	f:RegisterForDrag("LeftButton")
-	f:SetScript("OnDragStart", function() if not SUI.InCombat() then this:StartMoving() end end)
-	f:SetScript("OnDragStop", function() this:StopMovingOrSizing() end)
+	M.Build()
+	-- 3e vue de la fenetre principale : un cadre enfant qui la recouvre (pas de fenetre separee)
+	local f = CreateFrame("Frame", "ShikiUI_PallyTeam", M.win)
+	f:SetAllPoints(M.win)
 	f:Hide()
 	M.twin = f
-	f.title = T.Text(f, 13, T.c.text, "LEFT")
-	f.title:SetPoint("TOPLEFT", f, "TOPLEFT", 10, -8)
-	f.title:SetText(L("msg.pallypower.team.title"))
-	f.close = mkBtn(f, "x", 18, 18, function() f:Hide() end)
-	f.close:SetPoint("TOPRIGHT", f, "TOPRIGHT", -4, -4)
 	f.hint = T.Text(f, 10, T.c.dim, "LEFT")
 	f.hint:SetPoint("TOPLEFT", f, "TOPLEFT", 10, -26)
 	f.hint:SetText(L("msg.pallypower.team.hint"))
@@ -1909,8 +1902,10 @@ function M.TeamPaint()
 	local ncls = mmax(getn(cls), 4)
 	local np = mmin(getn(pal), 8)
 	local x0 = 10 + 104
-	f:SetWidth(mmax(320, x0 + ncls * (TC + TG) + 10))
-	f:SetHeight(74 + mmax(np, 1) * (TC + TG) + 36)
+	local W = mmax(380, x0 + ncls * (TC + TG) + 10)
+	M.win:SetWidth(W)
+	M.win:SetHeight(74 + mmax(np, 1) * (TC + TG) + 36)
+	M.Put(M.win.bCast, W - 10 - 110, 8, 110)
 	if np == 0 then f.empty:Show() else f.empty:Hide() end
 	for i = 1, M.MAXCLASS do
 		local h = f.hc[i]
@@ -1965,24 +1960,41 @@ function M.TeamPaint()
 	end
 end
 
-function M.TeamOpen()
-	if not M.on then return end
+-- Passe la fenetre en vue "Paladins" (appele par ApplyView).
+function M.TeamApply()
+	local f = M.win
 	M.TeamBuild()
-	M.ScanRoster()
-	if M.win and M.win:IsShown() then
-		M.twin:ClearAllPoints()
-		M.twin:SetPoint("TOPLEFT", M.win, "TOPRIGHT", 6, 0)
-	elseif not M.twin:GetLeft() then
-		M.twin:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
-	end
+	f.mx:Hide()
+	for _, b in pairs(f.allB) do b:Hide() end
+	for i = 1, M.MAXCLASS do f.classB[i]:Hide() end
+	for i = 1, M.ROWS do f.rows[i]:Hide() end
+	f.bDef:Hide()
+	f.bClear:Hide()
+	f.bAuto:Hide()
+	f.bTank:Hide()
+	f.bOne:Hide()
+	f.bRep:Hide()
+	f.bWis:Hide()
+	f.bView:Hide()
+	f.bTeam.txt:SetText(L("msg.pallypower.team.back"))
+	local first = not M.twin:IsShown()
 	M.twin:Show()
-	M.SyncReq()
-	M.SyncSend()
+	if first then
+		M.SyncReq()
+		M.SyncSend()
+	end
 	M.TeamPaint()
 end
 
+function M.TeamOpen()
+	if not M.on then return end
+	C.Set("pallypower.team", true)
+	M.Open()
+end
+
 function M.TeamToggle()
-	if M.twin and M.twin:IsShown() then M.twin:Hide() else M.TeamOpen() end
+	C.Set("pallypower.team", not C.Get("pallypower.team"))
+	if not (M.win and M.win:IsShown()) then M.Open() end
 end
 
 -- ---------------------------------------------------------------- mini-panneau (facon "Pally Buffs" de l'addon d'origine)
@@ -2231,7 +2243,7 @@ end
 -- ---------------------------------------------------------------- cycle de vie
 function M.OnKey(key)
 	if key == nil or sfind(key or EMPTY, "^pallypower%.") then
-		if key == "pallypower.compact" and M.win then
+		if (key == "pallypower.compact" or key == "pallypower.team") and M.win then
 			M.ApplyView()
 			M.PaintCells()
 		end
@@ -2318,6 +2330,7 @@ SUI.RegisterModule("pallypower", {
 		opt("autosalv", "bool", 18, false),
 		opt("sync", "bool", 19, true),
 		opt("remote", "bool", 19.2, true),
+		opt("team", "bool", 15.5, false),
 		opt("syncmsg", "bool", 19.5, true),
 		opt("autosplit", "bool", 19.7, true),
 		opt("judge", "choice", 20, "none", { choices = { "none", "light", "wisdom", "crusader" }, choiceText = judgeText, simple = true }),
