@@ -557,6 +557,7 @@ function M.RebuildNav()
 		if fam.id == "general" then tinsert(nav, { kind = "page", id = "profiles" }) end
 		if fam.id == "tools" then
 			tinsert(nav, { kind = "page", id = "addons" })
+			tinsert(nav, { kind = "page", id = "errors" })
 			hasTools = true
 		end
 		for j = 1, getn(fam.cats) do
@@ -1491,7 +1492,7 @@ function M.ClearHl()
 	M.hlTask, M.hl, M.hlPre, M.hlTimed, M.hlA = nil, nil, nil, nil, nil
 end
 
-local PAGES = { home = true, modules = true, styles = true, profiles = true, addons = true }
+local PAGES = { home = true, modules = true, styles = true, profiles = true, addons = true, errors = true }
 
 function M.OpenAt(key, opts)
 	opts = opts or {}
