@@ -1,7 +1,8 @@
 -- ShikiUI TooltipCompare : deux comparaisons quand on survole un equipement.
+--  Chaque touche BASCULE l'affichage (une pression = affiche, une autre = masque) au lieu d'etre maintenue.
 --  * Maj  (option tooltip.compareshift) : l'objet survole ET l'objet equipe cote a cote (infobulles du jeu, ShoppingTooltip1/2),
 --    une infobulle par emplacement possible (deux pour les bagues, bijoux et armes a une main).
---  * Ctrl (option tooltip.compare ; tooltip.compareauto = sans Ctrl) : un petit cadre colle a l'infobulle liste SEULEMENT les
+--  * Ctrl (option tooltip.compare ; tooltip.compareauto = toujours) : un petit cadre colle a l'infobulle liste SEULEMENT les
 --    differences calculees (vert = gain, rouge = perte) avec l'equivalence entre pourcentages et caracteristiques : par exemple +1% de
 --    critique vaut environ 20 d'agilite.
 -- Les statistiques sont lues dans le texte des infobulles (anglais et francais), jamais dans une base de donnees : un texte inconnu
@@ -337,7 +338,7 @@ function K.Hide()
 	if K.frame then K.frame:Hide() end
 end
 
--- ---------------------------------------------------------------- Maj : objet(s) equipe(s) a cote de l'objet survole
+-- ---------------------------------------------------------------- Ctrl : objet(s) equipe(s) a cote de l'objet survole
 local SHOPW = 290          -- largeur approximative d'une infobulle d'objet (pour savoir s'il reste de la place a droite)
 
 -- Le script OnHide de l'infobulle du jeu masque ShoppingTooltip1/2 a chaque rafraichissement (plusieurs fois par seconde) :
@@ -417,7 +418,7 @@ function K.ShowEquipped(link)
 	K.keep = true
 end
 
--- Surveille Maj tant que l'infobulle d'un objet est visible (enfant de GameTooltip : ne tourne que si elle est affichee)
+-- Surveille Ctrl tant que l'infobulle d'un objet est visible (enfant de GameTooltip : ne tourne que si elle est affichee)
 -- Le jeu rafraichit l'infobulle plusieurs fois par seconde (Hide puis Show, lien vide un instant) : on ne masque donc qu'apres
 -- un court delai d'absence, sinon les cadres clignotent.
 local GRACE = 0.3
@@ -440,8 +441,15 @@ function K.Watch()
 		end
 		local cur = K.last
 		if K.lastAge > GRACE then cur = nil end
+		-- Une pression sur la touche (front montant) bascule l'affichage : maintenir la touche enfoncee fait deriver Windows
+		-- (repetition de touche), donc on ne lit pas l'etat maintenu.
+		local sd = IsShiftKeyDown() and true or false
+		local cd = IsControlKeyDown() and true or false
+		if sd and not K.prevS and cur and K.shiftOn then K.tgE = not K.tgE end
+		if cd and not K.prevC and cur and K.on then K.tgC = not K.tgC end
+		K.prevS, K.prevC = sd, cd
 		-- Maj : objet(s) equipe(s)
-		if cur and K.shiftOn and IsShiftKeyDown() then
+		if cur and K.shiftOn and K.tgE then
 			K.idleE = 0
 			K.shopKey = nil          -- on re-pose a chaque passage : le jeu estompe ces infobulles a chaque rafraichissement
 			K.ShowEquipped(cur)
@@ -450,7 +458,7 @@ function K.Watch()
 			if K.idleE > GRACE then K.HideEquipped() end
 		end
 		-- Ctrl : statistiques comparees
-		if cur and K.on and (IsControlKeyDown() or K.auto) then
+		if cur and K.on and (K.tgC or K.auto) then
 			K.idleC = 0
 			K.Show(cur)
 		else
@@ -466,8 +474,8 @@ function K.Apply()
 	K.auto = C.Get("tooltip.compareauto") and true or false
 	K.shiftOn = C.Get("tooltip.compareshift") and true or false
 	if K.on or K.shiftOn then K.Watch() end
-	if not K.on then K.Hide() end
-	if not K.shiftOn then K.HideEquipped() end
+	if not K.on then K.tgC = false; K.Hide() end
+	if not K.shiftOn then K.tgE = false; K.HideEquipped() end
 end
 
 -- /sui cmp : diagnostic de la comparaison (objet survole, emplacement, statistiques lues)
