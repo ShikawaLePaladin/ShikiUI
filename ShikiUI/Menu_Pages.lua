@@ -1473,3 +1473,29 @@ function P.search()
 	M.EndRow(4)
 	if n > shown then M.Para(L("mod.menu.search.more", n - shown), 20) end
 end
+
+
+-- PAGE JOURNAL D'ERREURS : ShikiUIDB.global.errlog affiche en clair, les plus recentes d'abord.
+function P.errors()
+	local log = SUI.errlog or {}
+	M.SetHead(L("mod.menu.nav.errors"), L("mod.menu.errors.desc"))
+	M.Para(L("mod.menu.errors.count", getn(log)), 16)
+	M.Para(L("mod.menu.errors.help"), 32)
+	for i = getn(log), 1, -1 do
+		local line = log[i]
+		local _, _, tm, src, msg = string.find(line, "^(%d+)|([^|]+)|(.*)$")
+		if tm and src and msg then
+			M.Para("|cffff6060" .. src .. ":|r " .. msg, 36)
+		else
+			M.Para(line, 20)
+		end
+	end
+	if getn(log) > 0 then
+		M.GridBtn(L("mod.menu.errors.clear"), 3, 208, 26, function()
+			for i = getn(SUI.errlog), 1, -1 do table.remove(SUI.errlog, i) end
+			SUI.Config.db.global.errlog = SUI.errlog
+			SUI.Print(L("errors.cleared"))
+			M.Render()
+		end)
+	end
+end

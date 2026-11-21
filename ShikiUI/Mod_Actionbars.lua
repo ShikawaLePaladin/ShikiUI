@@ -1070,6 +1070,9 @@ function M.TargetAlpha(bar)
 	elseif show == "hover" then
 		if not (over or M.bind) then a = cfg.fade end
 	end
+	-- la barre de posture est TOUJOURS opaque : elle est fonctionnelle (switch de posture) et ne doit
+	-- jamais disparaitre au changement combat/hors combat (vu chez Shikiwa en tank).
+	if bar.kind == "stance" then return a end
 	if not (M.bind or M.grid) then
 		if M.combat then a = a * cfg.ain * bar.ain else a = a * cfg.aout * bar.aout end
 	end
