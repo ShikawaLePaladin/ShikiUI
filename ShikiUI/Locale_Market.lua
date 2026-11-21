@@ -64,7 +64,7 @@ SUI.AddStrings("fr", {
 	["msg.market.off"] = "Module Marche coupe : /sui modules pour l'activer.",
 	["msg.market.tip.value"] = "Marche",
 	["msg.market.tip.low"] = "Plus bas du jour",
-	["help.market"] = "/sui market [scan|stop|clear|watch] - fenetre du marche de l'hotel des ventes",
+	["help.market"] = "/sui market [scan|stop|clear|watch [add|del|scan|clear]] - fenetre du marche de l'hotel des ventes",
 })
 
 SUI.AddStrings("en", {
@@ -129,5 +129,5 @@ SUI.AddStrings("en", {
 	["msg.market.off"] = "Market module is off: /sui modules to enable it.",
 	["msg.market.tip.value"] = "Market",
 	["msg.market.tip.low"] = "Today's lowest",
-	["help.market"] = "/sui market [scan|stop|clear|watch] - auction house market window",
+	["help.market"] = "/sui market [scan|stop|clear|watch [add|del|scan|clear]] - auction house market window",
 })
