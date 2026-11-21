@@ -414,6 +414,10 @@ function M.RaiseDrop()
 	if not f or not f.drop or not f.catcher or not M.lvl then return end
 	f.drop:SetFrameLevel(M.lvl + 220)
 	f.catcher:SetFrameLevel(M.lvl + 210)
+	-- Les boutons de la liste sont des ENFANTS de f.drop : en 1.12 SetFrameLevel du parent ne recale pas les enfants, ils restaient
+	-- a l'ancien niveau (sous le fond de la liste) et leur texte etait presque invisible.
+	local i
+	for i = 1, getn(f.drop.rows) do f.drop.rows[i]:SetFrameLevel(M.lvl + 222) end
 end
 
 
