@@ -473,25 +473,72 @@ function M.BagFreeCount()
 end
 
 -- Prepare la file pour le jeu k ; vrai si la banque s'en occupe (rien d'autre a faire), faux = equipement normal.
+-- Regle : tout le jeu est sur le personnage (porte OU dans les sacs) -> tout va en banque ; sinon, ce qui manque et dort en banque
+-- vient dans les sacs ; rien en banque -> equipement normal.
+local PAIR = { [11] = 12, [12] = 11, [13] = 14, [14] = 13 }
+
 function M.BankSwap(k)
 	local set = getSet(k)
 	if not set then return false end
-	local wantN, wornN = 0, 0
-	local miss = {}
+	local wantN = 0
 	for s = 1, 19 do
-		local want = set.code[s]
-		if want then
-			wantN = wantN + 1
-			if M.Code(GetInventoryItemLink("player", s)) == want then wornN = wornN + 1 else miss[s] = want end
-		end
+		if set.code[s] then wantN = wantN + 1 end
 	end
 	if wantN == 0 then return false end
 	local name = set.name or "?"
+	-- 1) ou est chaque objet du jeu : porte (emplacement), dans les sacs, en banque, ou introuvable
+	local usedBag, usedBank = {}, {}
+	local nWorn, nBag, nBank = 0, 0, 0
+	local plan = {}          -- s -> { w = 1 porte | 2 sac | 3 banque, a, b }
+	local missing = 0
+	for s = 1, 19 do
+		local want = set.code[s]
+		if want then
+			local w = nil
+			if M.Code(GetInventoryItemLink("player", s)) == want then
+				w = { w = 1, a = s }
+			elseif PAIR[s] and M.Code(GetInventoryItemLink("player", PAIR[s])) == want then
+				w = { w = 1, a = PAIR[s] }
+			end
+			if not w then
+				for bag = 0, (NUM_BAG_SLOTS or 4) do
+					local size = GetContainerNumSlots(bag) or 0
+					for slot = 1, size do
+						local key = bag .. ":" .. slot
+						if not w and not usedBag[key] and M.Code(GetContainerItemLink(bag, slot)) == want then
+							usedBag[key] = true
+							w = { w = 2, a = bag, b = slot }
+						end
+					end
+				end
+			end
+			if not w then
+				for i = 1, getn(BANKBAGS) do
+					local bag = BANKBAGS[i]
+					local size = GetContainerNumSlots(bag) or 0
+					for slot = 1, size do
+						local key = bag .. ":" .. slot
+						if not w and not usedBank[key] and M.Code(GetContainerItemLink(bag, slot)) == want then
+							usedBank[key] = true
+							w = { w = 3, a = bag, b = slot }
+						end
+					end
+				end
+			end
+			plan[s] = w
+			if not w then missing = missing + 1
+			elseif w.w == 1 then nWorn = nWorn + 1
+			elseif w.w == 2 then nBag = nBag + 1
+			else nBank = nBank + 1 end
+		end
+	end
 	M.bn, M.bi = 0, 1
-	if wornN == wantN then
+	if nBank == 0 and missing == 0 then
+		-- tout est sur moi : on range tout en banque
 		local used = {}
 		for s = 1, 19 do
-			if set.code[s] then
+			local p = plan[s]
+			if p then
 				local bag, slot = M.BankFreeSlot(used)
 				if not bag then
 					M.bn = 0
@@ -499,45 +546,51 @@ function M.BankSwap(k)
 					return true
 				end
 				M.bn = M.bn + 1
-				M.bq[M.bn] = { kind = 1, a = s, b = bag, c = slot }
-			end
-		end
-		SUI.Print(L("msg.items.bank.store", name, M.bn))
-	else
-		-- objets manquants retrouves en banque (chaque objet de la banque ne sert qu'une fois)
-		local taken = {}
-		for s = 1, 19 do
-			local want = miss[s]
-			if want then
-				local found = false
-				for i = 1, getn(BANKBAGS) do
-					local bag = BANKBAGS[i]
-					local size = GetContainerNumSlots(bag) or 0
-					for slot = 1, size do
-						local key = bag .. ":" .. slot
-						if not found and not taken[key] and M.Code(GetContainerItemLink(bag, slot)) == want then
-							taken[key] = true
-							found = true
-							M.bn = M.bn + 1
-							M.bq[M.bn] = { kind = 2, a = bag, b = slot }
-						end
-					end
+				if p.w == 1 then
+					M.bq[M.bn] = { kind = 1, a = p.a, b = bag, c = slot }
+				else
+					M.bq[M.bn] = { kind = 3, a = p.a, b = p.b, c = bag, d = slot }
 				end
 			end
 		end
-		if M.bn == 0 then return false end              -- rien en banque : on equipe comme d'habitude
+		SUI.Print(L("msg.items.bank.store", name, M.bn))
+	elseif nBank > 0 then
+		-- ce qui manque sur moi dort en banque : on le prend (chaque objet de la banque ne sert qu'une fois)
+		for s = 1, 19 do
+			local p = plan[s]
+			if p and p.w == 3 then
+				M.bn = M.bn + 1
+				M.bq[M.bn] = { kind = 2, a = p.a, b = p.b }
+			end
+		end
 		if M.BagFreeCount() < M.bn then
 			SUI.Print(L("msg.items.bank.full", M.bn))
 			M.bn = 0
 			return true
 		end
 		SUI.Print(L("msg.items.bank.fetch", name, M.bn))
+	else
+		return false                                  -- rien a faire avec la banque : equipement normal
 	end
 	M.bankBusy = true
 	M.bvt, M.bwait = nil, 0
 	if M.btask then SUI.Cancel(M.btask) end
 	M.btask = SUI.Every(0.3, M.BankStep, "items.bank")
 	return true
+end
+
+-- Codes de tous les objets des jeux enregistres (pour les autres modules : "cet objet fait partie d'un de mes jeux").
+function M.SetCodes()
+	local t = {}
+	for k = 1, NSETS do
+		local s = M.sets[k]
+		if s and s.code then
+			for sl = 1, 19 do
+				if s.code[sl] then t[s.code[sl]] = true end
+			end
+		end
+	end
+	return t
 end
 
 function M.BankStep()
@@ -565,6 +618,11 @@ function M.BankStep()
 		if IsInventoryItemLocked(q.a) then return end
 		PickupInventoryItem(q.a)
 		PickupContainerItem(q.b, q.c)
+	elseif q.kind == 3 then
+		local _, _, lk = GetContainerItemInfo(q.a, q.b)
+		if lk then return end
+		PickupContainerItem(q.a, q.b)
+		PickupContainerItem(q.c, q.d)
 	else
 		local _, _, locked = GetContainerItemInfo(q.a, q.b)
 		if locked then return end

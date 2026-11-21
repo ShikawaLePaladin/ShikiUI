@@ -80,6 +80,10 @@ function M.ReadConfig()
 	cfg.layout = C.Get("bags.layout")
 	cfg.remember = C.Get("bags.remember")
 	cfg.depositall = C.Get("bags.depositall")
+	cfg.hideslots = C.Get("bags.hideslots")
+	cfg.hidebankslots = C.Get("bags.hidebankslots")
+	cfg.newitems = C.Get("bags.newitems")
+	cfg.setcat = C.Get("bags.setcat")
 end
 
 -- ---------------------------------------------------------------- informations d'objets (cache par lien)
@@ -385,8 +389,8 @@ function M.UpdateValue(win)
 end
 
 -- ---------------------------------------------------------------- categories
-local CATKEYS = { "equip", "consum", "quest", "trade", "junk", "other", "free" }
-local CATIDX = { equip = 1, consum = 2, quest = 3, trade = 4, junk = 5, other = 6, free = 7 }
+local CATKEYS = { "new", "set", "equip", "consum", "quest", "trade", "junk", "other", "free" }
+local CATIDX = { new = 1, set = 2, equip = 3, consum = 4, quest = 5, trade = 6, junk = 7, other = 8, free = 9 }
 local TRADE = { "trade", "marchandise", "reagent", "composant", "recipe", "recette", "gem" }
 local GEARNO = { INVTYPE_BAG = true, INVTYPE_AMMO = true, INVTYPE_QUIVER = true }
 local HDRH, GAP = 16, 4
@@ -409,10 +413,73 @@ function M.Classify(ty, sub, q, eq)
 	return "other"
 end
 
+-- Butin recent : un objet est "nouveau" tant que son identifiant n'a jamais ete vu dans tes sacs / sur toi / en banque.
+-- Les identifiants vus sont memorises (compte) et mis a jour a la fermeture des sacs : le nouveau butin reste en tete jusque-la.
+function M.IsFresh(id)
+	local kn = M.CacheRoot().prefs.known
+	if type(kn) ~= "table" or not id or id <= 0 then return false end
+	return not kn[id]
+end
+
+function M.MarkSeen(scope)
+	local pr = M.CacheRoot().prefs
+	if type(pr.known) ~= "table" then pr.known = {} end
+	local kn = pr.known
+	local nbag = NUM_BAG_SLOTS or 4
+	local list = {}
+	if scope == "bank" then
+		list[1] = -1
+		for i = 1, (GetNumBankSlots() or 0) do list[getn(list) + 1] = nbag + i end
+	else
+		for bag = 0, nbag do list[bag + 1] = bag end
+	end
+	for i = 1, getn(list) do
+		local bag = list[i]
+		for slot = 1, slotCount(bag) do
+			local link = GetContainerItemLink(bag, slot)
+			if link then
+				lookup(link)
+				local id = INF.id[link]
+				if id and id > 0 then kn[id] = true end
+			end
+		end
+	end
+	if scope ~= "bank" then
+		for s = 1, 19 do
+			local link = GetInventoryItemLink("player", s)
+			if link then
+				lookup(link)
+				local id = INF.id[link]
+				if id and id > 0 then kn[id] = true end
+			end
+		end
+		-- les objets des jeux d'equipement sont connus d'office
+		local codes = SUI.Items and SUI.Items.SetCodes and SUI.Items.SetCodes()
+		if codes then
+			for c in pairs(codes) do
+				local _, _, id = string.find(c, "^(%d+)")
+				if id then kn[tonumber(id)] = true end
+			end
+		end
+	end
+end
+
 function M.CatOf(b)
 	local link = b.link
 	if not link then return "free" end
-	return M.Classify(INF.ltype[link] or "", INF.sub[link], b.q, INF.eq[link])
+	if cfg.newitems and M.IsFresh(INF.id[link]) then return "new" end
+	local c = M.Classify(INF.ltype[link] or "", INF.sub[link], b.q, INF.eq[link])
+	if c == "equip" and M.setLookup then
+		local code = SUI.Items.Code(link)
+		if code and M.setLookup[code] then return "set" end
+	end
+	return c
+end
+
+-- texte d'en-tete : "Equipement" devient "Equipement hors jeux" quand une categorie "jeux" existe
+function M.CatLabelKey(key)
+	if key == "equip" and M.setLookup and next(M.setLookup) then return "equipx" end
+	return key
 end
 
 -- ---------------------------------------------------------------- infobulles des boutons
@@ -645,6 +712,8 @@ end
 function M.PlaceCats(win, w)
 	local sz, sp, cols = cfg.size, cfg.spacing, cfg.columns
 	local cg = win.cg
+	M.setLookup = nil
+	if cfg.setcat and SUI.Items and SUI.Items.SetCodes and SUI.Items.Code then M.setLookup = SUI.Items.SetCodes() end
 	for k = 1, getn(CATKEYS) do
 		local g = cg[CATKEYS[k]]
 		for j = getn(g), 1, -1 do g[j] = nil end
@@ -674,7 +743,7 @@ function M.PlaceCats(win, w)
 				head:SetWidth(w - PAD * 2)
 				head:ClearAllPoints()
 				head:SetPoint("TOPLEFT", win.frame, "TOPLEFT", PAD, -y)
-				T.SetButtonText(head, (collapsed and "+ " or "- ") .. L("msg.bags.cat." .. key) .. " (" .. n .. ")")
+				T.SetButtonText(head, (collapsed and "+ " or "- ") .. L("msg.bags.cat." .. M.CatLabelKey(key)) .. " (" .. n .. ")")
 				head:Show()
 				y = y + HDRH + 2
 			else
@@ -769,7 +838,10 @@ function M.Layout(win)
 	if rows < 1 then rows = 1 end
 	local w = PAD * 2 + cols * sz + (cols - 1) * sp
 	if w < MINW then w = MINW end
-	local extra = (win.key == "bank" or M.HasBagSlots(win)) and BANKROW or 0
+	local hideS = (win.key == "bank" and cfg.hidebankslots) or (win.key == "bag" and cfg.hideslots)
+	local extra = ((win.key == "bank" or M.HasBagSlots(win)) and not hideS) and BANKROW or 0
+	if win.key == "bag" and win.slots then M.PlaceBagSlots(win) end
+	if win.key == "bank" then M.UpdateBankBags(win) end
 	local gridH = rows * (sz + sp) - sp
 	if cfg.layout == "categories" then
 		M.SyncLinks(win)
@@ -991,7 +1063,7 @@ end
 
 local function cmpView(a, b)
 	if cfg.layout == "categories" then
-		local ca, cb = CATIDX[a.cat] or 6, CATIDX[b.cat] or 6
+		local ca, cb = CATIDX[a.cat] or CATIDX.other, CATIDX[b.cat] or CATIDX.other
 		if ca ~= cb then return ca < cb end
 		if a.q ~= b.q then return a.q > b.q end
 		if a.lname ~= b.lname then return a.lname < b.lname end
@@ -1048,7 +1120,7 @@ end
 
 local function matchesEntry(e, win)
 	local f = win.filter
-	if f == "gear" and e.cat ~= "equip" then return false end
+	if f == "gear" and e.cat ~= "equip" and e.cat ~= "set" then return false end
 	if f == "junk" and e.q ~= 0 then return false end
 	if f == "good" and e.q < 2 then return false end
 	local q = win.query
@@ -1183,7 +1255,7 @@ function M.SetView(win, key, silent)
 		if win.vpanel then win.vpanel:Hide() end
 		for bag, h in pairs(win.holder) do h:Show() end
 		if win.sbtn then win.sbtn:Show() end
-		if win.slots then
+		if win.slots and not cfg.hideslots then
 			for i = 1, getn(win.slots) do win.slots[i].btn:Show() end
 		end
 		win.title:SetText(L(win.def.title))
@@ -1393,7 +1465,10 @@ local function winHide()
 	M.DragStop(win)
 	if win.pick then win.pick:Hide() end
 	if win.offline then M.SetView(win, nil) end      -- on rouvre toujours sur ses propres sacs
-	if win.key == "bag" then M.Snapshot("bags") end
+	if win.key == "bag" then
+		M.MarkSeen("bag")
+		M.Snapshot("bags")
+	end
 	if win.sort then
 		abortSort(win)
 		SUI.Print(L("msg.bags.sort.fail"))
@@ -1645,7 +1720,7 @@ function M.PaintBankBags(win)
 				else
 					t:SetTexture(nil)
 				end
-				if i > owned then t:SetVertexColor(1, 0.1, 0.1) else t:SetVertexColor(1, 1, 1) end
+				if i > owned then t:SetVertexColor(T.c.bad[1], T.c.bad[2], T.c.bad[3]) else t:SetVertexColor(T.c.text[1], T.c.text[2], T.c.text[3]) end
 			end
 		end
 	end
@@ -1656,7 +1731,9 @@ function M.UpdateBankBags(win)
 	local owned = GetNumBankSlots() or 0
 	M.BuildBankBags(win)
 	for i = 1, getn(win.bankbags) do
-		if win.bankbags[i] then win.bankbags[i]:Show() end
+		if win.bankbags[i] then
+			if cfg.hidebankslots then win.bankbags[i]:Hide() else win.bankbags[i]:Show() end
+		end
 	end
 	M.PaintBankBags(win)
 	if win.buy then
@@ -1678,6 +1755,7 @@ function M.PlaceBagSlots(win)
 	if not win.slots then return end
 	for i = 1, getn(win.slots) do
 		local b = win.slots[i].btn
+		if cfg.hideslots then b:Hide() else b:Show() end
 		b:ClearAllPoints()
 		b:SetPoint("BOTTOMLEFT", win.frame, "BOTTOMLEFT", (PAD + (i - 1) * 25) / SLOTSCALE, (FOOTER + 2) / SLOTSCALE)
 	end
@@ -1952,6 +2030,7 @@ function M.OnEvent(ev, a1)
 		if bag then bag.dDim = true end
 	elseif ev == "BANKFRAME_OPENED" then
 		M.bankOpen, M.bankDirty = true, true
+		M.MarkSeen("bank")
 		if cfg.bankwin then
 			M.HideBlizzBank()
 			M.Open("bank")
@@ -2048,7 +2127,10 @@ function M.Enable()
 	for i = 1, getn(EVENTS) do SUI.On(EVENTS[i], M.OnEvent) end
 	M.task = SUI.Every(TICK, M.Tick, "bags.tick", true)
 	M.bankOpen, M.bankDirty, M.dep = false, false, nil
-	M.snapTask = SUI.After(5, function() M.Snapshot("bags") end, "bags.snap0")
+	M.snapTask = SUI.After(5, function()
+		M.Snapshot("bags")
+		if type(M.CacheRoot().prefs.known) ~= "table" then M.MarkSeen("bag") end     -- premiere fois : tout ce que tu as deja n'est pas du butin
+	end, "bags.snap0")
 	if not M.watching then
 		M.watching = true
 		C.Watch("bags.", M.OnKey)
@@ -2128,6 +2210,10 @@ local OPTS = {
 	{ key = "bags.filters", type = "bool", default = true },
 	{ key = "bags.remember", type = "bool", default = true, simple = true },
 	{ key = "bags.depositall", type = "bool", default = false },
+	{ key = "bags.hideslots", type = "bool", default = false, simple = true },
+	{ key = "bags.hidebankslots", type = "bool", default = false, simple = true },
+	{ key = "bags.newitems", type = "bool", default = true, simple = true },
+	{ key = "bags.setcat", type = "bool", default = true, simple = true },
 }
 local options = {}
 for i = 1, getn(OPTS) do
