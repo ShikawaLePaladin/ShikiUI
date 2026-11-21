@@ -438,8 +438,10 @@ end
 -- Dimensions de la fenetre classique : 6 colonnes de bene (74 px + 6 d ecart) + colonne de noms, hauteur
 -- selon le nombre de LIGNES affichees (fini la moitie d ecran vide avec 4 joueurs).
 local COLW, COLGAP = 74, 6
+-- Colonne des cases : x = 136 (T, 10, nom a gauche) ; la fenetre detaillee epouse EXACTEMENT les 6 colonnes (le pas est de 80)
+local GRIDX = 136
 function M.WinW()
-	return 10 + 74 + getn(M.BLESS) * (COLW + COLGAP) + 10
+	return GRIDX + (getn(M.BLESS) - 1) * (COLW + COLGAP) + COLW + 12
 end
 function M.WinH()
 	local rows = 0
@@ -476,7 +478,7 @@ function M.Build()
 		local btn = mkBtn(f, L("mod.pallypower.bless." .. b), 74, 18,
 			function() M.SetAll(b, not M.AllHave(b)) end,
 			function() M.SetAll(b, false) end)
-		btn:SetPoint("TOPLEFT", f, "TOPLEFT", 10 + (j - 1) * 80, -30)
+		btn:SetPoint("TOPLEFT", f, "TOPLEFT", GRIDX + (j - 1) * (COLW + COLGAP), -30)     -- pile au-dessus de la colonne de cases
 		f.allB[b] = btn
 	end
 	-- rangee 2 : boutons de classes presentes (jeu par defaut / clic droit = vider)
@@ -497,6 +499,9 @@ function M.Build()
 		local row = CreateFrame("Frame", nil, f)
 		row:SetHeight(14)
 		row:SetWidth(M.WinW() - 16)
+		row.bg = row:CreateTexture(nil, "BACKGROUND")
+		row.bg:SetAllPoints(row)
+		row.bg:SetTexture(1, 1, 1, (i / 2 == floor(i / 2)) and 0.05 or 0.02)
 		row.name = T.Text(row, 10, T.c.text, "LEFT", true)
 		row.name:SetPoint("LEFT", row, "LEFT", 40, 0)
 		row.name:SetWidth(84)
@@ -524,7 +529,7 @@ function M.Build()
 			cell:SetScript("OnClick", function()
 				if arg1 == "RightButton" then cellRClick() else cellClick() end
 			end)
-			cell:SetPoint("LEFT", row, "LEFT", 128 + (j - 1) * 80, 0)   -- aligne sur les boutons de colonne (80 px de pas)
+			cell:SetPoint("LEFT", row, "LEFT", GRIDX - 8 + (j - 1) * (COLW + COLGAP), 0)   -- aligne sur les boutons de colonne
 			tip(cell, "msg.pallypower.tip.cell")
 			row.cells[b] = cell
 		end
@@ -785,13 +790,13 @@ function M.ApplyView()
 		for i = 1, M.ROWS do f.rows[i]:Hide() end
 		f.bView.txt:SetText(L("msg.pallypower.viewdetail"))
 	else
-		f:SetWidth(540)
+		f:SetWidth(M.WinW())
 		f:SetHeight(520)
 		M.Put(f.bDef, 10, 8, 80)
 		M.Put(f.bClear, 94, 8, 80)
 		M.Put(f.bAuto, 178, 8, 80)
-		M.Put(f.bView, 300, 8, 96)
-		M.Put(f.bCast, 420, 8, 110)
+		M.Put(f.bView, M.WinW() - 10 - 110 - 6 - 96, 8, 96)
+		M.Put(f.bCast, M.WinW() - 10 - 110, 8, 110)
 		f.bTank:Hide()
 		f.bOne:Hide()
 		M.Put(f.bRep, 10, 36, 100)
@@ -869,14 +874,27 @@ function M.PaintCells()
 		if row:IsShown() and row._n then
 			for j = 1, getn(M.BLESS) do
 				local cell = row.cells[M.BLESS[j]]
+				if not cell.ico then
+					cell.ico = cell:CreateTexture(nil, "ARTWORK")
+					cell.ico:SetWidth(11)
+					cell.ico:SetHeight(11)
+					cell.ico:SetPoint("LEFT", cell, "LEFT", 3, 0)
+					cell.ico:SetTexCoord(0.07, 0.93, 0.07, 0.93)
+					cell.ico:SetTexture("Interface\\Icons\\" .. M.BICON[cell.bless])
+				end
 				if cell.who and M.Has(cell.who, cell.bless) then
 					cell:SetBackdropBorderColor(ar, ag, ab, 1)
+					cell:SetBackdropColor(ar, ag, ab, 0.22)          -- case attribuee : fond teinte + icone de la benediction
+					cell.ico:Show()
 				else
 					cell:SetBackdropBorderColor(bc[1], bc[2], bc[3], bc[4] or 1)
+					local bg = T.c.bg
+					cell:SetBackdropColor(bg[1], bg[2], bg[3], bg[4] or 1)
+					cell.ico:Hide()
 				end
 				if not cell.ten then
 					cell.ten = T.Text(cell, 10, T.c.text, "CENTER")
-					cell.ten:SetPoint("CENTER", cell, "CENTER", 0, 0)
+					cell.ten:SetPoint("CENTER", cell, "CENTER", 6, 0)
 				end
 				local aa = cell.who and M.assign[cell.who]
 				cell.ten:SetText((aa and M.IsSingle(aa, cell.bless)) and "10 min" or EMPTY)
