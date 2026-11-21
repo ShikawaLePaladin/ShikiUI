@@ -385,16 +385,18 @@ function M.Stop()
 end
 
 -- ---------------------------------------------------------------- fenetre (grille)
--- Clic gauche : pose / retire la benediction superieure (30 min). Clic droit : pose la benediction de 10 min sur CETTE case
+-- Clic gauche : fait defiler vide -> superieure (30 min) -> 10 min -> vide. Clic droit : pose la benediction de 10 min sur CETTE case
 -- (ou la convertit en 10 min) ; un second clic droit la retire.
 local function cellClick()
 	local b = this
 	if not (b.who and b.bless) then return end
 	local a = M.assign[b.who]
-	if a and a[b.bless] and a.sg and a.sg[b.bless] then
-		M.Put10(b.who, b.bless, false)      -- une case de 10 min : le clic gauche la repasse en superieure
+	if not (a and a[b.bless]) then
+		M.Put10(b.who, b.bless, false)      -- vide -> benediction superieure (30 min)
+	elseif (a.sg and a.sg[b.bless]) or a.single then
+		M.Toggle(b.who, b.bless, false)     -- 10 min -> vide
 	else
-		M.Toggle(b.who, b.bless)
+		M.Put10(b.who, b.bless, true)       -- 30 min -> 10 min : le clic gauche fait defiler vide / 30 min / 10 min
 	end
 end
 
