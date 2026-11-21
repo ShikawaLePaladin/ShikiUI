@@ -996,7 +996,7 @@ end
 function M.PaintClasses()
 	local f = M.win
 	if not f then return end
-	if M.Compact() then return end
+	if M.Compact() or C.Get("pallypower.team") then return end
 	local n = 0
 	for file in pairs(M.classes) do
 		n = n + 1
@@ -1836,10 +1836,8 @@ function M.TeamBuild()
 	f.empty:SetText(L("msg.pallypower.team.none"))
 	f.hc = {}
 	for i = 1, M.MAXCLASS do
-		local h = f:CreateTexture(nil, "ARTWORK")
-		h:SetWidth(TC - 8)
-		h:SetHeight(TC - 8)
-		h:SetTexture("Interface\\Glues\\CharacterCreate\\UI-CharacterCreate-Classes")
+		local h = T.Text(f, 8, T.c.dim, "CENTER")
+		h:SetWidth(TC + TG)
 		h:Hide()
 		f.hc[i] = h
 	end
@@ -1911,10 +1909,9 @@ function M.TeamPaint()
 		local h = f.hc[i]
 		local file = cls[i]
 		if file and np > 0 then
-			local tc = M.CCOORD[file]
-			if tc then h:SetTexCoord(tc[1], tc[2], tc[3], tc[4]) end
+			h:SetText(className(file))
 			h:ClearAllPoints()
-			h:SetPoint("TOPLEFT", f, "TOPLEFT", x0 + (i - 1) * (TC + TG) + 4, -42)
+			h:SetPoint("TOP", f, "TOPLEFT", x0 + (i - 1) * (TC + TG) + TC / 2, -48)
 			h:Show()
 		else
 			h:Hide()
