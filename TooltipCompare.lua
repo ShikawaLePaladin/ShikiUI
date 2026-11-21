@@ -387,6 +387,8 @@ function K.ShowEquipped(link)
 			else
 				st:SetPoint("TOPRIGHT", prev, "TOPLEFT", -2, 0)
 			end
+			st:SetScale(gt:GetScale() or 1)                       -- meme echelle et meme fond que l'infobulle survolee
+			if SUI.Tooltip and SUI.Tooltip.on and SUI.Tooltip.cfg and SUI.Tooltip.cfg.style then T.Backdrop(st, T.c.panel, T.c.border) end
 			st:SetInventoryItem("player", slots[i])
 			st:AddLine(L("msg.tooltip.equipped"), T.c.dim[1], T.c.dim[2], T.c.dim[3])
 			st:Show()
