@@ -1292,11 +1292,11 @@ end
 -- Texte "SELF" : rangs des benedictions connues puis, par classe (0-9), la benediction que JE donne ("n" = aucune).
 function M.SyncSelfText()
 	local s = "SELF "
-	local order = { "wisdom", "might", "salvation", "light", "kings" }
-	for i = 1, 5 do
+	local order = { "wisdom", "might", "salvation", "light", "kings", "sanctuary" }      -- ids PLPWR 0 a 5
+	for i = 1, 6 do
 		s = s .. (M.Knows(order[i]) and "10" or "nn")
 	end
-	s = s .. "nn@"
+	s = s .. "@"
 	for id = 0, 9 do
 		local ch = "n"
 		for file, cid in pairs(M.SYNC_CLS) do
