@@ -869,8 +869,7 @@ function M.SendQuery(page)
 	if q <= 0 then q = nil end
 	-- l'interface Blizzard fait de l'arithmetique sur AuctionFrameBrowse.page quand la liste change : elle ne le renseigne que via son
 	-- propre bouton de recherche, donc nous le fixons (sinon "attempt to perform arithmetic on field 'page'")
-	local bf = getglobal("AuctionFrameBrowse")
-	if bf and bf.page == nil then bf.page = 0 end
+	M.FixBlizzPage()
 	QueryAuctionItems(M.query, M.fMinL, M.fMaxL, nil, M.fClass, M.fSub, page, C.Get("auction.usable") and 1 or nil, q)
 end
 
@@ -3072,8 +3071,24 @@ function M.StartTab()
 end
 
 -- ---------------------------------------------------------------- evenements et cycle de vie
+-- Blizzard_AuctionUI : AuctionFrameBrowse_Update calcule avec AuctionFrameBrowse.page, qui peut etre nil quand la liste change sans
+-- passer par le bouton de recherche de Blizzard (notre requete, un autre addon, le retour d'une vente). On enrobe la fonction UNE fois.
+function M.FixBlizzPage()
+	local bf = getglobal("AuctionFrameBrowse")
+	if bf and bf.page == nil then bf.page = 0 end
+	local orig = getglobal("AuctionFrameBrowse_Update")
+	if M.blizzHooked or type(orig) ~= "function" then return end
+	M.blizzHooked = true
+	AuctionFrameBrowse_Update = function()
+		local b = getglobal("AuctionFrameBrowse")
+		if b and b.page == nil then b.page = 0 end
+		return orig()
+	end
+end
+
 function M.OnShow()
 	M.open = true
+	M.FixBlizzPage()
 	M.me = UnitName("player")
 	M.armUntil = 0
 	M.view = C.Get("auction.ui")
