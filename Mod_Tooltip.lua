@@ -414,6 +414,7 @@ function M.DecorateItem(link)
 	if cfg.itemid then GameTooltip:AddLine(L("msg.tooltip.itemid", id), T.c.dim[1], T.c.dim[2], T.c.dim[3]) end
 	if cfg.combathide and SUI.InCombat() then return end      -- "masquer en combat" : ni prix ni possession pendant un combat
 	if cfg.vendor then M.AddVendor(id, link) end
+	if SUI.Market and SUI.Market.AddTip then SUI.Market.AddTip(link) end
 	if cfg.owned then M.AddOwned(id) end
 end
 
