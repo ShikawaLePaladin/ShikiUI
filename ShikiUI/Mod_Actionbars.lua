@@ -894,16 +894,24 @@ function M.ForceRepaint(b)
 	b.vst = nil
 end
 
--- Paladin : une aura n'est active que si son buff est sur le joueur (la mort l'enleve, l'API peut garder l'ancien etat).
+-- Paladin : une aura n'est active que si un buff d'aura est reellement sur le joueur (la mort l'enleve, l'API peut garder
+-- l'ancien etat). GetShapeshiftFormInfo renvoie une icone generique (Spell_Nature_WispSplode) differente de celle du buff :
+-- on compare donc aux icones des buffs d'aura (relevees en jeu : Devotion, Retribution, Concentration, Resistances, Sanctification).
+M.AURA_BUFFS = { "devotionaura", "auraoflight", "mindsooth", "sealofkings", "wizardmark", "sealoffire", "mindvision", "crusaderaura" }
+
 function M.AuraBuffOn(icon)
 	local ub, dead = getglobal("UnitBuff"), getglobal("UnitIsDeadOrGhost")
-	if not icon or type(ub) ~= "function" then return true end      -- API absente : on garde l etat du jeu
+	if type(ub) ~= "function" then return true end                  -- API absente : on garde l etat du jeu
 	if type(dead) == "function" and dead("player") then return false end
-	local want = string.lower(icon)
+	local want = icon and string.lower(icon) or nil
 	for i = 1, 32 do
 		local t = ub("player", i)
 		if not t then break end
-		if string.lower(t) == want then return true end
+		t = string.lower(t)
+		if want and t == want then return true end
+		for k = 1, getn(M.AURA_BUFFS) do
+			if string.find(t, M.AURA_BUFFS[k], 1, true) then return true end
+		end
 	end
 	return false
 end
