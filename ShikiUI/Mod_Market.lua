@@ -852,6 +852,7 @@ function M.Disable()
 end
 
 SUI.RegisterCategory("market", 57)
+SUI.RegisterAction("market", "mod.menu.act.market", function() M.Open() end, 130)
 
 local function opt(key, typ, order, def, extra)
 	local o = { key = "market." .. key, type = typ, cat = "market", label = "opt.market." .. key, tip = "tip.market." .. key, default = def, order = order }

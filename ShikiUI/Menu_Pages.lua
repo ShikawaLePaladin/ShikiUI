@@ -1379,6 +1379,15 @@ function P.cat()
 	if nnew > 0 then
 		M.HeadBtn(L("mod.menu.new.clearcat", nnew), 130, function() M.NewClear(cat) end)
 	end
+	local acts = SUI.actions and SUI.actions[cat]
+	if acts and mod and M.State(cat) == "on" then
+		for i = 1, getn(acts) do
+			if M.frame.head.nbtn < 4 then
+				local fn = acts[i].fn
+				M.HeadBtn(L(acts[i].label), acts[i].w, function() M.Hide() fn() end)
+			end
+		end
+	end
 	M.SetHead(M.CatLabel(cat), M.CatDesc(cat), mod and M.Tx("tip.modules." .. cat) or nil)
 	local h = M.frame.head
 	local counts = L("mod.menu.count", total, modified)
