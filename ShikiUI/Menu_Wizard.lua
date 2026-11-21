@@ -415,6 +415,7 @@ function M.WizPackSet(id)
 		put(ESS)
 		put(EXTRA[id] or {})
 	end
+	if SUI.Config.class == "PALADIN" and SUI.modules.pallypower and id ~= "light" then set.pallypower = true end
 	return set
 end
 
