@@ -1584,7 +1584,17 @@ function M.BuildBankBags(win)
 	for i = 1, (NUM_BANKBAGSLOTS or 6) do
 		local ok, b = pcall(function(i)
 			local c = CreateFrame("CheckButton", BANKPFX .. "Bag" .. i, win.frame, "BankItemButtonBagTemplate")
-			c:SetID(i)   -- identifiant 1 a 6 comme les boutons de sac de la banque de Blizzard (non verifie en jeu)
+			c:SetID(nbag + i)   -- verifie en jeu : les boutons de Blizzard (BankFrameBag1..6) ont les identifiants 5 a 10 (= numero du conteneur)
+			-- Le modele de Blizzard deduit l'emplacement d'inventaire a la creation (avant SetID) : GetInventorySlot() donnait 39 (case de banque).
+			-- Icone, clic (poser / reprendre un sac) et infobulle sont donc geres ici, avec l'emplacement verifie en jeu : ContainerIDToInventoryID(4 + i) = 63 + i.
+			c.bagIndex = i
+			c.invSlot = ContainerIDToInventoryID and ContainerIDToInventoryID(nbag + i) or (63 + i)
+			c:SetScript("OnEvent", nil)
+			c:SetScript("OnClick", M.BankBagClick)
+			c:SetScript("OnDragStart", M.BankBagClick)
+			c:SetScript("OnReceiveDrag", M.BankBagClick)
+			c:SetScript("OnEnter", M.BankBagEnter)
+			c:SetScript("OnLeave", function() GameTooltip:Hide() end)
 			c:SetWidth(22)
 			c:SetHeight(22)
 			c:SetPoint("BOTTOMLEFT", win.frame, "BOTTOMLEFT", PAD + (i - 1) * 25, FOOTER + 2)
@@ -1595,6 +1605,52 @@ function M.BuildBankBags(win)
 	end
 end
 
+function M.BankBagClick()
+	local b = this
+	if not b.invSlot then return end
+	if b.bagIndex > (GetNumBankSlots() or 0) then
+		local sp = getglobal("StaticPopup_Show")
+		if sp then sp("CONFIRM_BUY_BANK_SLOT") end
+		return
+	end
+	if CursorHasItem() then PutItemInBag(b.invSlot) else PickupBagFromSlot(b.invSlot) end
+end
+
+function M.BankBagEnter()
+	local b = this
+	GameTooltip:SetOwner(b, "ANCHOR_RIGHT")
+	if b.bagIndex > (GetNumBankSlots() or 0) then
+		GameTooltip:SetText(L("msg.bags.bankslot.buy"))
+	elseif GameTooltip.SetInventoryItem and GetInventoryItemLink("player", b.invSlot) then
+		GameTooltip:SetInventoryItem("player", b.invSlot)
+	else
+		GameTooltip:SetText(L("msg.bags.bankslot.empty"))
+	end
+	GameTooltip:Show()
+end
+
+-- icone (ou case vide) de chaque emplacement de sac de la banque ; teinte rouge tant que l'emplacement n'est pas achete
+function M.PaintBankBags(win)
+	if not win or not win.bankbags then return end
+	local owned = GetNumBankSlots() or 0
+	for i = 1, getn(win.bankbags) do
+		local b = win.bankbags[i]
+		if b and b.invSlot then
+			local t = getglobal(b:GetName() .. "IconTexture")
+			if t then
+				local tex = GetInventoryItemTexture and GetInventoryItemTexture("player", b.invSlot)
+				if tex then
+					t:SetTexture(tex)
+					t:Show()
+				else
+					t:SetTexture(nil)
+				end
+				if i > owned then t:SetVertexColor(1, 0.1, 0.1) else t:SetVertexColor(1, 1, 1) end
+			end
+		end
+	end
+end
+
 function M.UpdateBankBags(win)
 	if win.key ~= "bank" then return end
 	local owned = GetNumBankSlots() or 0
@@ -1602,6 +1658,7 @@ function M.UpdateBankBags(win)
 	for i = 1, getn(win.bankbags) do
 		if win.bankbags[i] then win.bankbags[i]:Show() end
 	end
+	M.PaintBankBags(win)
 	if win.buy then
 		if owned < (NUM_BANKBAGSLOTS or 6) then win.buy:Show() else win.buy:Hide() end
 	end
@@ -1872,6 +1929,9 @@ function M.OnEvent(ev, a1)
 	if M.bankOpen and (ev == "PLAYERBANKSLOTS_CHANGED" or ev == "PLAYERBANKBAGSLOTS_CHANGED"
 		or (ev == "BAG_UPDATE" and a1 and (a1 == -1 or a1 > (NUM_BAG_SLOTS or 4)))) then
 		M.bankDirty = true
+	end
+	if bank and M.bankOpen and (ev == "PLAYERBANKBAGSLOTS_CHANGED" or ev == "BAG_UPDATE" or ev == "ITEM_LOCK_CHANGED" or ev == "BANKFRAME_OPENED") then
+		M.PaintBankBags(bank)
 	end
 	if ev == "BAG_UPDATE" then
 		if bag and a1 then bag.dBags[a1] = true end
