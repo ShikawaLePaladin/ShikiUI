@@ -133,8 +133,21 @@ local function saveAssign()
 	if M.SyncSoon then M.SyncSoon() end
 end
 
+-- ancien indicateur "tout en 10 min" (a.single) : converti en 10 min par case, pour que le clic fasse defiler les etats case par case
+local function unsingle(a)
+	if not a.single then return end
+	a.single = nil
+	a.sg = a.sg or {}
+	for j = 1, getn(M.BLESS) do
+		local k = M.BLESS[j]
+		if a[k] then a.sg[k] = true end
+	end
+end
+M.Unsingle = unsingle
+
 function M.Toggle(name, b, want)
 	local a = asg(name)
+	unsingle(a)
 	if want == nil then want = not a[b] end
 	if want then a[b] = true else a[b] = nil end
 	if a.sg then a.sg[b] = nil end
@@ -145,6 +158,7 @@ end
 -- Pose une benediction sur un joueur : mode "10" = benediction de 10 min pour cette case seulement, sinon benediction superieure.
 function M.Put10(name, b, ten)
 	local a = asg(name)
+	unsingle(a)
 	a[b] = true
 	if ten then
 		if not a.sg then a.sg = {} end
@@ -391,6 +405,7 @@ local function cellClick()
 	local b = this
 	if not (b.who and b.bless) then return end
 	local a = M.assign[b.who]
+	if a then unsingle(a) end
 	if not (a and a[b.bless]) then
 		M.Put10(b.who, b.bless, false)      -- vide -> benediction superieure (30 min)
 	elseif (a.sg and a.sg[b.bless]) or a.single then
@@ -404,6 +419,7 @@ local function cellRClick()
 	local b = this
 	if not (b.who and b.bless) then return end
 	local a = M.assign[b.who]
+	if a then unsingle(a) end
 	if a and a[b.bless] and ((a.sg and a.sg[b.bless]) or a.single) then
 		M.Toggle(b.who, b.bless, false)
 	else
