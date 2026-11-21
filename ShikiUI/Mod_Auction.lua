@@ -116,7 +116,7 @@ M.q = nil               -- pile de lots en cours
 M.oN = 0
 M.oName, M.oCnt, M.oBuy, M.oBid, M.oCur, M.oHigh, M.oLeft, M.oTex, M.oQ, M.oLink = {}, {}, {}, {}, {}, {}, {}, {}, {}, {}
 M.oSel, M.oOffset, M.cancelUntil = nil, 0, 0
-M.an = { bk = {}, tk = {}, tv = {}, tr = {}, nt = 0, ntr = 0 }
+M.an = { bk = {}, tk = {}, tv = {}, tr = {}, n = 0, nt = 0, ntr = 0, units = 0, sellers = 0 }
 M.sellerSet = {}
 M.colorEpoch = 1
 
