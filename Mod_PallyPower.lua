@@ -326,13 +326,13 @@ M.RANKLVL = { might = { 4, 12, 22, 32, 42, 52, 60 }, wisdom = { 14, 24, 34, 44, 
 	light = { 40, 50, 60 }, sanctuary = { 30, 40, 50, 60 } }
 M.GREATERLVL = 60
 
--- Rang a lancer sur une unite : nil = rang maximum (pas de suffixe) ; 0 = cible trop basse pour cette benediction ; n = rang n.
+-- Rang a lancer sur une unite : nil = rang maximum (pas de suffixe) ; n = rang n (au minimum 1 : sur une cible plus basse que le rang 1, on tente le rang 1 et le serveur tranche).
 function M.RankFor(b, unit)
 	local tbl = M.RANKLVL[b]
 	local ul = getglobal("UnitLevel")
 	local lv = tbl and type(ul) == "function" and ul(unit)
 	if type(lv) ~= "number" or lv <= 0 then return nil end
-	local r = 0
+	local r = 1
 	for i = 1, getn(tbl) do
 		if tbl[i] <= lv then r = i end
 	end
@@ -347,12 +347,11 @@ function M.LowLevel(unit)
 	return type(lv) == "number" and lv > 0 and lv < M.GREATERLVL
 end
 
--- Nom complet du sort pour une unite : single = 10 min ; rang adapte au niveau ; nil = rien a lancer (cible trop basse).
+-- Nom complet du sort pour une unite : single = 10 min ; rang adapte au niveau.
 -- Renvoie aussi le booleen "simple" reellement utilise.
 function M.CastName(b, single, unit)
 	if not single and M.LowLevel(unit) then single = true end
 	local rk = M.RankFor(b, unit)
-	if rk == 0 then return nil, single end
 	local nm = M.SpellName(b, single)
 	if single and rk then nm = nm .. "(" .. (GAMEFR and "Rang " or "Rank ") .. rk .. ")" end
 	return nm, single
@@ -362,6 +361,7 @@ end
 function M.BuildPairs()
 	M.npairs, M.qi, M.castn = 0, 0, 0
 	M.buffNames = {}   -- les noms de buffs sont relus a chaque tour du cycle
+	M.ScanKnown()      -- une benediction absente du livre de sorts (talent non appris) est ignoree au lieu d'echouer en silence
 	-- deux passes : d'abord les benedictions de classe (30 min), ensuite les benedictions simples (10 min).
 	-- Une benediction de classe touche TOUTE la classe : posee apres, elle ecraserait la benediction simple d'un autre joueur de la classe
 	-- (ex. Sagesse de classe sur le druide soigneur ecraserait Puissance 10 min sur le druide feral).
@@ -375,7 +375,7 @@ function M.BuildPairs()
 					if a[b] then
 						-- cible de bas niveau : benediction simple, au rang que son niveau permet (seconde passe)
 						local nm, single = M.CastName(b, M.IsSingle(a, b), r.unit)
-						if nm and (pass == 2) == single and not M.HasBuff(r.unit, M.SPELLS[b]) then
+						if nm and M.Knows(b) and (pass == 2) == single and not M.HasBuff(r.unit, M.SPELLS[b]) then
 							M.npairs = M.npairs + 1
 							M.pairs[M.npairs] = { unit = r.unit, name = nm, base = M.SPELLS[b], frb = GAMEFR and M.SPELLS_FR[b] or nil, who = r.name, tries = 0 }
 						end
