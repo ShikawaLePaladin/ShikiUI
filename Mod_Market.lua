@@ -628,7 +628,8 @@ function M.Build()
 			if not it then return end
 			local gt = getglobal("GameTooltip")
 			gt:SetOwner(this, "ANCHOR_RIGHT")
-			gt:SetText(it.e.n or "?", qcolor(it.e.q))
+			local ok = pcall(gt.SetHyperlink, gt, "item:" .. it.id .. ":0:0:0")
+			if not ok or gt:NumLines() == 0 then gt:SetText(it.e.n or "?", qcolor(it.e.q)) end
 			gt:AddLine(L("msg.market.row.tip"), T.c.dim[1], T.c.dim[2], T.c.dim[3], 1)
 			gt:Show()
 		end)
