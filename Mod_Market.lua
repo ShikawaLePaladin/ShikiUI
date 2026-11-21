@@ -297,7 +297,7 @@ function M.Finish(partial)
 	SUI.Off("AUCTION_ITEM_LIST_UPDATE", M.OnList)
 	local db = M.LoadDB()
 	local day = M.Day()
-	db.scan.id = (db.scan.id or 0) + 1
+	if not sc.names then db.scan.id = (db.scan.id or 0) + 1 end     -- un scan cible reste dans le dernier scan complet
 	local n = 0
 	for id, acc in pairs(sc.acc) do
 		M.Record(id, acc, day, db.scan.id)
@@ -443,12 +443,25 @@ function M.Rebuild()
 		if ok and filt ~= "" and not sfind(slower(e.n or ""), filt, 1, true) then ok = false end
 		if ok and watch and not watch[slower(e.n or "")] then ok = false end
 		local pct, profit = M.Metrics(e)
+		local val = e.md
 		if ok and M.mode == "deals" then
 			if e.s ~= scanId or not pct or pct < minpct or profit < minprofit or not M.Reliable(e) then ok = false end
+		elseif ok and M.mode == "vendor" then
+			-- revente au marchand : plus bas prix de l'hotel sous le prix de vente du marchand (pas de commission, pas d'attente)
+			local tt = SUI.Tooltip
+			local sp = tt and tt.SellPrice and tt.SellPrice(id)
+			if e.s ~= scanId or not e.mn or not sp or e.mn >= sp then
+				ok = false
+			else
+				val = sp
+				profit = sp - e.mn
+				pct = floor(profit * 100 / sp)
+				if profit < minprofit then ok = false end
+			end
 		end
 		if ok then
 			n = n + 1
-			list[n] = { id = id, e = e, name = slower(e.n or ""), now = e.mn, val = e.md, pct = pct, profit = profit, offers = e.no }
+			list[n] = { id = id, e = e, name = slower(e.n or ""), now = e.mn, val = val, pct = pct, profit = profit, offers = e.no }
 		end
 	end
 	tsort(list, cmp)
@@ -488,7 +501,7 @@ end
 
 function M.SetMode(m)
 	M.mode = m
-	if m == "deals" then
+	if m == "deals" or m == "vendor" then
 		M.sortKey, M.sortDesc = "profit", true
 	else
 		M.sortKey, M.sortDesc = "name", false
@@ -617,6 +630,8 @@ function M.Build()
 	f.bAll:SetPoint("LEFT", f.bDeals, "RIGHT", 4, 0)
 	f.bWatch = T.Button(f, L("msg.market.mode.watch"), 110, 22, function() M.SetMode("watch") end)
 	f.bWatch:SetPoint("LEFT", f.bAll, "RIGHT", 4, 0)
+	f.bVendor = T.Button(f, L("msg.market.mode.vendor"), 150, 22, function() M.SetMode("vendor") end)
+	f.bVendor:SetPoint("LEFT", f.bWatch, "RIGHT", 4, 0)
 	f.edit = T.Edit(f, 180, 22)
 	f.edit:SetPoint("TOPRIGHT", f, "TOPRIGHT", -12, -64)
 	f.edit:SetScript("OnTextChanged", function()
@@ -746,11 +761,14 @@ function M.Refresh()
 	f.bDeals:SetAlpha(M.mode == "deals" and 1 or 0.6)
 	f.bAll:SetAlpha(M.mode == "all" and 1 or 0.6)
 	f.bWatch:SetAlpha(M.mode == "watch" and 1 or 0.6)
+	f.bVendor:SetAlpha(M.mode == "vendor" and 1 or 0.6)
 	for i = 1, getn(COLS) do
 		local c = COLS[i]
 		local mark = ""
 		if M.sortKey == c.key then mark = M.sortDesc and " v" or " ^" end
-		f.heads[i].label:SetText(L(c.tk) .. mark)
+		local tk = c.tk
+		if c.key == "val" and M.mode == "vendor" then tk = "msg.market.col.vendor" end
+		f.heads[i].label:SetText(L(tk) .. mark)
 	end
 	-- lignes
 	local ar, ag, ab = T.Accent()
@@ -795,7 +813,7 @@ function M.Refresh()
 	end
 	if M.nlist == 0 then
 		local key = "msg.market.empty.nodata"
-		if M.Count() > 0 then key = (M.mode == "deals") and "msg.market.empty.deals" or (M.mode == "watch" and "msg.market.empty.watch" or "msg.market.empty.filter") end
+		if M.Count() > 0 then key = (M.mode == "deals") and "msg.market.empty.deals" or (M.mode == "watch" and "msg.market.empty.watch" or (M.mode == "vendor" and "msg.market.empty.vendor" or "msg.market.empty.filter")) end
 		setText(f.empty, L(key))
 		f.empty:Show()
 	else
