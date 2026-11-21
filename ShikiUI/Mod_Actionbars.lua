@@ -894,23 +894,26 @@ function M.ForceRepaint(b)
 	b.vst = nil
 end
 
--- Paladin : une aura n'est active que si un buff d'aura est reellement sur le joueur (la mort l'enleve, l'API peut garder
--- l'ancien etat). GetShapeshiftFormInfo renvoie une icone generique (Spell_Nature_WispSplode) differente de celle du buff :
--- on compare donc aux icones des buffs d'aura (relevees en jeu : Devotion, Retribution, Concentration, Resistances, Sanctification).
+-- Paladin : une aura n'est active que si un buff d'aura est reellement sur le joueur (la mort l'enleve, l'API peut garder l'ancien etat).
+-- Releve en jeu : la forme ACTIVE renvoie l'icone generique Spell_Nature_WispSplode (pas celle de son buff) ; les autres gardent leur icone.
+-- Icones des buffs d'aura : Devotion, Retribution, Concentration, Resistances (ombre, givre, feu), Sanctification, Croise.
 M.AURA_BUFFS = { "devotionaura", "auraoflight", "mindsooth", "sealofkings", "wizardmark", "sealoffire", "mindvision", "crusaderaura" }
 
 function M.AuraBuffOn(icon)
 	local ub, dead = getglobal("UnitBuff"), getglobal("UnitIsDeadOrGhost")
-	if type(ub) ~= "function" then return true end                  -- API absente : on garde l etat du jeu
+	if not icon or type(ub) ~= "function" then return true end      -- API absente : on garde l etat du jeu
 	if type(dead) == "function" and dead("player") then return false end
-	local want = icon and string.lower(icon) or nil
+	local want = string.lower(icon)
+	local generic = string.find(want, "wispsplode", 1, true) and true or false
 	for i = 1, 32 do
 		local t = ub("player", i)
 		if not t then break end
 		t = string.lower(t)
-		if want and t == want then return true end
-		for k = 1, getn(M.AURA_BUFFS) do
-			if string.find(t, M.AURA_BUFFS[k], 1, true) then return true end
+		if t == want then return true end
+		if generic then
+			for k = 1, getn(M.AURA_BUFFS) do
+				if string.find(t, M.AURA_BUFFS[k], 1, true) then return true end
+			end
 		end
 	end
 	return false
@@ -1795,6 +1798,10 @@ function M.Tick()
 		M.dVis = false
 		M.UpdateVisibility()
 	end
+	if M.dStance then
+		M.dStance = false
+		forEachShown(function(b) if b.kind == "stance" then M.UpdateButton(b) end end)   -- icones des formes / auras relues
+	end
 	if M.dAll then
 		M.dAll = false
 		M.dState, M.dCd, M.dBind = false, false, false
@@ -1856,6 +1863,7 @@ function M.LateState()
 	M.lateTask = SUI.After(0.4, function()
 		M.lateTask = nil
 		M.dState = true
+		if M.class == "PALADIN" then M.dStance = true end      -- l icone d une forme-aura change aussi (emplacement derniere aura)
 	end, "actionbars.late")
 end
 
@@ -1898,6 +1906,7 @@ function M.OnEvent(ev, a1)
 		-- paladin : les auras sont des "formes" ; le client met l'aura active a jour APRES l'evenement -> etat des boutons relu tout de suite puis un peu plus tard
 		if M.class == "PALADIN" and (M.nforms or 0) > 0 then
 			M.dState = true
+			M.dStance = true
 			M.LateState()
 		end
 	elseif ev == "PLAYER_REGEN_ENABLED" then
