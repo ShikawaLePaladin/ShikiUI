@@ -436,10 +436,12 @@ function M.Rebuild()
 	local minq = C.Get("market.minquality") or 0
 	local filt = slower(M.filter or "")
 	local scanId = db.scan.id
+	local watch = (M.mode == "watch") and M.WatchList() or nil
 	for id, e in pairs(db.items) do
 		local ok = true
 		if (e.q or 0) < minq then ok = false end
 		if ok and filt ~= "" and not sfind(slower(e.n or ""), filt, 1, true) then ok = false end
+		if ok and watch and not watch[slower(e.n or "")] then ok = false end
 		local pct, profit = M.Metrics(e)
 		if ok and M.mode == "deals" then
 			if e.s ~= scanId or not pct or pct < minpct or profit < minprofit or not M.Reliable(e) then ok = false end
@@ -455,6 +457,33 @@ function M.Rebuild()
 	if M.offset > n - NROWS then M.offset = n - NROWS end
 	if M.offset < 0 then M.offset = 0 end
 	M.Refresh()
+end
+
+-- L'objet choisi est-il dans la liste d'achats ?
+function M.IsTracked(id)
+	local e = id and M.LoadDB().items[id]
+	return e ~= nil and e.n ~= nil and M.WatchList()[slower(e.n)] ~= nil
+end
+
+-- Ajoute l'objet choisi a la liste d'achats (prix voulu : valeur marche moins l'ecart des bonnes affaires, sinon 90 % du plus bas) ou l'en retire.
+function M.TrackSel()
+	local e = M.sel and M.LoadDB().items[M.sel]
+	if not e or not e.n then return end
+	if M.IsTracked(M.sel) then
+		M.WatchDel(e.n)
+		SUI.Print(L("msg.market.watch.removed", e.n))
+	else
+		local max
+		if e.md and e.md > 0 then
+			max = floor(e.md * (100 - (C.Get("market.dealpct") or 25)) / 100)
+		elseif e.mn then
+			max = floor(e.mn * 0.9)
+		end
+		if not max or max < 1 then max = e.mn or 1 end
+		M.WatchAdd(e.n, max)
+		SUI.Print(L("msg.market.watch.added", e.n, money(max)))
+	end
+	if M.mode == "watch" then M.Rebuild() else M.Refresh() end
 end
 
 function M.SetMode(m)
@@ -586,6 +615,8 @@ function M.Build()
 	f.bDeals:SetPoint("TOPLEFT", f, "TOPLEFT", 12, -64)
 	f.bAll = T.Button(f, L("msg.market.mode.all"), 120, 22, function() M.SetMode("all") end)
 	f.bAll:SetPoint("LEFT", f.bDeals, "RIGHT", 4, 0)
+	f.bWatch = T.Button(f, L("msg.market.mode.watch"), 110, 22, function() M.SetMode("watch") end)
+	f.bWatch:SetPoint("LEFT", f.bAll, "RIGHT", 4, 0)
 	f.edit = T.Edit(f, 180, 22)
 	f.edit:SetPoint("TOPRIGHT", f, "TOPRIGHT", -12, -64)
 	f.edit:SetScript("OnTextChanged", function()
@@ -679,6 +710,8 @@ function M.Build()
 	f.bSearch:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", 12, 10)
 	f.bClear = T.Button(f, L("msg.market.btn.clear"), 110, 22, function() M.Clear() end)
 	f.bClear:SetPoint("LEFT", f.bSearch, "RIGHT", 6, 0)
+	f.bTrack = T.Button(f, L("msg.market.btn.track"), 150, 22, function() M.TrackSel() end)
+	f.bTrack:SetPoint("LEFT", f.bClear, "RIGHT", 6, 0)
 	f.help = T.Text(f, 10, T.c.dim, "RIGHT")
 	f.help:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -12, 14)
 	f.help:SetWidth(260)
@@ -710,13 +743,9 @@ function M.Refresh()
 	local au = SUI.Auction
 	local ready = au and au.open and not sc
 	if ready then f.bScan:Show() else f.bScan:Hide() end
-	if M.mode == "deals" then
-		f.bDeals:SetAlpha(1)
-		f.bAll:SetAlpha(0.6)
-	else
-		f.bDeals:SetAlpha(0.6)
-		f.bAll:SetAlpha(1)
-	end
+	f.bDeals:SetAlpha(M.mode == "deals" and 1 or 0.6)
+	f.bAll:SetAlpha(M.mode == "all" and 1 or 0.6)
+	f.bWatch:SetAlpha(M.mode == "watch" and 1 or 0.6)
 	for i = 1, getn(COLS) do
 		local c = COLS[i]
 		local mark = ""
@@ -766,7 +795,7 @@ function M.Refresh()
 	end
 	if M.nlist == 0 then
 		local key = "msg.market.empty.nodata"
-		if M.Count() > 0 then key = (M.mode == "deals") and "msg.market.empty.deals" or "msg.market.empty.filter" end
+		if M.Count() > 0 then key = (M.mode == "deals") and "msg.market.empty.deals" or (M.mode == "watch" and "msg.market.empty.watch" or "msg.market.empty.filter") end
 		setText(f.empty, L(key))
 		f.empty:Show()
 	else
@@ -798,11 +827,14 @@ function M.Refresh()
 			end
 		end
 		f.bSearch:Show()
+		f.bTrack:Show()
+		T.SetButtonText(f.bTrack, L(M.IsTracked(M.sel) and "msg.market.btn.untrack" or "msg.market.btn.track"))
 	else
 		setText(f.dName, "")
 		setText(f.dInfo, "")
 		for i = 1, NHIST do f.bars[i]:Hide() end
 		f.bSearch:Hide()
+		f.bTrack:Hide()
 	end
 end
 
