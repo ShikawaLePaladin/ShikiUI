@@ -3074,15 +3074,22 @@ end
 -- Blizzard_AuctionUI : AuctionFrameBrowse_Update calcule avec AuctionFrameBrowse.page, qui peut etre nil quand la liste change sans
 -- passer par le bouton de recherche de Blizzard (notre requete, un autre addon, le retour d'une vente). On enrobe la fonction UNE fois.
 function M.FixBlizzPage()
-	local bf = getglobal("AuctionFrameBrowse")
-	if bf and bf.page == nil then bf.page = 0 end
-	local orig = getglobal("AuctionFrameBrowse_Update")
-	if M.blizzHooked or type(orig) ~= "function" then return end
-	M.blizzHooked = true
-	AuctionFrameBrowse_Update = function()
-		local b = getglobal("AuctionFrameBrowse")
-		if b and b.page == nil then b.page = 0 end
-		return orig()
+	M.blizzHooked = M.blizzHooked or {}
+	local names = { "Browse", "Bid", "Auctions" }
+	for i = 1, getn(names) do
+		local n = names[i]
+		local fr = getglobal("AuctionFrame" .. n)
+		if fr and fr.page == nil then fr.page = 0 end
+		local fname = "AuctionFrame" .. n .. "_Update"
+		local orig = getglobal(fname)
+		if not M.blizzHooked[n] and type(orig) == "function" then
+			M.blizzHooked[n] = true
+			setglobal(fname, function()
+				local b = getglobal("AuctionFrame" .. n)
+				if b and b.page == nil then b.page = 0 end
+				return orig()
+			end)
+		end
 	end
 end
 
