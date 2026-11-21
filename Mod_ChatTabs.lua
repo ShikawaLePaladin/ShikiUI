@@ -1639,6 +1639,18 @@ function M.PopItems()
 					end
 				end)
 			end
+			-- affectation a la barre d'onglets 2 (la fenetre garde sa place, seuls ses onglets changent de barre)
+			if SUI.Chat and SUI.Chat.InBar2 and SUI.Chat.SetBar then
+				if SUI.Chat.InBar2(id) then
+					add(L("mod.chattabs.pop.bar1"), function()
+						if say(SUI.Chat.SetBar(id, false)) then M.PopClose() end
+					end)
+				else
+					add(L("mod.chattabs.pop.bar2"), function()
+						if say(SUI.Chat.SetBar(id, true)) then M.PopClose() end
+					end)
+				end
+			end
 		end
 		add(L("mod.chattabs.pop.tidy"), function()
 			local ok, n = M.Tidy()
