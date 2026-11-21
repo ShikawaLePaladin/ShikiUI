@@ -867,6 +867,10 @@ end
 function M.SendQuery(page)
 	local q = C.Get("auction.quality")
 	if q <= 0 then q = nil end
+	-- l'interface Blizzard fait de l'arithmetique sur AuctionFrameBrowse.page quand la liste change : elle ne le renseigne que via son
+	-- propre bouton de recherche, donc nous le fixons (sinon "attempt to perform arithmetic on field 'page'")
+	local bf = getglobal("AuctionFrameBrowse")
+	if bf and bf.page == nil then bf.page = 0 end
 	QueryAuctionItems(M.query, M.fMinL, M.fMaxL, nil, M.fClass, M.fSub, page, C.Get("auction.usable") and 1 or nil, q)
 end
 
@@ -930,6 +934,12 @@ function M.OnList()
 		M.state = "query"
 		M.sentAt = GetTime()
 		M.dirty = true
+		-- page suivante tout de suite si le client l'autorise (le delai de 5 s est supprime par AuctionQueryThrottle) : on n'attend pas le tick
+		if CanSendAuctionQuery() then
+			M.SendQuery(M.page)
+			M.state = "wait"
+			M.sentAt = GetTime()
+		end
 	else
 		M.StopScan(true)
 	end
@@ -2354,12 +2364,12 @@ function M.RefreshAnalysis(f)
 	-- distribution
 	local mx = 0
 	for b = 1, NBUCK do
-		if a.bk[b] > mx then mx = a.bk[b] end
+		if (a.bk[b] or 0) > mx then mx = a.bk[b] end
 	end
 	for b = 1, NBUCK do
 		local bar = x.bar[b]
 		if has and mx > 0 then
-			bar:SetValue(a.bk[b] / mx)
+			bar:SetValue((a.bk[b] or 0) / mx)
 			bar:Show()
 		else
 			bar:SetValue(0)
