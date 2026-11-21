@@ -4,7 +4,7 @@
 --      fois, au rythme que CanSendAuctionQuery autorise ; le client 1.12 n'a pas de lecture globale). Progression, arret possible, et un arret
 --      (ou la fermeture de l'hotel) garde ce qui a deja ete lu. Aucun achat, aucune mise en vente : lecture seule.
 --   2. BASE DE PRIX (ShikiUIDB.global.market.db, partagee entre personnages) : par objet, le plus bas prix de rachat unitaire du jour, la
---      MEDIANE des plus bas prix des derniers jours (valeur marche), le nombre d'offres, une histoire de 14 jours. Plafonnee (4000 objets,
+--      MEDIANE des plus bas prix des derniers jours (valeur marche), le nombre d'offres, une histoire de 14 jours. Plafonnee (8000 objets,
 --      les plus anciens sortent) ; sans historique, la valeur marche est la mediane des 8 offres les moins cheres du scan.
 --   3. FENETRE MARCHE (/sui market, ou l'onglet lateral du panneau de l'hotel) : "Bonnes affaires" (prix actuel sous la valeur marche d'au
 --      moins X % et profit net, apres la commission, d'au moins Y), "Toute la base" (recherche par nom), tri par colonne, courbe de prix de
@@ -29,7 +29,7 @@ SUI.Market = M
 local DAY = 86400
 local PAGE = 50
 local NROWS = 12
-local MAXITEMS = 4000
+local MAXITEMS = 8000
 local NHIST = 14
 local NLOW = 8            -- offres les moins cheres gardees par objet pendant un scan
 local TICK = 0.3
@@ -212,6 +212,12 @@ function M.Count()
 	local n = 0
 	for _ in pairs(M.LoadDB().items) do n = n + 1 end
 	return n
+end
+
+-- valeur marche fiable : au moins 3 jours d'historique (sans cela, la mediane des offres du jour peut etre faussee par des prix absurdes)
+function M.Reliable(e)
+	local days, vals = {}, {}
+	return histParse(e.h, days, vals) >= 3
 end
 
 -- profit net unitaire (apres commission) et ecart en % entre le prix actuel et la valeur marche
@@ -421,7 +427,7 @@ function M.Rebuild()
 		if ok and filt ~= "" and not sfind(slower(e.n or ""), filt, 1, true) then ok = false end
 		local pct, profit = M.Metrics(e)
 		if ok and M.mode == "deals" then
-			if e.s ~= scanId or not pct or pct < minpct or profit < minprofit then ok = false end
+			if e.s ~= scanId or not pct or pct < minpct or profit < minprofit or not M.Reliable(e) then ok = false end
 		end
 		if ok then
 			n = n + 1
