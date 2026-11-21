@@ -848,7 +848,7 @@ end
 -- elements deja poses par les presets (centre libre, colonnes laterales moyennes).
 local EXTRA_KEYS = { "chat.main", "bags.window", "bags.bank", "chat.copy", "messages.win", "messages.hist", "messages.badge",
 	"messages.toasts", "finder.win", "tracker.win", "pp.win", "powerauras.banner", "esport.win", "loot",
-	"lootwin", "lootroll", "items", "mail", "auction", "hud", "bossmods.msg", "meter.win2", "meter.win3" }
+	"lootwin", "lootroll", "items", "mail", "auction", "hud", "bossmods.msg", "meter.win2", "meter.win3", "chat.tabs2" }
 local EXTRAS = {
 	["chat.main"] = { 0.0, 0.02, 12, 40 },          -- chat TOUJOURS visible en bas-gauche apres un preset (le reset effacait sa position)
 	["bags.window"] = { 0.99, 0.30, -24, 0 },       -- colonne droite, sous la zone compteur/menace

@@ -50,8 +50,9 @@ M.seq = {}
 M.seqSeen = {}
 M.orderList = nil
 M.cfg = { stamp = true, stampfmt = "hm", url = true, classcolor = true, shortchan = false, dedupe = 0, nourl = false, quiet = false,
-	history = 200, wheel = 3, tabs = true, background = false, bgalpha = 0.6, hidebuttons = true, fontsize = 0, maxlines = 128, unread = true,
+	history = 200, wheel = 3, tabs = true, tabs2 = true, background = false, bgalpha = 0.6, hidebuttons = true, fontsize = 0, maxlines = 128, unread = true,
 	kwn = 0, kwcolor = "warn", kwsound = "none", kwchannels = "all", kwflash = true }
+M.TAB2_DEF = { [2] = true }        -- affectation par defaut de la barre 2 : la fenetre 2 (journal de combat)
 M.kw = {}              -- mots-cles compiles : { s = texte replie, pre = joker au debut, suf = joker a la fin }
 M.kwFlash = {}         -- index de fenetre -> true : mot-cle recu dans une fenetre non regardee
 M.kwAny = false
@@ -79,6 +80,8 @@ function M.ReadConfig()
 	cfg.history = C.Get("chat.history")
 	cfg.wheel = C.Get("chat.wheel")
 	cfg.tabs = C.Get("chat.tabs")
+	cfg.tabs2 = C.Get("chat.tabs2")
+	cfg.tab2set = C.Get("chat.tab2set")
 	cfg.cw = C.Get("chat.width") or 0
 	cfg.ch = C.Get("chat.height") or 0
 	cfg.background = C.Get("chat.background")
@@ -748,39 +751,75 @@ function M.RefreshBar()
 	if not bar then return end
 	M.KeepTabsHidden()
 	M.Sequence()
-	local shownN = 0
+	-- Barre 2 active seulement si le reglage est on, la fenetre 2 existe, est visible et N'EST PAS dockee
+	-- (GetChatWindowInfo renvoie son etat de dock, comme le reste de l'addon le lit). Sinon, tous les onglets
+	-- retournent dans la barre principale.
+	local f2 = M.frames[2]
+	local two = false
+	if M.bar2 and M.cfg.tabs2 and f2 and f2:IsShown() then
+		local _, _, _, _, _, _, shown2, docked2 = GetChatWindowInfo(2)
+		two = (shown2 and not docked2) or false
+	end
+	local b2set = (type(M.cfg.tab2set) == "table") and M.cfg.tab2set or M.TAB2_DEF
+	local n1, n2 = 0, 0
 	for s = 1, M.num do
 		local i = M.seq[s]
 		local name, shown = windowShown(i)
 		local b = M.tabs[i]
 		if shown and name and name ~= "" and M.cfg.tabs then
-			shownN = shownN + 1
-			b.slot = shownN
+			if two and b2set[i] then
+				n2 = n2 + 1
+				b.slot, b.onBar = n2, 2
+			else
+				n1 = n1 + 1
+				b.slot, b.onBar = n1, 1
+			end
 			b.winName = name
 			b:Show()
 		else
 			b.slot = nil
+			b.onBar = nil
 			b:Hide()
+			if M.bar2 and b:GetParent() == M.bar2 then b:SetParent(bar) end
 		end
 	end
-	if shownN == 0 then return end
-	-- largeur reelle du chat exprimee dans l'echelle de la barre (la barre n'a pas l'echelle de la fenetre 1)
+	if M.bar2 then
+		if two and n2 > 0 and M.cfg.tabs then
+			M.bar2:Show()
+		else
+			M.bar2:Hide()
+		end
+	end
+	if n1 == 0 and n2 == 0 then return end
+	-- largeur reelle de chaque fenetre exprimee dans l'echelle de sa barre (la barre n'a pas l'echelle de la fenetre)
 	local f1 = M.frames[1]
 	local fw = (f1:GetWidth() or 0) * (f1:GetScale() or 1) / (bar:GetScale() or 1)
 	if fw <= 0 then fw = bar:GetWidth() or 400 end
 	if M.barRelay and M.barRelay.moved and bar:GetWidth() ~= fw then bar:SetWidth(fw) end
 	local avail = fw - 24 - 58      -- 58 px reserves aux boutons copier et bulle (ils se placent dans la barre, a droite des onglets)
-	local w = floor(avail / shownN)
+	local w = (n1 > 0) and floor(avail / n1) or 110
 	if w > 110 then w = 110 end
 	if w < 36 then w = 36 end
+	local w2 = 110
+	if two and n2 > 0 then
+		local fw2 = (f2:GetWidth() or 0) * (f2:GetScale() or 1) / (M.bar2:GetScale() or 1)
+		if fw2 <= 0 then fw2 = M.bar2:GetWidth() or 400 end
+		if M.bar2Relay and M.bar2Relay.moved and M.bar2:GetWidth() ~= fw2 then M.bar2:SetWidth(fw2) end
+		w2 = floor(fw2 / n2)
+		if w2 > 110 then w2 = 110 end
+		if w2 < 36 then w2 = 36 end
+	end
 	for i = 1, M.num do
 		local b = M.tabs[i]
 		if b.slot then
-			if b.curW ~= w or b.curSlot ~= b.slot then
-				b:SetWidth(w)
+			local bb = (b.onBar == 2) and M.bar2 or bar
+			local bw = (b.onBar == 2) and w2 or w
+			if b:GetParent() ~= bb then b:SetParent(bb) end
+			if b.curW ~= bw or b.curSlot ~= b.slot or b.curBar ~= b.onBar then
+				b:SetWidth(bw)
 				b:ClearAllPoints()
-				b:SetPoint("LEFT", bar, "LEFT", 2 + (b.slot - 1) * (w + 2), 0)
-				b.curW, b.curSlot = w, b.slot
+				b:SetPoint("LEFT", bb, "LEFT", 2 + (b.slot - 1) * (bw + 2), 0)
+				b.curW, b.curSlot, b.curBar = bw, b.slot, b.onBar
 			end
 			local n = M.unread[i] or 0
 			local txt = b.winName
@@ -806,6 +845,26 @@ function M.RefreshBar()
 	end
 end
 
+-- Affecte (on) ou retire (off) la fenetre idx de la barre d'onglets 2. Retourne true si applique (contrat du menu chattabs).
+function M.SetBar(idx, on)
+	if not M.frames[idx] then return false end
+	local set = C.Get("chat.tab2set")
+	if type(set) ~= "table" then set = { [2] = true } end
+	if on then set[idx] = true else set[idx] = nil end
+	C.Set("chat.tab2set", set)
+	M.cfg.tab2set = set
+	M.dirty = true
+	M.RefreshBar()
+	return true
+end
+
+-- La fenetre idx est-elle affectee a la barre 2 ? (sans config : la fenetre 2)
+function M.InBar2(idx)
+	local set = M.cfg.tab2set
+	if type(set) ~= "table" then set = M.TAB2_DEF end
+	return set[idx] == true
+end
+
 -- ---------------------------------------------------------------- application des reglages sur les frames
 function M.ApplyOptions()
 	if not M.built then return end
@@ -813,6 +872,10 @@ function M.ApplyOptions()
 	if M.bar then
 		if M.on and cfg.tabs then M.bar:Show() else M.bar:Hide() end
 		if M.copyBtn then if M.on and cfg.tabs then M.copyBtn:Show() else M.copyBtn:Hide() end end
+	end
+	if M.bar2 then
+		if not (M.on and cfg.tabs and cfg.tabs2) then M.bar2:Hide() end
+		M.dirty = true               -- le prochain refresh redecoupe les onglets (detachee ? onglets affectes ?)
 	end
 	for i = 1, M.num do
 		local f = M.frames[i]
@@ -1061,6 +1124,11 @@ function M.BuildMover()
 		if not reset and f1x and f1x:GetWidth() then bar:SetWidth(f1x:GetWidth() * (f1x:GetScale() or 1) / (bar:GetScale() or 1)) end
 	end)
 	if M.barRelay then M.barRelay.visible = function() return M.cfg.tabs end end
+	M.bar2Relay = M.AddRelay("chat.tabs2", "ShikiUI_ChatTabs2Mover", function() return M.bar2 end, function(bar, reset)
+		local f2x = M.frames[2]
+		if not reset and f2x and f2x:GetWidth() then bar:SetWidth(f2x:GetWidth() * (f2x:GetScale() or 1) / (bar:GetScale() or 1)) end
+	end)
+	if M.bar2Relay then M.bar2Relay.visible = function() return M.cfg.tabs and M.cfg.tabs2 end end
 	-- Une fois ancree par un seul point, la zone de saisie perd la largeur que lui donnaient ses deux ancres d'origine : on la remet a la
 	-- largeur du chat (sinon le cadre se deforme et le texte "Say:" deborde).
 	M.AddRelay("chat.edit", "ShikiUI_ChatEditMover", function() return getglobal("ChatFrameEditBox") end, function(eb, reset)
@@ -1128,6 +1196,21 @@ function M.Build()
 		b.idx = i
 		b:Hide()
 		M.tabs[i] = b
+	end
+	-- Barre d'onglets 2 : ancree au-dessus de la fenetre 2 (ex. journal de combat detache a droite). Les fenetres
+	-- affectees a cette barre (config chat.tab2set, defaut : la fenetre 2) y posent leurs onglets au lieu de la barre
+	-- principale. Elle suit la fenetre 2 comme la barre principale suit la fenetre 1, et se cache tant que la fenetre
+	-- 2 est dockee (dans le dock, les fenetres se superposent : la barre 2 empilerait sur la barre 1).
+	local f2 = M.frames[2]
+	if f2 then
+		local bar2 = CreateFrame("Frame", "ShikiUI_ChatBar2", UIParent)
+		bar2:SetHeight(22)
+		bar2:SetWidth(f2:GetWidth())
+		T.Backdrop(bar2, T.c.bg, T.c.border)
+		bar2:SetPoint("BOTTOMLEFT", f2, "TOPLEFT", 0, 8)
+		bar2:SetPoint("BOTTOMRIGHT", f2, "TOPRIGHT", 0, 8)
+		bar2:Hide()
+		M.bar2 = bar2
 	end
 	-- Bouton "copier" : une ACTION, pas un onglet. Petit carre a part, a droite, separe des onglets par un filet, dessine comme deux feuilles
 	-- superposees (icone "copier") et non comme un onglet de canal ; l'infobulle dit ce qu'il fait.
@@ -1360,6 +1443,7 @@ SUI.RegisterModule("chat", {
 	cost = "medium",
 	options = {
 		opt("tabs", "bool", 10, true, { simple = true }),
+		opt("tabs2", "bool", 11, true, { simple = true }),
 		opt("stamp", "bool", 20, true, { simple = true }),
 		opt("stampfmt", "choice", 21, "hm", { choices = { "hm", "hms", "hm12" } }),
 		opt("classcolor", "bool", 30, true, { simple = true }),
