@@ -401,7 +401,7 @@ function M.Equip(ref, quiet)
 		return false
 	end
 	if M.bankBusy then return true end
-	if not quiet and k ~= PREV and M.bankOpen and M.Mode() == 0 and not M.busy and C.Get("items.bank") then
+	if not quiet and k ~= PREV and M.IsBankOpen() and M.Mode() == 0 and not M.busy and C.Get("items.bank") then
 		if M.BankSwap(k) then return true end
 	end
 	if M.busy then
@@ -421,6 +421,14 @@ M.bankOpen = false
 M.bankBusy = false
 M.bq = {}               -- file : { kind = 1 range (porte -> banque) | 2 prend (banque -> sacs), a, b, c }
 M.bn, M.bi = 0, 1
+
+-- Banque ouverte ? l'evenement, ou (module active banque deja ouverte) le cadre de banque du jeu.
+function M.IsBankOpen()
+	if M.bankOpen then return true end
+	local bf = getglobal("BankFrame")
+	if bf and bf.IsShown and bf:IsShown() then return true end
+	return false
+end
 
 function M.OnBank(ev)
 	M.bankOpen = (ev == "BANKFRAME_OPENED")
@@ -534,7 +542,7 @@ end
 
 function M.BankStep()
 	if not M.bankBusy then return end
-	if not M.bankOpen or UnitIsDeadOrGhost("player") or SUI.InCombat() then
+	if not M.IsBankOpen() or UnitIsDeadOrGhost("player") or SUI.InCombat() then
 		M.BankStop()
 		return
 	end
