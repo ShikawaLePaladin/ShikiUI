@@ -2305,6 +2305,7 @@ end
 
 -- ---------------------------------------------------------------- declaration
 SUI.RegisterCategory("pallypower", 68)
+SUI.RegisterAction("pallypower", "mod.menu.act.pallyteam", function() M.TeamOpen() end, 130)
 
 local function opt(key, typ, order, def, extra)
 	local o = { key = "pallypower." .. key, type = typ, cat = "pallypower", label = "opt.pallypower." .. key, tip = "tip.pallypower." .. key, default = def, order = order }

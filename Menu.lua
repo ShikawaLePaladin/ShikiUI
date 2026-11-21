@@ -46,14 +46,15 @@ end
 
 -- familles de la navigation : un module ou une categorie inconnue tombe dans "other" (Autres)
 M.FAMILIES = {
-	{ id = "general", cats = { "general", "mode", "perf" } },
-	{ id = "look", cats = { "style", "layout", "units", "nameplates", "tooltip" } },
-	{ id = "combat", cats = { "castbar", "auras", "threat", "tanktools", "meter", "totems", "clickheal", "alerts", "manaswap", "debuffs", "handguard" } },
-	{ id = "group", cats = { "group", "raid", "markers" } },
-	{ id = "interface", cats = { "actionbars", "chat", "minimap", "charstats" } },
-	{ id = "tools", cats = { "social", "bulletin", "stats" } },
-	{ id = "loot", cats = { "loot", "items", "bags", "mail", "auction" } },
+	{ id = "general", cats = { "general", "mode", "perf", "specs" } },
+	{ id = "look", cats = { "style", "skin", "layout", "units", "nameplates", "tooltip", "powerauras", "cursor" } },
+	{ id = "combat", cats = { "castbar", "auras", "threat", "tanktools", "meter", "totems", "clickheal", "alerts", "manaswap", "debuffs", "handguard", "cooldowns", "buffwatch", "bossmods", "groupfx", "esport" } },
+	{ id = "group", cats = { "group", "raid", "markers", "marks", "pallypower", "grouppets", "finder" } },
+	{ id = "interface", cats = { "actionbars", "chat", "chattabs", "messages", "windows", "minimap", "map", "datatext", "charstats" } },
+	{ id = "tools", cats = { "social", "bulletin", "stats", "macros", "tracker" } },
+	{ id = "loot", cats = { "loot", "items", "bags", "mail", "auction", "market", "vendor" } },
 }
+M.openFam = {}           -- familles depliees dans la navigation (en memoire : la famille de la page courante s'ouvre seule)
 
 -- ---------------------------------------------------------------- aides
 function M.Has(key)
@@ -572,7 +573,23 @@ function M.RebuildNav()
 		tinsert(nav, { kind = "head", id = "tools" })
 		tinsert(nav, { kind = "page", id = "addons" })
 	end
+	local fam
+	for i = 1, getn(nav) do
+		if nav[i].kind == "head" then fam = nav[i].id end
+		if i > 2 then nav[i].fam = fam end
+	end
 	M.navList = nav
+end
+
+-- Ouvre la famille qui contient la page / categorie donnee (la navigation ne montre que les familles depliees).
+function M.OpenFamilyOf(kind, id)
+	for i = 1, getn(M.navList) do
+		local e = M.navList[i]
+		if e.kind == kind and e.id == id and e.fam then
+			M.openFam[e.fam] = true
+			return
+		end
+	end
 end
 
 function M.NavLabel(e)
@@ -583,7 +600,12 @@ end
 
 local function navClick()
 	local e = this.entry
-	if not e or e.kind == "head" then return end
+	if not e then return end
+	if e.kind == "head" then
+		M.openFam[e.id] = not M.openFam[e.id]
+		M.UpdateNav()
+		return
+	end
 	M.Open(e.kind == "page" and e.id or "cat", e.id)
 end
 
@@ -633,6 +655,9 @@ function M.NewNavItem()
 	it.fresh:SetHeight(6)
 	it.fresh:SetPoint("RIGHT", it, "RIGHT", -8, 0)
 	it.fresh:Hide()
+	it.arrow = T.Text(it, 11, T.c.dim, "RIGHT")      -- repli / depli d'une famille (+ / -)
+	it.arrow:SetPoint("RIGHT", it, "RIGHT", -8, 0)
+	it.arrow:Hide()
 	it.label = T.Text(it, 12, T.c.text, "LEFT")
 	it.label:SetPoint("LEFT", it, "LEFT", 24, 0)
 	it.label:SetWidth(M.G.NAVW - 12 - 30)
@@ -647,6 +672,11 @@ function M.UpdateNav()
 	local accR, accG, accB = T.Accent()
 	local page = M.page
 	if M.search ~= "" then page = "search" end
+	local key = page .. ":" .. tostring(M.cat)
+	if key ~= M.famKey then          -- la page a change : sa famille se deplie (un repli manuel reste respecte ensuite)
+		M.famKey = key
+		if page == "cat" then M.OpenFamilyOf("cat", M.cat) elseif page ~= "search" then M.OpenFamilyOf("page", page) end
+	end
 	for i = 1, getn(list) do
 		local e = list[i]
 		local it = M.navItems[i]
@@ -656,58 +686,68 @@ function M.UpdateNav()
 			M.navItems[i] = it
 		end
 		it.entry = e
+		e.hid = (e.kind ~= "head" and e.fam ~= nil and not M.openFam[e.fam])
 		local h = 22
-		if e.kind == "head" then
+		if e.hid then
+			e.sel = false
+			it:Hide()
+			h = nil
+		elseif e.kind == "head" then
 			if i > 1 then y = y + 6 end
 			h = 18
 		end
-		it:ClearAllPoints()
-		it:SetPoint("TOPLEFT", M.ns.child, "TOPLEFT", 0, -y)
-		it:SetHeight(h)
-		y = y + h
-		it.label:SetText(M.NavLabel(e))
-		local sel = (e.kind == "page" and page == e.id) or (e.kind == "cat" and page == "cat" and M.cat == e.id)
-		e.sel = sel
-		it.hov:Hide()
-		if e.kind == "head" then
-			it.label:SetTextColor(T.c.dim[1], T.c.dim[2], T.c.dim[3], 1)
-			it.label:ClearAllPoints()
-			it.label:SetPoint("LEFT", it, "LEFT", 8, 0)
-			it.selTex:Hide()
-			it.bar:Hide()
-			it.dot:Hide()
-			it.fresh:Hide()
-		else
-			it.label:ClearAllPoints()
-			it.label:SetPoint("LEFT", it, "LEFT", 24, 0)
-			if sel then
-				it.label:SetTextColor(accR, accG, accB, 1)
-				it.selTex:SetVertexColor(T.c.panel[1], T.c.panel[2], T.c.panel[3], 1)
-				it.selTex:Show()
-				it.bar:SetVertexColor(accR, accG, accB, 1)
-				it.bar:Show()
-			else
-				it.label:SetTextColor(T.c.text[1], T.c.text[2], T.c.text[3], 1)
+		if h then
+			it:ClearAllPoints()
+			it:SetPoint("TOPLEFT", M.ns.child, "TOPLEFT", 0, -y)
+			it:SetHeight(h)
+			y = y + h
+			it.label:SetText(M.NavLabel(e))
+			local sel = (e.kind == "page" and page == e.id) or (e.kind == "cat" and page == "cat" and M.cat == e.id)
+			e.sel = sel
+			it.hov:Hide()
+			if e.kind == "head" then
+				it.label:SetTextColor(T.c.dim[1], T.c.dim[2], T.c.dim[3], 1)
+				it.label:ClearAllPoints()
+				it.label:SetPoint("LEFT", it, "LEFT", 8, 0)
 				it.selTex:Hide()
 				it.bar:Hide()
-			end
-			if e.kind == "cat" and SUI.modules[e.id] then
-				local c = M.StateColor(M.State(e.id))
-				it.dot:SetVertexColor(c[1], c[2], c[3], 1)
-				it.dot:Show()
-			else
 				it.dot:Hide()
-			end
-			local nn = 0
-			if e.kind == "cat" then nn = M.NewCount(e.id) elseif e.id == "modules" then nn = M.NewCount("modules") end
-			if nn > 0 then
-				it.fresh:SetVertexColor(accR, accG, accB, 1)
-				it.fresh:Show()
-			else
 				it.fresh:Hide()
+				it.arrow:SetText(M.openFam[e.id] and "-" or "+")
+				it.arrow:Show()
+			else
+				it.arrow:Hide()
+				it.label:ClearAllPoints()
+				it.label:SetPoint("LEFT", it, "LEFT", 24, 0)
+				if sel then
+					it.label:SetTextColor(accR, accG, accB, 1)
+					it.selTex:SetVertexColor(T.c.panel[1], T.c.panel[2], T.c.panel[3], 1)
+					it.selTex:Show()
+					it.bar:SetVertexColor(accR, accG, accB, 1)
+					it.bar:Show()
+				else
+					it.label:SetTextColor(T.c.text[1], T.c.text[2], T.c.text[3], 1)
+					it.selTex:Hide()
+					it.bar:Hide()
+				end
+				if e.kind == "cat" and SUI.modules[e.id] then
+					local c = M.StateColor(M.State(e.id))
+					it.dot:SetVertexColor(c[1], c[2], c[3], 1)
+					it.dot:Show()
+				else
+					it.dot:Hide()
+				end
+				local nn = 0
+				if e.kind == "cat" then nn = M.NewCount(e.id) elseif e.id == "modules" then nn = M.NewCount("modules") end
+				if nn > 0 then
+					it.fresh:SetVertexColor(accR, accG, accB, 1)
+					it.fresh:Show()
+				else
+					it.fresh:Hide()
+				end
 			end
+			it:Show()
 		end
-		it:Show()
 	end
 	for i = getn(list) + 1, getn(M.navItems) do M.navItems[i]:Hide() end
 	M.ScrollSet(M.ns, y + 6)

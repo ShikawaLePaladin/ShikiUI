@@ -46,6 +46,13 @@ function SUI.RegisterCategory(key, order)
 	SUI.categories[key] = order
 end
 
+-- Boutons d action d une page de module (en-tete de la page) : SUI.RegisterAction(cat, cle de traduction, fonction, largeur).
+SUI.actions = {}
+function SUI.RegisterAction(cat, label, fn, w)
+	SUI.actions[cat] = SUI.actions[cat] or {}
+	tinsert(SUI.actions[cat], { label = label, fn = fn, w = w or 130 })
+end
+
 -- opt : { key, type = bool | number | choice | header, cat, label, tip, min, max, step, choices, default,
 --         simple = true (visible en mode Simple), order, global = true (hors profil), reload = true }
 function SUI.RegisterOption(opt)
