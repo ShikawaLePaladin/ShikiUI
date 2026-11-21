@@ -119,6 +119,8 @@ Locale_Mail.lua
 Mod_Mail.lua
 Locale_Map.lua
 Mod_Map.lua
+Locale_Market.lua
+Mod_Market.lua
 Locale_Marks.lua
 Mod_Marks.lua
 Locale_Messages.lua
