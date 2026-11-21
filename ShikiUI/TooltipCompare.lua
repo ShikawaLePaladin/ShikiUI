@@ -1,6 +1,9 @@
--- ShikiUI TooltipCompare : comparaison compacte avec l'objet equipe quand on survole un equipement en maintenant Maj (option
--- tooltip.compare ; tooltip.compareauto = sans Maj). Un petit cadre colle a l'infobulle liste SEULEMENT les differences (vert = gain,
--- rouge = perte) avec l'equivalence entre pourcentages et caracteristiques : par exemple +1% de critique vaut environ 20 d'agilite.
+-- ShikiUI TooltipCompare : deux comparaisons quand on survole un equipement.
+--  * Maj  (option tooltip.compareshift) : l'objet survole ET l'objet equipe cote a cote (infobulles du jeu, ShoppingTooltip1/2),
+--    une infobulle par emplacement possible (deux pour les bagues, bijoux et armes a une main).
+--  * Ctrl (option tooltip.compare ; tooltip.compareauto = sans Ctrl) : un petit cadre colle a l'infobulle liste SEULEMENT les
+--    differences calculees (vert = gain, rouge = perte) avec l'equivalence entre pourcentages et caracteristiques : par exemple +1% de
+--    critique vaut environ 20 d'agilite.
 -- Les statistiques sont lues dans le texte des infobulles (anglais et francais), jamais dans une base de donnees : un texte inconnu
 -- est simplement ignore. Cout : un OnUpdate enfant de GameTooltip (il ne tourne que pendant qu'une infobulle est visible) ; les
 -- lectures sont mises en cache par lien. Appele par Mod_Tooltip (SUI.TooltipCompare.Show / Hide).
@@ -177,7 +180,7 @@ end
 
 local function readLines(tip)
 	local out = {}
-	local n = tip:NumLines() or 0
+	local n = tonumber(tip:NumLines()) or 0
 	local i
 	for i = 1, n do
 		local fs = getglobal("ShikiUI_CmpScanTextLeft" .. i)
@@ -318,7 +321,9 @@ function K.Show(link)
 	f:ClearAllPoints()
 	local gt = GameTooltip
 	local right = gt:GetRight() or 0
-	if right + 195 > (GetScreenWidth() or 1024) / (UIParent:GetScale() or 1) then
+	if K.shopShown then
+		f:SetPoint("TOPLEFT", gt, "BOTTOMLEFT", 0, -2)          -- Maj + Ctrl : les infobulles equipees occupent le cote
+	elseif right + 195 > (GetScreenWidth() or 1024) / (UIParent:GetScale() or 1) then
 		f:SetPoint("TOPRIGHT", gt, "TOPLEFT", -2, 0)
 	else
 		f:SetPoint("TOPLEFT", gt, "TOPRIGHT", 2, 0)
@@ -332,6 +337,69 @@ function K.Hide()
 	if K.frame then K.frame:Hide() end
 end
 
+-- ---------------------------------------------------------------- Maj : objet(s) equipe(s) a cote de l'objet survole
+local SHOPW = 290          -- largeur approximative d'une infobulle d'objet (pour savoir s'il reste de la place a droite)
+
+function K.HideEquipped()
+	if not K.shopShown then return end
+	K.shopShown, K.shopKey = false, nil
+	local i
+	for i = 1, 2 do
+		local st = getglobal("ShoppingTooltip" .. i)
+		if st then st:Hide() end
+	end
+end
+
+function K.ShowEquipped(link)
+	local st1 = getglobal("ShoppingTooltip1")
+	local gt = GameTooltip
+	if not link or not st1 or not gt then return end
+	local _, _, loc = K.Info(link)
+	local list = K.SLOTS[loc or ""]
+	if not list then
+		K.HideEquipped()
+		return
+	end
+	local slots = {}
+	local i
+	for i = 1, getn(list) do
+		local cur = GetInventoryItemLink("player", list[i])
+		if cur and cur ~= link then tinsert(slots, list[i]) end
+	end
+	local n = getn(slots)
+	if n == 0 then
+		K.HideEquipped()
+		return
+	end
+	local key = link .. "|" .. slots[1] .. "|" .. (slots[2] or 0)
+	if K.shopShown and K.shopKey == key and st1:IsShown() then return end
+	if not K.shopShown and st1:IsShown() then return end         -- le jeu affiche deja sa propre comparaison : on ne double pas
+	local right = gt:GetRight() or 0
+	local fits = right + SHOPW * n <= (GetScreenWidth() or 1024) / (UIParent:GetScale() or 1)
+	local prev = gt
+	for i = 1, n do
+		local st = getglobal("ShoppingTooltip" .. i)
+		if st then
+			st:SetOwner(gt, "ANCHOR_NONE")
+			st:ClearAllPoints()
+			if fits then
+				st:SetPoint("TOPLEFT", prev, "TOPRIGHT", 2, 0)
+			else
+				st:SetPoint("TOPRIGHT", prev, "TOPLEFT", -2, 0)
+			end
+			st:SetInventoryItem("player", slots[i])
+			st:AddLine(L("msg.tooltip.equipped"), T.c.dim[1], T.c.dim[2], T.c.dim[3])
+			st:Show()
+			prev = st
+		end
+	end
+	for i = n + 1, 2 do
+		local st = getglobal("ShoppingTooltip" .. i)
+		if st then st:Hide() end
+	end
+	K.shopShown, K.shopKey = true, key
+end
+
 -- Surveille Maj tant que l'infobulle d'un objet est visible (enfant de GameTooltip : ne tourne que si elle est affichee)
 function K.Watch()
 	if K.watch or not getglobal("GameTooltip") then return end
@@ -342,20 +410,28 @@ function K.Watch()
 		if this.t < 0.12 then return end
 		this.t = 0
 		local link = SUI.Tooltip and SUI.Tooltip.link
-		if not K.on or not link then
+		if not link then
 			K.Hide()
+			K.HideEquipped()
 			return
 		end
-		if IsShiftKeyDown() or K.auto then K.Show(link) else K.Hide() end
+		if K.shiftOn and IsShiftKeyDown() then K.ShowEquipped(link) else K.HideEquipped() end
+		if K.on and (IsControlKeyDown() or K.auto) then K.Show(link) else K.Hide() end
 	end)
-	w:SetScript("OnHide", K.Hide)
+	w:SetScript("OnHide", function()
+		K.Hide()
+		K.HideEquipped()
+	end)
 	K.watch = w
 end
 
 function K.Apply()
 	K.on = C.Get("tooltip.compare") and true or false
 	K.auto = C.Get("tooltip.compareauto") and true or false
-	if K.on then K.Watch() else K.Hide() end
+	K.shiftOn = C.Get("tooltip.compareshift") and true or false
+	if K.on or K.shiftOn then K.Watch() end
+	if not K.on then K.Hide() end
+	if not K.shiftOn then K.HideEquipped() end
 end
 
 -- /sui cmp : diagnostic de la comparaison (objet survole, emplacement, statistiques lues)

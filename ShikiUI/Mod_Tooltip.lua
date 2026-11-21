@@ -642,6 +642,7 @@ SUI.RegisterModule("tooltip", {
 		opt("vendor", "bool", 82, true, { simple = true }),
 		opt("owned", "bool", 83, true, { simple = true }),
 		opt("combathide", "bool", 90, false),
+		opt("compareshift", "bool", 94, true, { simple = true }),
 		opt("compare", "bool", 95, true, { simple = true }),
 		opt("compareauto", "bool", 96, false),
 	},
