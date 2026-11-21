@@ -851,7 +851,7 @@ function M.Disable()
 	if M.tab then M.tab:Hide() end
 end
 
-SUI.RegisterCategory("market", 49)
+SUI.RegisterCategory("market", 57)
 
 local function opt(key, typ, order, def, extra)
 	local o = { key = "market." .. key, type = typ, cat = "market", label = "opt.market." .. key, tip = "tip.market." .. key, default = def, order = order }
