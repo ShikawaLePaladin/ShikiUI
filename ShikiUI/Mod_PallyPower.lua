@@ -74,7 +74,7 @@ M.SPELLS = { kings = "Blessing of Kings", wisdom = "Blessing of Wisdom", might =
 M.CLASSDEF = {
 	WARRIOR = { kings = true, might = true }, ROGUE = { kings = true, might = true }, HUNTER = { kings = true, might = true },
 	MAGE = { kings = true, wisdom = true }, WARLOCK = { kings = true, wisdom = true }, PRIEST = { kings = true, wisdom = true },
-	DRUID = { kings = true, wisdom = true }, SHAMAN = { kings = true, wisdom = true }, PALADIN = { wisdom = true },
+	DRUID = { kings = true, wisdom = true }, SHAMAN = { kings = true, wisdom = true }, PALADIN = { kings = true, wisdom = true },
 }
 M.JUDGES = { none = EMPTY, light = "Judgement of Light", wisdom = "Judgement of Wisdom", crusader = "Judgement of Crusader" }
 M.GREATERPFX = "Greater "
@@ -1046,15 +1046,27 @@ function M.AutoOne(r)
 	local a = asg(r.name)
 	for j = 1, getn(M.BLESS) do a[M.BLESS[j]] = nil end
 	a.sg = nil
+	-- LOGIQUE SIMPLE : ce qui fait partie du jeu par defaut de la classe (CLASSDEF) = benediction superieure de 30 min (une pose couvre toute
+	-- la classe) ; ce qui s'en ecarte (tank, corps a corps d'une classe de soutien...) = 10 min sur CE joueur seulement, case marquee "10 min".
+	local def = M.CLASSDEF[r.file] or {}
 	local set = M.AutoSet(r)
 	for i = 1, getn(set) do
-		if not M.PeerCovers(r.file, set[i]) then a[set[i]] = true end
+		local b = set[i]
+		if not M.PeerCovers(r.file, b) then
+			a[b] = true
+			if not def[b] then
+				if not a.sg then a.sg = {} end
+				a.sg[b] = true
+			end
+		end
 	end
 	-- PRIORITE PALATANK sur la Salut (2026-11-19) : un paladin avec le drapeau tank recoit la Salut
 	-- (il s'en sert pour son swap OctoManaSwap) EN PLUS de son set tank (Sanctuary incluse depuis le TANKSET).
 	-- Les autres tanks gardent Sanctuary sans Salut (la Salut sur un vrai tank = perte de menace).
 	if r.file == "PALADIN" and a.tank and C.Get("pallypower.autosalv") and M.Knows("salvation") then
 		a.salvation = true
+		if not a.sg then a.sg = {} end
+		a.sg.salvation = true
 	end
 	if C.Get("pallypower.autosingle") and (a.tank or M.HYBRID[r.file]) then a.single = true end
 end
@@ -1772,7 +1784,7 @@ SUI.RegisterModule("pallypower", {
 		opt("greater", "bool", 10, true, { simple = true }),
 		opt("compact", "bool", 15, true, { simple = true }),
 		opt("mini", "bool", 16, true, { simple = true }),
-		opt("autosingle", "bool", 17, true, { simple = true }),
+		opt("autosingle", "bool", 17, false, { simple = true }),
 		opt("autosalv", "bool", 18, false),
 		opt("sync", "bool", 19, true),
 		opt("syncmsg", "bool", 19.5, true),
