@@ -340,7 +340,20 @@ end
 -- ---------------------------------------------------------------- Maj : objet(s) equipe(s) a cote de l'objet survole
 local SHOPW = 290          -- largeur approximative d'une infobulle d'objet (pour savoir s'il reste de la place a droite)
 
+-- Le script OnHide de l'infobulle du jeu masque ShoppingTooltip1/2 a chaque rafraichissement (plusieurs fois par seconde) :
+-- on ignore ces masquages tant que la comparaison est voulue (K.keep), sinon elles clignotent.
+local function guard(st)
+	if st.shikiGuard then return end
+	st.shikiGuard = true
+	local orig = st.Hide
+	st.Hide = function(self)
+		if K.keep then return end
+		return orig(self)
+	end
+end
+
 function K.HideEquipped()
+	K.keep = false
 	if not K.shopShown then return end
 	K.shopShown, K.shopKey = false, nil
 	local i
@@ -373,13 +386,13 @@ function K.ShowEquipped(link)
 	end
 	local key = link .. "|" .. slots[1] .. "|" .. (slots[2] or 0)
 	if K.shopShown and K.shopKey == key and st1:IsShown() then return end
-	if not K.shopShown and st1:IsShown() then return end         -- le jeu affiche deja sa propre comparaison : on ne double pas
 	local right = gt:GetRight() or 0
 	local fits = right + SHOPW * n <= (GetScreenWidth() or 1024) / (UIParent:GetScale() or 1)
 	local prev = gt
 	for i = 1, n do
 		local st = getglobal("ShoppingTooltip" .. i)
 		if st then
+			guard(st)
 			st:SetOwner(gt, "ANCHOR_NONE")
 			st:ClearAllPoints()
 			if fits then
@@ -395,34 +408,55 @@ function K.ShowEquipped(link)
 			prev = st
 		end
 	end
+	K.keep = false
 	for i = n + 1, 2 do
 		local st = getglobal("ShoppingTooltip" .. i)
 		if st then st:Hide() end
 	end
 	K.shopShown, K.shopKey = true, key
+	K.keep = true
 end
 
 -- Surveille Maj tant que l'infobulle d'un objet est visible (enfant de GameTooltip : ne tourne que si elle est affichee)
+-- Le jeu rafraichit l'infobulle plusieurs fois par seconde (Hide puis Show, lien vide un instant) : on ne masque donc qu'apres
+-- un court delai d'absence, sinon les cadres clignotent.
+local GRACE = 0.3
+
 function K.Watch()
-	if K.watch or not getglobal("GameTooltip") then return end
-	local w = CreateFrame("Frame", "ShikiUI_TooltipCmpWatch", GameTooltip)
+	if K.watch then return end
+	local w = CreateFrame("Frame", "ShikiUI_TooltipCmpWatch", UIParent)
 	w.t = 0
+	K.idleE, K.idleC = 0, 0
 	w:SetScript("OnUpdate", function()
-		this.t = this.t + (arg1 or 0)
-		if this.t < 0.12 then return end
-		this.t = 0
+		local dt = arg1 or 0
+		this.t = this.t + dt
+		if this.t < 0.05 then return end
+		dt, this.t = this.t, 0
 		local link = SUI.Tooltip and SUI.Tooltip.link
-		if not link then
-			K.Hide()
-			K.HideEquipped()
-			return
+		if link and GameTooltip:IsShown() then
+			K.last, K.lastAge = link, 0
+		else
+			K.lastAge = (K.lastAge or 99) + dt
 		end
-		if K.shiftOn and IsShiftKeyDown() then K.ShowEquipped(link) else K.HideEquipped() end
-		if K.on and (IsControlKeyDown() or K.auto) then K.Show(link) else K.Hide() end
-	end)
-	w:SetScript("OnHide", function()
-		K.Hide()
-		K.HideEquipped()
+		local cur = K.last
+		if K.lastAge > GRACE then cur = nil end
+		-- Maj : objet(s) equipe(s)
+		if cur and K.shiftOn and IsShiftKeyDown() then
+			K.idleE = 0
+			K.shopKey = nil          -- on re-pose a chaque passage : le jeu estompe ces infobulles a chaque rafraichissement
+			K.ShowEquipped(cur)
+		else
+			K.idleE = K.idleE + dt
+			if K.idleE > GRACE then K.HideEquipped() end
+		end
+		-- Ctrl : statistiques comparees
+		if cur and K.on and (IsControlKeyDown() or K.auto) then
+			K.idleC = 0
+			K.Show(cur)
+		else
+			K.idleC = K.idleC + dt
+			if K.idleC > GRACE then K.Hide() end
+		end
 	end)
 	K.watch = w
 end
