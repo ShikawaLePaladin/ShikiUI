@@ -502,6 +502,7 @@ function M.HookSetter(name)
 	GameTooltip[name] = function(self, a, b)
 		if M.on then
 			M.link = M.Link(name, a, b)
+			if SUI.TooltipCompare and SUI.TooltipCompare.Wake then SUI.TooltipCompare.Wake() end
 			M.src = name
 			M.count = M.Count(name, a, b)
 		end

@@ -426,7 +426,7 @@ function K.Watch()
 	local w = CreateFrame("Frame", "ShikiUI_TooltipCmpWatch", UIParent)
 	w.t = 0
 	K.idleE, K.idleC = 0, 0
-	w:SetScript("OnUpdate", function()
+	K.tick = function()
 		local dt = arg1 or 0
 		this.t = this.t + dt
 		if this.t < 0.05 then return end
@@ -462,15 +462,30 @@ function K.Watch()
 			K.idleC = K.idleC + dt
 			if K.idleC > GRACE then K.Hide() end
 		end
-	end)
+		-- plus rien a surveiller : la minuterie s arrete (elle repart a l affichage d une infobulle d objet, voir K.Wake)
+		if not cur and K.lastAge > 1 and K.idleE > GRACE and K.idleC > GRACE then
+			this:SetScript("OnUpdate", nil)
+			K.running = false
+		end
+	end
 	K.watch = w
+end
+
+-- Reveille la surveillance (appele a chaque infobulle d objet) : aucun OnUpdate ne tourne tant qu aucune infobulle n est affichee.
+function K.Wake()
+	if not (K.on or K.shiftOn) then return end
+	K.Watch()
+	K.idleE, K.idleC = 0, 0
+	if not K.running then
+		K.running = true
+		K.watch:SetScript("OnUpdate", K.tick)
+	end
 end
 
 function K.Apply()
 	K.on = C.Get("tooltip.compare") and true or false
 	K.auto = C.Get("tooltip.compareauto") and true or false
 	K.shiftOn = C.Get("tooltip.compareshift") and true or false
-	if K.on or K.shiftOn then K.Watch() end
 	if not K.on then K.tgC = false; K.Hide() end
 	if not K.shiftOn then K.tgE = false; K.HideEquipped() end
 end
