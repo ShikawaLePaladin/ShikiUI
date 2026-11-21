@@ -1,6 +1,6 @@
 -- ShikiUI TooltipCompare : deux comparaisons quand on survole un equipement.
 --  Chaque touche BASCULE l'affichage (une pression = affiche, une autre = masque) au lieu d'etre maintenue.
---  * Maj  (option tooltip.compareshift) : l'objet survole ET l'objet equipe cote a cote (infobulles du jeu, ShoppingTooltip1/2),
+--  * Maj  (option tooltip.compareshift) : l'objet survole ET l'objet equipe cote a cote (infobulles du jeu, ShikiUI_EqTip1/2),
 --    une infobulle par emplacement possible (deux pour les bagues, bijoux et armes a une main).
 --  * Ctrl (option tooltip.compare ; tooltip.compareauto = toujours) : un petit cadre colle a l'infobulle liste SEULEMENT les
 --    differences calculees (vert = gain, rouge = perte) avec l'equivalence entre pourcentages et caracteristiques : par exemple +1% de
@@ -341,32 +341,33 @@ end
 -- ---------------------------------------------------------------- Ctrl : objet(s) equipe(s) a cote de l'objet survole
 local SHOPW = 290          -- largeur approximative d'une infobulle d'objet (pour savoir s'il reste de la place a droite)
 
--- Le script OnHide de l'infobulle du jeu masque ShoppingTooltip1/2 a chaque rafraichissement (plusieurs fois par seconde) :
--- on ignore ces masquages tant que la comparaison est voulue (K.keep), sinon elles clignotent.
-local function guard(st)
-	if st.shikiGuard then return end
-	st.shikiGuard = true
-	local orig = st.Hide
-	st.Hide = function(self)
-		if K.keep then return end
-		return orig(self)
-	end
+-- Infobulles PROPRES (pas ShoppingTooltip1/2) : le jeu masque et estompe ses ShoppingTooltip a chaque rafraichissement de l'infobulle
+-- survolee (plusieurs fois par seconde), ce qui les fait clignoter. Les notres n'ont pas de proprietaire : seul notre code les masque.
+function K.EqTip(i)
+	local name = "ShikiUI_EqTip" .. i
+	local st = getglobal(name)
+	if st then return st end
+	if not CreateFrame then return nil end
+	local ok, f = pcall(CreateFrame, "GameTooltip", name, UIParent, "GameTooltipTemplate")
+	if not ok or not f then return nil end
+	f:SetFrameStrata("TOOLTIP")
+	f:Hide()
+	return f
 end
 
 function K.HideEquipped()
-	K.keep = false
 	if not K.shopShown then return end
 	K.shopShown, K.shopKey = false, nil
 	local i
 	for i = 1, 2 do
-		local st = getglobal("ShoppingTooltip" .. i)
+		local st = getglobal("ShikiUI_EqTip" .. i)
 		if st then st:Hide() end
 	end
 end
 
 function K.ShowEquipped(link)
-	local st1 = getglobal("ShoppingTooltip1")
 	local gt = GameTooltip
+	local st1 = K.EqTip(1)
 	if not link or not st1 or not gt then return end
 	local _, _, loc = K.Info(link)
 	local list = K.SLOTS[loc or ""]
@@ -391,10 +392,9 @@ function K.ShowEquipped(link)
 	local fits = right + SHOPW * n <= (GetScreenWidth() or 1024) / (UIParent:GetScale() or 1)
 	local prev = gt
 	for i = 1, n do
-		local st = getglobal("ShoppingTooltip" .. i)
+		local st = K.EqTip(i)
 		if st then
-			guard(st)
-			st:SetOwner(gt, "ANCHOR_NONE")
+			st:SetOwner(UIParent, "ANCHOR_NONE")
 			st:ClearAllPoints()
 			if fits then
 				st:SetPoint("TOPLEFT", prev, "TOPRIGHT", 2, 0)
@@ -409,13 +409,11 @@ function K.ShowEquipped(link)
 			prev = st
 		end
 	end
-	K.keep = false
 	for i = n + 1, 2 do
-		local st = getglobal("ShoppingTooltip" .. i)
+		local st = getglobal("ShikiUI_EqTip" .. i)
 		if st then st:Hide() end
 	end
 	K.shopShown, K.shopKey = true, key
-	K.keep = true
 end
 
 -- Surveille Ctrl tant que l'infobulle d'un objet est visible (enfant de GameTooltip : ne tourne que si elle est affichee)
@@ -451,7 +449,6 @@ function K.Watch()
 		-- Maj : objet(s) equipe(s)
 		if cur and K.shiftOn and K.tgE then
 			K.idleE = 0
-			K.shopKey = nil          -- on re-pose a chaque passage : le jeu estompe ces infobulles a chaque rafraichissement
 			K.ShowEquipped(cur)
 		else
 			K.idleE = K.idleE + dt
