@@ -101,9 +101,11 @@ end
 function M.Build()
 	if M.win then return end
 	local f = T.Panel(UIParent, 220, 20)
-	f:SetFrameStrata("LOW")
+	f:SetFrameStrata("MEDIUM")
+	f:SetFrameLevel(30)   -- au-dessus de la zone du chat (qui avale les clics a cet endroit)
 	f:EnableMouse(false)
 	f:Hide()
+	if f.SetClampedToScreen then f:SetClampedToScreen(true) end   -- une position enregistree hors ecran (autre echelle) ne doit pas la perdre
 	M.win = f
 	SUI.Mover.Register("datatext.win", f, { label = L("mod.datatext.title"), point = "BOTTOMLEFT", x = 220, y = 6, scale = true })
 	M.built = true
@@ -257,5 +259,10 @@ SUI.RegisterCommand("datatext", function()
 	if not C.Get("modules.datatext") then C.Set("modules.datatext", true) end
 	if M.win then
 		if M.win:IsShown() then M.win:Hide() else M.win:Show() end
+		-- etat reel (diagnostic : ou est la barre, de quelle taille)
+		SUI.Print("datatext: " .. (M.win:IsShown() and "visible" or "masque") .. " largeur=" .. floor(M.win:GetWidth() or 0)
+			.. " echelle=" .. string.format("%.2f", M.win:GetEffectiveScale() or 0) .. " ecran=" .. floor(UIParent:GetWidth() or 0) .. "x" .. floor(UIParent:GetHeight() or 0) .. " gauche=" .. floor(M.win:GetLeft() or -1) .. " bas=" .. floor(M.win:GetBottom() or -1) .. " actif=" .. tostring(M.active))
+	else
+		SUI.Print("datatext: fenetre non creee (module " .. (C.Get("modules.datatext") and "actif" or "coupe") .. ")")
 	end
 end, "help.datatext")
