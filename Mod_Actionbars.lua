@@ -1157,6 +1157,7 @@ function M.OnEnter()
 	local b = this
 	b.bar.hover = true
 	M.hoverBtn = b
+	if b.hl then b.hl:Show() end
 	hoverAlpha(b.bar)
 	local mode = cfg.tooltips
 	if mode == "never" or (mode == "safe" and M.combat) or not GameTooltip then return end
@@ -1222,6 +1223,7 @@ end
 function M.OnLeave()
 	local b = this
 	b.bar.hover = false
+	if b.hl then b.hl:Hide() end
 	if cfg.hidedelay > 0 then
 		b.bar.holdUntil = GetTime() + cfg.hidedelay
 		M.StartHold(b.bar.holdUntil)
@@ -1304,6 +1306,14 @@ local function newButton(bar, i)
 	f.push:SetPoint("TOPLEFT", f, "TOPLEFT", 1, -1)
 	f.push:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -1, 1)
 	f.push:Hide()
+	-- surbrillance au survol (le curseur sur un sort / une forme / un sort de familier)
+	f.hl = f:CreateTexture(nil, "OVERLAY")
+	f.hl:SetTexture(T.tex.white)
+	f.hl:SetBlendMode("ADD")
+	f.hl:SetPoint("TOPLEFT", f, "TOPLEFT", 1, -1)
+	f.hl:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -1, 1)
+	f.hl:SetVertexColor(1, 1, 1, 0.22)    -- style:ok voile blanc neutre de survol
+	f.hl:Hide()
 	M.StyleTexts(f)
 	f.cdt = T.Text(tf, 14, T.c.text, "CENTER", true)
 	f.cdt:SetPoint("CENTER", f, "CENTER", 0, 0)
@@ -1491,6 +1501,17 @@ local function pin(f, key, x, y, h)
 end
 
 -- toutes les textures decoratives d'une barre (le jeu les raffiche a chaque mise a jour) ; la texture de remplissage reste
+-- Fond de la barre (partie vide) : sans lui, une barre depouillee n'affiche que l'XP acquise et on ne voit pas la fin du niveau.
+local function track(f)
+	if f.suiTrack then return end
+	local t = f:CreateTexture(nil, "BACKGROUND")
+	t:SetTexture(T.tex.white)
+	t:SetAllPoints(f)
+	local c = T.c.bg
+	t:SetVertexColor(c[1], c[2], c[3], 0.85)
+	f.suiTrack = t
+end
+
 local function stripArt(f)
 	local keep = f.GetStatusBarTexture and f:GetStatusBarTexture() or nil
 	local r = { f:GetRegions() }
@@ -1547,8 +1568,8 @@ function M.StyleXpBars()
 		local t = getglobal(XPTEX[i])
 		if t and t.Hide then t:Hide() t.Show = noop end
 	end
-	if xp then pcall(stripArt, xp) end
-	if rep then pcall(stripArt, rep) end
+	if xp then pcall(stripArt, xp) pcall(track, xp) end
+	if rep then pcall(stripArt, rep) pcall(track, rep) end
 	-- Barre d'experience TOUJOURS visible en mode "fine" (meme au niveau maximum : elle est vide mais presente,
 	-- l'utilisateur qui ne la veut pas choisit "Masquee"). La reputation suivie reste juste au-dessus.
 	if xp then pcall(pin, xp, "bars.xp", 0, 0, 5) end
@@ -1769,7 +1790,7 @@ end
 local EVENTS = { "ACTIONBAR_SLOT_CHANGED", "ACTIONBAR_UPDATE_STATE", "ACTIONBAR_UPDATE_USABLE", "ACTIONBAR_UPDATE_COOLDOWN",
 	"ACTIONBAR_PAGE_CHANGED", "UPDATE_BONUS_ACTIONBAR", "UPDATE_SHAPESHIFT_FORM", "UPDATE_SHAPESHIFT_FORMS", "PET_BAR_UPDATE",
 	"PET_BAR_UPDATE_COOLDOWN", "UNIT_PET", "UPDATE_BINDINGS", "ACTIONBAR_SHOWGRID", "ACTIONBAR_HIDEGRID", "PLAYER_REGEN_DISABLED",
-	"PLAYER_REGEN_ENABLED", "PLAYER_TARGET_CHANGED", "PLAYER_ENTERING_WORLD", "UNIT_HEALTH", "PLAYER_AURAS_CHANGED", "UNIT_MANA", "UNIT_RAGE", "UNIT_ENERGY" }
+	"PLAYER_REGEN_ENABLED", "PLAYER_TARGET_CHANGED", "PLAYER_ENTERING_WORLD", "UNIT_HEALTH", "PLAYER_AURAS_CHANGED", "PLAYER_ALIVE", "PLAYER_UNGHOST", "PLAYER_DEAD", "UNIT_MANA", "UNIT_RAGE", "UNIT_ENERGY" }
 
 -- Relecture differee de l'etat des boutons de forme (l'aura / la forme active n'est parfois a jour que quelques dixiemes de seconde apres l'evenement).
 function M.LateState()
@@ -1809,6 +1830,10 @@ function M.OnEvent(ev, a1)
 	elseif ev == "PLAYER_REGEN_DISABLED" then
 		M.combat = true
 		M.dVis = true
+	elseif ev == "PLAYER_ALIVE" or ev == "PLAYER_UNGHOST" or ev == "PLAYER_DEAD" then
+		-- l'aura / la forme active est remise a zero par la mort : l'icone ne doit pas rester "active"
+		M.dBase, M.dAll, M.dState = true, true, true
+		M.LateState()
 	elseif ev == "PLAYER_AURAS_CHANGED" then
 		if cfg.pg and (cfg.pg.stealth > 0 or cfg.pg.shadow > 0) then M.dAura = true end
 		if M.auraPosture then M.dPost = true end
