@@ -310,6 +310,7 @@ function M.Finish(partial)
 	M.Trim()
 	SUI.Print(L(partial and "msg.market.scan.partial" or "msg.market.scan.done", n, sc.lots))
 	M.Rebuild()
+	M.WatchReport()
 end
 
 function M.Stop(silent)
@@ -827,6 +828,76 @@ function M.OnClose()
 	if M.win and M.win:IsShown() then M.Refresh() end
 end
 
+-- ---------------------------------------------------------------- liste d'achats : "je veux cet objet sous ce prix"
+-- db.watch[nom en minuscules] = { n = nom, max = prix unitaire maxi en cuivres } ; verifiee a la fin de chaque scan.
+function M.WatchList()
+	local db = M.LoadDB()
+	if type(db.watch) ~= "table" then db.watch = {} end
+	return db.watch
+end
+
+function M.WatchAdd(name, max)
+	if type(name) ~= "string" or name == "" or not max or max < 1 then return false end
+	M.WatchList()[string.lower(name)] = { n = name, max = floor(max) }
+	return true
+end
+
+function M.WatchDel(name)
+	local w = M.WatchList()
+	local k = string.lower(name or "")
+	if not w[k] then return false end
+	w[k] = nil
+	return true
+end
+
+function M.WatchCount()
+	local n = 0
+	for _ in pairs(M.WatchList()) do n = n + 1 end
+	return n
+end
+
+-- Objets de la base dont le plus bas prix est au plus le prix voulu : { { id, n, mn, max }, ... } tries par nom.
+function M.WatchHits()
+	local w = M.WatchList()
+	local hits = {}
+	for id, e in pairs(M.LoadDB().items) do
+		local k = e.n and string.lower(e.n)
+		local it = k and w[k]
+		if it and e.mn and e.mn <= it.max then tinsert(hits, { id = id, n = e.n, mn = e.mn, max = it.max }) end
+	end
+	tsort(hits, function(a, b) return a.n < b.n end)
+	return hits
+end
+
+function M.WatchReport()
+	if M.WatchCount() == 0 then return 0 end
+	local hits = M.WatchHits()
+	for i = 1, getn(hits) do
+		SUI.Print(L("msg.market.watch.hit", hits[i].n, money(hits[i].mn), money(hits[i].max)))
+	end
+	return getn(hits)
+end
+
+local function watchCmd(rest)
+	local _, _, sub, arg = string.find(rest or "", "^(%S+)%s*(.-)$")
+	if sub == "add" then
+		local _, _, p, name = string.find(arg, "^(%S+)%s+(.+)$")
+		local au = SUI.Auction
+		local max = p and ((au and au.ParseMoney and au.ParseMoney(p)) or (tonumber(p) and tonumber(p) * 10000))
+		if M.WatchAdd(name, max) then SUI.Print(L("msg.market.watch.added", name, money(max))) else SUI.Print(L("msg.market.watch.usage")) end
+	elseif sub == "del" then
+		if M.WatchDel(arg) then SUI.Print(L("msg.market.watch.removed", arg)) else SUI.Print(L("msg.market.watch.none", arg)) end
+	elseif sub == "clear" then
+		M.LoadDB().watch = {}
+		SUI.Print(L("msg.market.watch.cleared"))
+	else
+		local w = M.WatchList()
+		if M.WatchCount() == 0 then SUI.Print(L("msg.market.watch.empty")) return end
+		for _, it in pairs(w) do SUI.Print(L("msg.market.watch.line", it.n, money(it.max))) end
+		M.WatchReport()
+	end
+end
+
 -- ---------------------------------------------------------------- module
 function M.Enable()
 	M.on = true
@@ -881,6 +952,8 @@ SUI.RegisterCommand("market", function(rest)
 		M.Start()
 	elseif rest == "stop" then
 		M.Stop(false)
+	elseif string.sub(rest, 1, 5) == "watch" then
+		watchCmd(string.sub(rest, 7))
 	elseif rest == "clear" then
 		M.Clear()
 		SUI.Print(L("msg.market.cleared"))
