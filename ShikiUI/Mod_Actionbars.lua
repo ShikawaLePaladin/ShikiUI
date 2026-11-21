@@ -894,6 +894,20 @@ function M.ForceRepaint(b)
 	b.vst = nil
 end
 
+-- Paladin : une aura n'est active que si son buff est sur le joueur (la mort l'enleve, l'API peut garder l'ancien etat).
+function M.AuraBuffOn(icon)
+	local ub, dead = getglobal("UnitBuff"), getglobal("UnitIsDeadOrGhost")
+	if not icon or type(ub) ~= "function" then return true end      -- API absente : on garde l etat du jeu
+	if type(dead) == "function" and dead("player") then return false end
+	local want = string.lower(icon)
+	for i = 1, 32 do
+		local t = ub("player", i)
+		if not t then break end
+		if string.lower(t) == want then return true end
+	end
+	return false
+end
+
 function M.UpdateState(b)
 	local kind = b.kind
 	if kind == "action" then
@@ -930,7 +944,8 @@ function M.UpdateState(b)
 		end
 		paintBorder(b, bs)
 	elseif kind == "stance" then
-		local _, _, active, castable = GetShapeshiftFormInfo(b.idx)
+		local sicon, _, active, castable = GetShapeshiftFormInfo(b.idx)
+		if active and M.class == "PALADIN" then active = M.AuraBuffOn(sicon) end
 		local st = 0
 		if not castable then st = 3 elseif cfg.stanceind and not active then st = 5 end
 		paintTint(b, st)
@@ -1153,11 +1168,28 @@ function M.ScanHover()
 	end
 end
 
+function M.HoverOn(b)
+	if not b.hl then return end
+	local r, g, bl = T.Accent()
+	b.hl:SetVertexColor(r, g, bl, 0.10)
+	b.hl:Show()
+	for k = 1, 4 do
+		b.hlE[k]:SetVertexColor(r, g, bl, 0.9)
+		b.hlE[k]:Show()
+	end
+end
+
+function M.HoverOff(b)
+	if not b.hl then return end
+	b.hl:Hide()
+	for k = 1, 4 do b.hlE[k]:Hide() end
+end
+
 function M.OnEnter()
 	local b = this
 	b.bar.hover = true
 	M.hoverBtn = b
-	if b.hl then b.hl:Show() end
+	M.HoverOn(b)
 	hoverAlpha(b.bar)
 	local mode = cfg.tooltips
 	if mode == "never" or (mode == "safe" and M.combat) or not GameTooltip then return end
@@ -1223,7 +1255,7 @@ end
 function M.OnLeave()
 	local b = this
 	b.bar.hover = false
-	if b.hl then b.hl:Hide() end
+	M.HoverOff(b)
 	if cfg.hidedelay > 0 then
 		b.bar.holdUntil = GetTime() + cfg.hidedelay
 		M.StartHold(b.bar.holdUntil)
@@ -1306,14 +1338,32 @@ local function newButton(bar, i)
 	f.push:SetPoint("TOPLEFT", f, "TOPLEFT", 1, -1)
 	f.push:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -1, 1)
 	f.push:Hide()
-	-- surbrillance au survol (le curseur sur un sort / une forme / un sort de familier)
+	-- survol : fin liseré d'accent autour de l'icone + voile tres leger
 	f.hl = f:CreateTexture(nil, "OVERLAY")
 	f.hl:SetTexture(T.tex.white)
 	f.hl:SetBlendMode("ADD")
 	f.hl:SetPoint("TOPLEFT", f, "TOPLEFT", 1, -1)
 	f.hl:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -1, 1)
-	f.hl:SetVertexColor(1, 1, 1, 0.22)    -- style:ok voile blanc neutre de survol
 	f.hl:Hide()
+	f.hlE = {}
+	for k = 1, 4 do
+		local e = f:CreateTexture(nil, "OVERLAY")
+		e:SetTexture(T.tex.white)
+		e:Hide()
+		f.hlE[k] = e
+	end
+	f.hlE[1]:SetPoint("TOPLEFT", f, "TOPLEFT", 0, 0)
+	f.hlE[1]:SetPoint("TOPRIGHT", f, "TOPRIGHT", 0, 0)
+	f.hlE[1]:SetHeight(1)
+	f.hlE[2]:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", 0, 0)
+	f.hlE[2]:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", 0, 0)
+	f.hlE[2]:SetHeight(1)
+	f.hlE[3]:SetPoint("TOPLEFT", f, "TOPLEFT", 0, 0)
+	f.hlE[3]:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", 0, 0)
+	f.hlE[3]:SetWidth(1)
+	f.hlE[4]:SetPoint("TOPRIGHT", f, "TOPRIGHT", 0, 0)
+	f.hlE[4]:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", 0, 0)
+	f.hlE[4]:SetWidth(1)
 	M.StyleTexts(f)
 	f.cdt = T.Text(tf, 14, T.c.text, "CENTER", true)
 	f.cdt:SetPoint("CENTER", f, "CENTER", 0, 0)
