@@ -240,10 +240,10 @@ local function canQuery()
 	return fn() and true or false
 end
 
-local function sendQuery(page)
+local function sendQuery(page, name)
 	local au = SUI.Auction
 	if au and au.FixBlizzPage then au.FixBlizzPage() end
-	QueryAuctionItems("", nil, nil, nil, nil, nil, page, nil, nil)
+	QueryAuctionItems(name or "", nil, nil, nil, nil, nil, page, nil, nil)
 end
 
 function M.ReadPage()
@@ -304,9 +304,11 @@ function M.Finish(partial)
 		n = n + 1
 	end
 	db.scan.t = time and time() or 0
-	db.scan.items = n
-	db.scan.lots = sc.lots
-	db.scan.partial = partial and true or false
+	if not sc.names then        -- un scan cible ne remplace pas le bilan du dernier scan complet
+		db.scan.items = n
+		db.scan.lots = sc.lots
+		db.scan.partial = partial and true or false
+	end
 	M.Trim()
 	SUI.Print(L(partial and "msg.market.scan.partial" or "msg.market.scan.done", n, sc.lots))
 	M.Rebuild()
@@ -325,7 +327,8 @@ function M.Stop(silent)
 	M.Finish(true)
 end
 
-function M.Start()
+-- names (facultatif) : liste de noms a chercher un par un au lieu de balayer tout l'hotel (scan cible)
+function M.Start(names)
 	if M.sc then return end
 	local au = SUI.Auction
 	if not (au and au.open) then
@@ -337,7 +340,7 @@ function M.Start()
 		return
 	end
 	M.LoadDB()
-	M.sc = { page = 0, pages = 1, state = "query", sentAt = GetTime(), acc = {}, lots = 0, items = 0 }
+	M.sc = { page = 0, pages = 1, state = "query", sentAt = GetTime(), acc = {}, lots = 0, items = 0, names = names, ni = 1 }
 	SUI.On("AUCTION_ITEM_LIST_UPDATE", M.OnList)
 	if M.task then SUI.Cancel(M.task) end
 	M.task = SUI.Every(TICK, M.Tick, "market.tick")
@@ -358,7 +361,18 @@ function M.OnList()
 		sc.state = "query"
 		sc.sentAt = GetTime()
 		if canQuery() then
-			sendQuery(sc.page)
+			sendQuery(sc.page, sc.names and sc.names[sc.ni])
+			sc.state = "wait"
+			sc.sentAt = GetTime()
+		end
+		M.dirtyBar = true
+	elseif sc.names and sc.ni < getn(sc.names) then
+		sc.ni = sc.ni + 1
+		sc.page = 0
+		sc.state = "query"
+		sc.sentAt = GetTime()
+		if canQuery() then
+			sendQuery(0, sc.names[sc.ni])
 			sc.state = "wait"
 			sc.sentAt = GetTime()
 		end
@@ -380,7 +394,7 @@ function M.Tick()
 	end
 	if sc.state == "query" then
 		if canQuery() then
-			sendQuery(sc.page)
+			sendQuery(sc.page, sc.names and sc.names[sc.ni])
 			sc.state = "wait"
 			sc.sentAt = GetTime()
 		elseif GetTime() - sc.sentAt > 10 then
@@ -887,6 +901,12 @@ local function watchCmd(rest)
 		if M.WatchAdd(name, max) then SUI.Print(L("msg.market.watch.added", name, money(max))) else SUI.Print(L("msg.market.watch.usage")) end
 	elseif sub == "del" then
 		if M.WatchDel(arg) then SUI.Print(L("msg.market.watch.removed", arg)) else SUI.Print(L("msg.market.watch.none", arg)) end
+	elseif sub == "scan" then
+		local names = {}
+		for _, it in pairs(M.WatchList()) do tinsert(names, it.n) end
+		if getn(names) == 0 then SUI.Print(L("msg.market.watch.empty")) return end
+		tsort(names)
+		M.Start(names)
 	elseif sub == "clear" then
 		M.LoadDB().watch = {}
 		SUI.Print(L("msg.market.watch.cleared"))
