@@ -654,6 +654,8 @@ function M.Build()
 	M.BuildMatrix(f)
 	f.bView = mkBtn(f, EMPTY, 96, 20, function() C.Set("pallypower.compact", not M.Compact()) end)
 	f.bView:SetPoint("BOTTOM", f, "BOTTOM", 0, 8)
+	f.bTeam = mkBtn(f, L("msg.pallypower.b.team"), 62, 18, function() M.TeamToggle() end)
+	f.bTeam:SetPoint("TOPRIGHT", f, "TOPRIGHT", -46, -4)
 	T.GearButton(f, "pallypower", { size = 14, point = "TOPRIGHT", x = -26, y = -4, title = L("msg.pallypower.gear") })
 	f:SetScript("OnMouseWheel", function()
 		if arg1 > 0 then M.Scroll(-3) else M.Scroll(3) end
@@ -1038,6 +1040,7 @@ end
 
 function M.Close()
 	if M.win then M.win:Hide() end
+	if M.twin then M.twin:Hide() end
 end
 
 function M.ToggleWin()
@@ -1493,7 +1496,9 @@ function M.PeerLines()
 end
 
 function M.OnAddon(ev, a1, a2, a3, a4)
-	if not M.on or a1 ~= M.SYNC_PREFIX or type(a2) ~= "string" or C.Get("pallypower.sync") == false then return end
+	if not M.on or type(a2) ~= "string" or C.Get("pallypower.sync") == false then return end
+	if a1 == M.SHK_PREFIX then M.TeamOnShk(a2, a4) return end
+	if a1 ~= M.SYNC_PREFIX then return end
 	local sender = a4
 	if not sender or sender == UnitName("player") then return end
 	if a2 == "REQ" then
@@ -1510,6 +1515,15 @@ function M.OnAddon(ev, a1, a2, a3, a4)
 			p[id] = tonumber(ch) or -1
 		end
 		M.peers[sender] = p
+		local _, _, kn = string.find(a2, "^SELF (%w*)@")
+		if kn then
+			local k = {}
+			for i = 0, 5 do
+				local pr = strsub(kn, i * 2 + 1, i * 2 + 2)
+				if pr ~= "" and pr ~= "nn" then k[i] = true end
+			end
+			M.peerKnown[sender] = k
+		end
 		changed = true
 	elseif strsub(a2, 1, 7) == "ASSIGN " then
 		local _, _, name, class, skill = string.find(a2, "^ASSIGN (%S+) (%S+) (%S+)")
@@ -1518,6 +1532,8 @@ function M.OnAddon(ev, a1, a2, a3, a4)
 			p[tonumber(class) or 0] = tonumber(skill) or -1
 			M.peers[sender] = p
 			changed = true
+		elseif name == UnitName("player") and class and skill then
+			M.TeamOnAssign(sender, tonumber(class), tonumber(skill))
 		end
 	elseif a2 == "CLEAR" then
 		if M.peers[sender] then M.peers[sender] = nil changed = true end
@@ -1528,11 +1544,445 @@ function M.OnAddon(ev, a1, a2, a3, a4)
 			SUI.Print(L("msg.pallypower.sync.changed", sender, now or L("msg.pallypower.sync.none")))
 		end
 		if M.win and M.win:IsShown() and M.PaintCells then M.PaintCells() end
+		if M.twin and M.twin:IsShown() then M.TeamPaint() end
 	end
 end
 
 function M.SyncReq()
 	syncSend("REQ")
+end
+
+-- ---------------------------------------------------------------- vue "Paladins" : ce que donnent les autres paladins, reglage a distance, repartition auto
+-- Lignes = paladins (toi + ceux qui ont envoye leur SELF), colonnes = classes presentes, case = benediction donnee a la classe.
+-- Clic : change la benediction (parmi celles que CE paladin connait) ; clic droit : 10 min / 30 min. Pour un AUTRE paladin, l'ordre part
+-- en message ASSIGN (protocole PLPWR) : il l'applique s'il accepte les ordres du chef (option pallypower.remote). Le reglage 10 min
+-- n'a pas de message dans PLPWR : message ShikiUI "SHKPP S10" (compris seulement par les paladins qui ont ShikiUI).
+M.SHK_PREFIX = "SHKPP"
+M.peerKnown = {}      -- [nom] = { [id benediction PLPWR] = true } (lu dans leur SELF)
+M.peerSingle = {}     -- [nom] = { [id classe] = true } : 10 min demande a ce paladin pour cette classe
+
+local function fileOfCid(cid)
+	for f, id in pairs(M.SYNC_CLS) do
+		if id == cid then return f end
+	end
+	return nil
+end
+
+local function bessOfBid(bid)
+	for b, id in pairs(M.SYNC_BID) do
+		if id == bid then return b end
+	end
+	return nil
+end
+
+local function shkSend(msg)
+	local ch = syncChan()
+	local sam = getglobal("SendAddonMessage")
+	if not ch or type(sam) ~= "function" then return false end
+	sam(M.SHK_PREFIX, msg, ch, UnitName("player"))
+	return true
+end
+
+-- Benediction que JE donne a une classe (premiere complete) et son mode.
+function M.MyClassBless(file)
+	for j = 1, getn(M.BLESS) do
+		local n, have = M.ClassState(file, M.BLESS[j])
+		if n > 0 and have == n then return M.BLESS[j] end
+	end
+	return nil
+end
+
+function M.MyClassSingle(file, b)
+	if not b then return false end
+	local any = false
+	for i = 1, M.nrost do
+		local r = M.roster[i]
+		if r.file == file then
+			any = true
+			if not M.IsSingle(M.assign[r.name], b) then return false end
+		end
+	end
+	return any
+end
+
+-- Je donne EXACTEMENT cette benediction (ou aucune) a toute la classe ; single = 10 min.
+function M.ApplyClassAssign(file, b, single)
+	for i = 1, M.nrost do
+		local r = M.roster[i]
+		if r.file == file then
+			local a = asg(r.name)
+			unsingle(a)
+			for j = 1, getn(M.BLESS) do a[M.BLESS[j]] = nil end
+			a.sg = nil
+			if b then
+				a[b] = true
+				if single then a.sg = {} a.sg[b] = true end
+			end
+		end
+	end
+	saveAssign()
+	M.PaintCells()
+	M.PaintRows()
+end
+
+-- Qui a le droit de regler mes benedictions : le chef / assistants du raid, le chef du groupe.
+function M.CanRemote(sender)
+	if C.Get("pallypower.remote") == false then return false end
+	local nr = GetNumRaidMembers and GetNumRaidMembers() or 0
+	if nr > 0 then
+		for i = 1, nr do
+			local n, rank = GetRaidRosterInfo(i)
+			if n == sender then return (rank or 0) >= 1 end
+		end
+		return false
+	end
+	local np = GetNumPartyMembers and GetNumPartyMembers() or 0
+	for i = 1, np do
+		if UnitName("party" .. i) == sender then
+			return UnitIsPartyLeader and UnitIsPartyLeader("party" .. i) and true or false
+		end
+	end
+	return false
+end
+
+function M.TeamOnAssign(sender, cid, bid)
+	if not cid or not bid or not M.CanRemote(sender) then return end
+	local file = fileOfCid(cid)
+	if not file then return end
+	local b = (bid >= 0) and bessOfBid(bid) or nil
+	if b and not M.Knows(b) then return end
+	M.ApplyClassAssign(file, b, false)
+	SUI.Print(L("msg.pallypower.team.recv", sender, className(file), b and L("msg.pallypower.bless." .. b) or L("msg.pallypower.team.tip.none")))
+end
+
+function M.TeamOnShk(msg, sender)
+	if not sender or sender == UnitName("player") then return end
+	local _, _, name, cid, flag = string.find(msg, "^S10 (%S+) (%d+) (%d)")
+	if not name or name ~= UnitName("player") or not M.CanRemote(sender) then return end
+	local file = fileOfCid(tonumber(cid))
+	local b = file and M.MyClassBless(file)
+	if b then M.ApplyClassAssign(file, b, flag == "1") end
+end
+
+function M.TeamPaladins()
+	local out = {}
+	local _, cls = UnitClass("player")
+	if cls == "PALADIN" then tinsert(out, (UnitName("player"))) end
+	local names = {}
+	for n in pairs(M.peers) do tinsert(names, n) end
+	table.sort(names)
+	for i = 1, getn(names) do tinsert(out, names[i]) end
+	return out
+end
+
+function M.TeamKnows(name, b)
+	if name == UnitName("player") then return M.Knows(b) end
+	local k = M.peerKnown[name]
+	if not k then return true end
+	return k[M.SYNC_BID[b]] and true or false
+end
+
+function M.TeamGet(name, file)
+	if name == UnitName("player") then return M.MyClassBless(file) end
+	local p = M.peers[name]
+	local cid = M.SYNC_CLS[file]
+	local bid = p and cid and p[cid]
+	if bid and bid >= 0 then return bessOfBid(bid) end
+	return nil
+end
+
+function M.TeamSingle(name, file)
+	if name == UnitName("player") then return M.MyClassSingle(file, M.MyClassBless(file)) end
+	local ps = M.peerSingle[name]
+	local cid = M.SYNC_CLS[file]
+	return (ps and cid and ps[cid]) and true or false
+end
+
+function M.TeamSet(name, file, b, single)
+	if name == UnitName("player") then
+		M.ApplyClassAssign(file, b, single)
+		return
+	end
+	local cid = M.SYNC_CLS[file]
+	if not cid then return end
+	local bid = b and M.SYNC_BID[b] or -1
+	syncSend("ASSIGN " .. name .. " " .. cid .. " " .. bid)
+	shkSend("S10 " .. name .. " " .. cid .. " " .. ((b and single) and 1 or 0))
+	local p = M.peers[name] or {}
+	p[cid] = bid
+	M.peers[name] = p
+	local ps = M.peerSingle[name] or {}
+	ps[cid] = (b and single) and true or nil
+	M.peerSingle[name] = ps
+end
+
+function M.TeamCycle(name, file)
+	local opts = {}
+	for j = 1, getn(M.BLESS) do
+		if M.TeamKnows(name, M.BLESS[j]) then tinsert(opts, M.BLESS[j]) end
+	end
+	local cur = M.TeamGet(name, file)
+	local idx = 0
+	for i = 1, getn(opts) do
+		if opts[i] == cur then idx = i end
+	end
+	local nxt = opts[idx + 1]
+	M.TeamSet(name, file, nxt, M.TeamSingle(name, file))
+end
+
+function M.TeamToggle10(name, file)
+	local cur = M.TeamGet(name, file)
+	if not cur then return end
+	M.TeamSet(name, file, cur, not M.TeamSingle(name, file))
+end
+
+M.TEAMWANT = { "kings", "wisdom", "might" }
+
+-- Repartition automatique : pour chaque classe presente, chaque benediction voulue (jeu par defaut) va au paladin qui la connait
+-- et qui en donne le moins ; un paladin donne UNE benediction par classe (limite du protocole). Seul, on retombe sur l'auto simple.
+function M.TeamAuto()
+	if M.nrost == 0 then M.ScanRoster() end
+	local pal = M.TeamPaladins()
+	if getn(pal) < 2 then
+		M.AutoAssign()
+		return
+	end
+	local load = {}
+	for i = 1, getn(pal) do load[pal[i]] = 0 end
+	local plan = {}
+	for idx = 1, getn(M.CORDER) do
+		local file = M.CORDER[idx]
+		if M.classes[file] then
+			local def = M.CLASSDEF[file] or {}
+			local want = {}
+			for k = 1, getn(M.TEAMWANT) do
+				if def[M.TEAMWANT[k]] then tinsert(want, M.TEAMWANT[k]) end
+			end
+			if C.Get("pallypower.autosalv") then tinsert(want, "salvation") end
+			-- les benedictions que peu de paladins connaissent sont placees d'abord
+			local cap = {}
+			for k = 1, getn(want) do
+				cap[want[k]] = 0
+				for i = 1, getn(pal) do
+					if M.TeamKnows(pal[i], want[k]) then cap[want[k]] = cap[want[k]] + 1 end
+				end
+			end
+			for k = 2, getn(want) do
+				local v, j = want[k], k - 1
+				while j >= 1 and cap[want[j]] > cap[v] do
+					want[j + 1] = want[j]
+					j = j - 1
+				end
+				want[j + 1] = v
+			end
+			local used = {}
+			plan[file] = {}
+			for k = 1, getn(want) do
+				local best
+				for i = 1, getn(pal) do
+					local p = pal[i]
+					if not used[p] and M.TeamKnows(p, want[k]) and (not best or load[p] < load[best]) then best = p end
+				end
+				if best then
+					used[best] = true
+					load[best] = load[best] + 1
+					plan[file][best] = want[k]
+				end
+			end
+		end
+	end
+	local step = 0
+	for idx = 1, getn(M.CORDER) do
+		local file = M.CORDER[idx]
+		if plan[file] then
+			for i = 1, getn(pal) do
+				local p = pal[i]
+				local b = plan[file][p]
+				if p == UnitName("player") then
+					M.TeamSet(p, file, b, false)
+				else
+					step = step + 1
+					SUI.After(0.25 * step, function() M.TeamSet(p, file, b, false) M.TeamPaint() end, "pp.teamauto")
+				end
+			end
+		end
+	end
+	SUI.Print(L("msg.pallypower.team.autodone", getn(pal)))
+	M.TeamPaint()
+end
+
+-- ---- fenetre
+local TC, TG = 32, 4
+
+function M.TeamBuild()
+	if M.twin then return end
+	local f = CreateFrame("Frame", "ShikiUI_PallyTeam", UIParent)
+	f:SetWidth(320)
+	f:SetHeight(160)
+	T.Backdrop(f, T.c.panel, T.c.border)
+	f:SetFrameStrata("HIGH")
+	f:SetMovable(true)
+	f:EnableMouse(true)
+	f:SetClampedToScreen(true)
+	f:RegisterForDrag("LeftButton")
+	f:SetScript("OnDragStart", function() if not SUI.InCombat() then this:StartMoving() end end)
+	f:SetScript("OnDragStop", function() this:StopMovingOrSizing() end)
+	f:Hide()
+	M.twin = f
+	f.title = T.Text(f, 13, T.c.text, "LEFT")
+	f.title:SetPoint("TOPLEFT", f, "TOPLEFT", 10, -8)
+	f.title:SetText(L("msg.pallypower.team.title"))
+	f.close = mkBtn(f, "x", 18, 18, function() f:Hide() end)
+	f.close:SetPoint("TOPRIGHT", f, "TOPRIGHT", -4, -4)
+	f.hint = T.Text(f, 10, T.c.dim, "LEFT")
+	f.hint:SetPoint("TOPLEFT", f, "TOPLEFT", 10, -26)
+	f.hint:SetText(L("msg.pallypower.team.hint"))
+	f.empty = T.Text(f, 11, T.c.dim, "LEFT")
+	f.empty:SetPoint("TOPLEFT", f, "TOPLEFT", 10, -50)
+	f.empty:SetWidth(300)
+	f.empty:SetText(L("msg.pallypower.team.none"))
+	f.hc = {}
+	for i = 1, M.MAXCLASS do
+		local h = f:CreateTexture(nil, "ARTWORK")
+		h:SetWidth(TC - 8)
+		h:SetHeight(TC - 8)
+		h:SetTexture("Interface\\Glues\\CharacterCreate\\UI-CharacterCreate-Classes")
+		h:Hide()
+		f.hc[i] = h
+	end
+	f.rows = {}
+	for r = 1, 8 do
+		local row = { cells = {} }
+		row.name = T.Text(f, 11, T.c.text, "LEFT", true)
+		row.name:SetWidth(100)
+		row.name:Hide()
+		for i = 1, M.MAXCLASS do
+			local c = CreateFrame("Button", nil, f)
+			c:SetWidth(TC)
+			c:SetHeight(TC)
+			T.Backdrop(c, T.c.bg, T.c.border)
+			c.icon = c:CreateTexture(nil, "ARTWORK")
+			c.icon:SetPoint("TOPLEFT", c, "TOPLEFT", 2, -2)
+			c.icon:SetPoint("BOTTOMRIGHT", c, "BOTTOMRIGHT", -2, 2)
+			c.icon:SetTexCoord(0.07, 0.93, 0.07, 0.93)
+			c.ten = T.Text(c, 10, T.c.text, "RIGHT", true)
+			c.ten:SetPoint("BOTTOMRIGHT", c, "BOTTOMRIGHT", -2, 2)
+			c:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+			c:SetScript("OnClick", function()
+				if not (this.pal and this.file) then return end
+				if arg1 == "RightButton" then M.TeamToggle10(this.pal, this.file) else M.TeamCycle(this.pal, this.file) end
+				M.TeamPaint()
+			end)
+			c:SetScript("OnEnter", function()
+				if not (this.pal and this.file) then return end
+				GameTooltip:SetOwner(this, "ANCHOR_TOP")
+				local b = M.TeamGet(this.pal, this.file)
+				GameTooltip:AddLine(this.pal .. " - " .. className(this.file), 1, 1, 1, 1)
+				if b then
+					GameTooltip:AddLine(L("msg.pallypower.bless." .. b) .. " : " .. L(M.TeamSingle(this.pal, this.file) and "msg.pallypower.team.tip.10" or "msg.pallypower.team.tip.30"), 1, 1, 1, 1)
+				else
+					GameTooltip:AddLine(L("msg.pallypower.team.tip.none"), 0.7, 0.7, 0.7, 1)
+				end
+				if this.pal ~= UnitName("player") then GameTooltip:AddLine(L("msg.pallypower.team.tip.remote"), 0.7, 0.7, 0.7, 1) end
+				GameTooltip:Show()
+			end)
+			c:SetScript("OnLeave", function() GameTooltip:Hide() end)
+			c:Hide()
+			row.cells[i] = c
+		end
+		f.rows[r] = row
+	end
+	f.bAuto = mkBtn(f, L("msg.pallypower.team.auto"), 110, 20, function() M.TeamAuto() end)
+	f.bAuto:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", 10, 8)
+	f.bRef = mkBtn(f, L("msg.pallypower.team.refresh"), 90, 20, function() M.SyncReq() M.SyncSend() M.TeamPaint() end)
+	f.bRef:SetPoint("LEFT", f.bAuto, "RIGHT", 6, 0)
+end
+
+function M.TeamPaint()
+	local f = M.twin
+	if not f or not f:IsShown() then return end
+	local pal = M.TeamPaladins()
+	local cls = {}
+	for i = 1, getn(M.CORDER) do
+		if M.classes[M.CORDER[i]] then tinsert(cls, M.CORDER[i]) end
+	end
+	local ncls = mmax(getn(cls), 4)
+	local np = mmin(getn(pal), 8)
+	local x0 = 10 + 104
+	f:SetWidth(mmax(320, x0 + ncls * (TC + TG) + 10))
+	f:SetHeight(74 + mmax(np, 1) * (TC + TG) + 36)
+	if np == 0 then f.empty:Show() else f.empty:Hide() end
+	for i = 1, M.MAXCLASS do
+		local h = f.hc[i]
+		local file = cls[i]
+		if file and np > 0 then
+			local tc = M.CCOORD[file]
+			if tc then h:SetTexCoord(tc[1], tc[2], tc[3], tc[4]) end
+			h:ClearAllPoints()
+			h:SetPoint("TOPLEFT", f, "TOPLEFT", x0 + (i - 1) * (TC + TG) + 4, -42)
+			h:Show()
+		else
+			h:Hide()
+		end
+	end
+	for r = 1, 8 do
+		local row = f.rows[r]
+		local name = pal[r]
+		if name and r <= np then
+			local y = -(42 + TC - 4 + 4 + (r - 1) * (TC + TG))
+			row.name:ClearAllPoints()
+			row.name:SetPoint("TOPLEFT", f, "TOPLEFT", 10, y - 9)
+			row.name:SetText(name == UnitName("player") and L("msg.pallypower.team.me", name) or name)
+			row.name:Show()
+			for i = 1, M.MAXCLASS do
+				local c = row.cells[i]
+				local file = cls[i]
+				if file then
+					c.pal, c.file = name, file
+					c:ClearAllPoints()
+					c:SetPoint("TOPLEFT", f, "TOPLEFT", x0 + (i - 1) * (TC + TG), y)
+					local b = M.TeamGet(name, file)
+					if b then
+						c.icon:SetTexture("Interface\\Icons\\" .. M.BICON[b])
+						c.icon:Show()
+					else
+						c.icon:Hide()
+					end
+					c.ten:SetText((b and M.TeamSingle(name, file)) and "10" or EMPTY)
+					c:Show()
+				else
+					c.pal, c.file = nil, nil
+					c:Hide()
+				end
+			end
+		else
+			row.name:Hide()
+			for i = 1, M.MAXCLASS do
+				row.cells[i].pal = nil
+				row.cells[i]:Hide()
+			end
+		end
+	end
+end
+
+function M.TeamOpen()
+	if not M.on then return end
+	M.TeamBuild()
+	M.ScanRoster()
+	if M.win and M.win:IsShown() then
+		M.twin:ClearAllPoints()
+		M.twin:SetPoint("TOPLEFT", M.win, "TOPRIGHT", 6, 0)
+	elseif not M.twin:GetLeft() then
+		M.twin:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
+	end
+	M.twin:Show()
+	M.SyncReq()
+	M.SyncSend()
+	M.TeamPaint()
+end
+
+function M.TeamToggle()
+	if M.twin and M.twin:IsShown() then M.twin:Hide() else M.TeamOpen() end
 end
 
 -- ---------------------------------------------------------------- mini-panneau (facon "Pally Buffs" de l'addon d'origine)
@@ -1867,6 +2317,7 @@ SUI.RegisterModule("pallypower", {
 		opt("autosingle", "bool", 17, false, { simple = true }),
 		opt("autosalv", "bool", 18, false),
 		opt("sync", "bool", 19, true),
+		opt("remote", "bool", 19.2, true),
 		opt("syncmsg", "bool", 19.5, true),
 		opt("autosplit", "bool", 19.7, true),
 		opt("judge", "choice", 20, "none", { choices = { "none", "light", "wisdom", "crusader" }, choiceText = judgeText, simple = true }),
@@ -1905,6 +2356,8 @@ SUI.RegisterCommand("pp", function(rest)
 		M.Demo(false)
 	elseif rest == "auto" then
 		M.AutoAssign()
+	elseif rest == "team" then
+		M.TeamToggle()
 	elseif rest == "tank" or rest == "single" then
 		M.TargetFlag(rest)
 	elseif rest == "clear" then
