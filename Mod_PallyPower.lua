@@ -320,6 +320,44 @@ function M.SpellName(b, single)
 	return base
 end
 
+-- Niveaux d'apprentissage des rangs (1.12) : le client refuse un rang trop haut sur une cible de bas niveau ("niveau trop bas").
+-- Une benediction superieure n'existe qu'au niveau 52+ : sur une cible de niveau < 60 on pose donc la benediction simple, au bon rang. [donnees du jeu]
+M.RANKLVL = { might = { 4, 12, 22, 32, 42, 52, 60 }, wisdom = { 14, 24, 34, 44, 54, 60 }, kings = { 20 }, salvation = { 26 },
+	light = { 40, 50, 60 }, sanctuary = { 30, 40, 50, 60 } }
+M.GREATERLVL = 60
+
+-- Rang a lancer sur une unite : nil = rang maximum (pas de suffixe) ; 0 = cible trop basse pour cette benediction ; n = rang n.
+function M.RankFor(b, unit)
+	local tbl = M.RANKLVL[b]
+	local ul = getglobal("UnitLevel")
+	local lv = tbl and type(ul) == "function" and ul(unit)
+	if type(lv) ~= "number" or lv <= 0 then return nil end
+	local r = 0
+	for i = 1, getn(tbl) do
+		if tbl[i] <= lv then r = i end
+	end
+	if r >= getn(tbl) then return nil end
+	return r
+end
+
+-- Vrai si la cible est trop basse pour une benediction superieure (la pose devient une benediction simple de 10 min).
+function M.LowLevel(unit)
+	local ul = getglobal("UnitLevel")
+	local lv = type(ul) == "function" and ul(unit)
+	return type(lv) == "number" and lv > 0 and lv < M.GREATERLVL
+end
+
+-- Nom complet du sort pour une unite : single = 10 min ; rang adapte au niveau ; nil = rien a lancer (cible trop basse).
+-- Renvoie aussi le booleen "simple" reellement utilise.
+function M.CastName(b, single, unit)
+	if not single and M.LowLevel(unit) then single = true end
+	local rk = M.RankFor(b, unit)
+	if rk == 0 then return nil, single end
+	local nm = M.SpellName(b, single)
+	if single and rk then nm = nm .. "(" .. (GAMEFR and "Rang " or "Rank ") .. rk .. ")" end
+	return nm, single
+end
+
 -- Construit la liste (unite, sort) de tout ce qui manque, dans l'ordre de la liste puis des benedictions.
 function M.BuildPairs()
 	M.npairs, M.qi, M.castn = 0, 0, 0
@@ -334,9 +372,13 @@ function M.BuildPairs()
 			if a then
 				for j = 1, getn(M.BLESS) do
 					local b = M.BLESS[j]
-					if a[b] and (pass == 2) == M.IsSingle(a, b) and not M.HasBuff(r.unit, M.SPELLS[b]) then
-						M.npairs = M.npairs + 1
-						M.pairs[M.npairs] = { unit = r.unit, name = M.SpellName(b, M.IsSingle(a, b)), base = M.SPELLS[b], frb = GAMEFR and M.SPELLS_FR[b] or nil, who = r.name, tries = 0 }
+					if a[b] then
+						-- cible de bas niveau : benediction simple, au rang que son niveau permet (seconde passe)
+						local nm, single = M.CastName(b, M.IsSingle(a, b), r.unit)
+						if nm and (pass == 2) == single and not M.HasBuff(r.unit, M.SPELLS[b]) then
+							M.npairs = M.npairs + 1
+							M.pairs[M.npairs] = { unit = r.unit, name = nm, base = M.SPELLS[b], frb = GAMEFR and M.SPELLS_FR[b] or nil, who = r.name, tries = 0 }
+						end
 					end
 				end
 			end
@@ -1568,6 +1610,8 @@ function M.CastGreater(b)
 	else
 		nm = M.GREATERPFX .. M.SPELLS[b]
 	end
+	if M.LowLevel(s.units[1]) then nm = M.CastName(b, true, s.units[1]) end     -- cible trop basse : benediction simple au bon rang
+	if not nm then SUI.Print(L("msg.pallypower.lowlevel", s.miss[1])) return false end
 	castOn(s.units[1], nm)
 	M.lastCast = s.miss[1]
 	if M.mini then M.MiniPaint() end
@@ -1588,8 +1632,9 @@ function M.CastNext(b)
 				local s = st[bb]
 				if s then
 					for k = 1, getn(s.units) do
-						if (s.singles[k] and true or false) == single then
-							castOn(s.units[k], M.SpellName(bb, single))
+						local nm, eff = M.CastName(bb, s.singles[k] and true or false, s.units[k])
+						if nm and eff == single then
+							castOn(s.units[k], nm)
 							M.lastCast = s.miss[k]
 							if M.mini then M.MiniPaint() end
 							return true
