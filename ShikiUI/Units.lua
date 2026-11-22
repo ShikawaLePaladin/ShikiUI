@@ -1163,6 +1163,8 @@ function U.Create(unit)
 	end
 	f.hp = T.Bar(f)
 	f.hp:SetFrameLevel(f:GetFrameLevel() + 2)
+	-- le fond opaque de la barre de vie cacherait la barre de pre-soin placee dessous : le fond est celui de la barre de pre-soin
+	if f.heal and f.hp.bg then f.hp.bg:Hide() end
 	f.pw = T.Bar(f)
 	f.pw:SetFrameLevel(f:GetFrameLevel() + 2)
 	f.nameText = mkText(f.hp, 11, T.c.text, "LEFT")
