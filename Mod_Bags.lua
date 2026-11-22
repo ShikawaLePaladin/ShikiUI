@@ -228,11 +228,11 @@ local function newItem(win, bag, slot)
 		ic:SetTexCoord(0.07, 0.93, 0.07, 0.93)
 	end
 	paintHighlight(b)
-	-- Alt + clic : marque l'objet comme utilise (categorie "Mes objets") ; tout autre clic garde le comportement du jeu
+	-- Alt + clic : menu pour deplacer l'objet de categorie ; tout autre clic garde le comportement du jeu
 	local oldClick = b:GetScript("OnClick")
 	b:SetScript("OnClick", function()
 		if IsAltKeyDown and IsAltKeyDown() and this and this.link then
-			M.ToggleMine(this)
+			M.OpenCatMenu(this)
 			return
 		end
 		if oldClick then oldClick() end
@@ -479,8 +479,10 @@ function M.CatOf(b)
 	if not link then return "free" end
 	if cfg.newitems and M.IsFresh(INF.id[link]) then return "new" end
 	local id = INF.id[link]
+	local ov = M.catT and M.catT[id]                              -- categorie choisie a la main (Alt + clic -> menu)
+	if ov and CATIDX[ov] and (ov ~= "mine" or cfg.minecat) then return ov end
 	local mt = cfg.minecat and M.mineT
-	if mt and mt[id] == true then return "mine" end              -- marque a la main (Alt + clic)
+	if mt and mt[id] == true then return "mine" end              -- ancien marquage (version precedente)
 	local c = M.Classify(INF.ltype[link] or "", INF.sub[link], b.q, INF.eq[link])
 	if c == "equip" and M.setLookup then
 		local code = SUI.Items.Code(link)
@@ -505,24 +507,94 @@ function M.NoteWorn()
 	end
 end
 
--- Alt + clic sur un objet : le met dans "Mes objets" (utilise) ou l'en retire.
-function M.ToggleMine(b)
-	local link = b and b.link
-	if not link then return end
-	local id = INF.id[link]
-	if not id or id <= 0 then return end
-	local pr = M.CacheRoot().prefs
-	if type(pr.mine) ~= "table" then pr.mine = {} end
-	M.mineT, M.wornT = pr.mine, pr.worn
-	local isMine = (M.CatOf(b) == "mine")
-	pr.mine[id] = not isMine
-	M.mineT = pr.mine
-	local _, _, name = string.find(link, "%[(.-)%]")
-	SUI.Print(L(isMine and "msg.bags.mine.off" or "msg.bags.mine.on", name or "?"))
+-- Alt + clic sur un objet : menu pour le deplacer dans la categorie de ton choix (ou revenir au classement automatique).
+M.MENUCATS = { "mine", "equip", "consum", "trade", "quest", "junk", "other" }
+
+function M.RelayoutAll()
 	for k = 1, getn(M.order) do
 		local w = M.wins[M.order[k]]
 		if w then w.dLayout, w.dAll = true, true end
 	end
+end
+
+-- Range l'objet id dans la categorie key (nil = classement automatique).
+function M.SetItemCat(id, key)
+	local pr = M.CacheRoot().prefs
+	if type(pr.cat) ~= "table" then pr.cat = {} end
+	pr.cat[id] = key
+	if type(pr.mine) == "table" then pr.mine[id] = nil end
+	M.catT, M.mineT = pr.cat, pr.mine
+	M.RelayoutAll()
+end
+
+function M.CatMenuClose()
+	if M.catMenu then M.catMenu:Hide() end
+	if M.catCatcher then M.catCatcher:Hide() end
+end
+
+function M.CatMenuPick(key)
+	if M.catId then M.SetItemCat(M.catId, key) end
+	M.CatMenuClose()
+end
+
+function M.BuildCatMenu()
+	if M.catMenu then return M.catMenu end
+	local n = getn(M.MENUCATS) + 1
+	local c = CreateFrame("Button", "ShikiUI_BagCatCatcher", UIParent)
+	c:SetAllPoints(UIParent)
+	c:SetFrameStrata("DIALOG")
+	c:EnableMouse(true)
+	c:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+	c:SetScript("OnClick", function() M.CatMenuClose() end)
+	c:Hide()
+	local f = T.Panel(UIParent, 190, 30 + n * 20)
+	f:SetFrameStrata("FULLSCREEN_DIALOG")
+	f:SetClampedToScreen(true)
+	f:EnableMouse(true)
+	f:Hide()
+	f.title = T.Text(f, 11, T.c.text, "LEFT")
+	f.title:SetPoint("TOPLEFT", f, "TOPLEFT", 8, -8)
+	f.items = {}
+	for i = 1, n do
+		local btn = T.Button(f, "", 174, 18, function(bt) M.CatMenuPick(bt.key) end)
+		btn:SetPoint("TOPLEFT", f, "TOPLEFT", 8, -26 - (i - 1) * 20)
+		f.items[i] = btn
+	end
+	M.catMenu, M.catCatcher = f, c
+	return f
+end
+
+function M.OpenCatMenu(b)
+	local link = b and b.link
+	if not link then return end
+	local id = INF.id[link]
+	if not id or id <= 0 then return end
+	local f = M.BuildCatMenu()
+	M.catId = id
+	local _, _, name = string.find(link, "%[(.-)%]")
+	f.title:SetText(L("msg.bags.menu.move", name or "?"))
+	local pr = M.CacheRoot().prefs
+	M.catT, M.mineT, M.wornT = pr.cat, pr.mine, pr.worn
+	local cur = M.catT and M.catT[id]
+	for i = 1, getn(f.items) do
+		local key = M.MENUCATS[i]
+		local btn = f.items[i]
+		btn.key = key
+		T.SetButtonText(btn, key and L("msg.bags.cat." .. key) or L("msg.bags.cat.auto"))
+		T.SetSelected(btn, cur == key)
+	end
+	local gc = getglobal("GetCursorPosition")
+	f:ClearAllPoints()
+	if type(gc) == "function" then
+		local x, y = gc()
+		local sc = UIParent:GetEffectiveScale()
+		if not sc or sc == 0 then sc = 1 end
+		f:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", (x or 0) / sc - 10, (y or 0) / sc + 10)
+	else
+		f:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
+	end
+	M.catCatcher:Show()
+	f:Show()
 end
 
 -- texte d'en-tete : "Equipement" devient "Equipement hors jeux" quand une categorie "jeux" existe
@@ -763,7 +835,7 @@ function M.PlaceCats(win, w)
 	local cg = win.cg
 	do
 		local pr = M.CacheRoot().prefs
-		M.mineT, M.wornT = pr.mine, pr.worn
+		M.mineT, M.wornT, M.catT = pr.mine, pr.worn, pr.cat
 	end
 	M.setLookup = nil
 	if cfg.setcat and SUI.Items and SUI.Items.SetCodes and SUI.Items.Code then M.setLookup = SUI.Items.SetCodes() end
