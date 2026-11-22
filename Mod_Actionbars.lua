@@ -1330,6 +1330,7 @@ local function newButton(bar, i)
 		m:SetFrameLevel(f:GetFrameLevel() + 1)
 		m:EnableMouse(false)
 		m:Hide()
+		m.suiOwn = true      -- ce balayage passe par CooldownFrame_SetTimer : le module Cooldowns ne doit pas y ajouter un 2e chiffre (les barres ont leur texte)
 		f.cdModel = m
 	end
 	-- textes dans un cadre au-dessus du balayage (sinon le modele les recouvre) ; ce cadre ne capte pas la souris
@@ -1650,6 +1651,10 @@ function M.HideBlizzard()
 		local f = getglobal("ActionButton" .. i)
 		if f then pcall(kill, f) end
 	end
+	-- le cadre MainMenuBar du jeu (invisible mais plein ecran en bas) captait les clics : les barres Session / infos-textes en dessous
+	-- ne pouvaient plus etre cliquees ni deplacees (GetMouseFocus = MainMenuBar). Ses enfants gardent leur souris.
+	local mb = getglobal("MainMenuBar")
+	if mb and mb.EnableMouse then pcall(mb.EnableMouse, mb, false) end
 end
 
 -- Micro-menu du jeu (Personnage, Sorts, Talents, Quetes, Social, Carte, Menu, Aide) : ces boutons sont des enfants de la barre d'art

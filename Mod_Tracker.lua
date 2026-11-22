@@ -1014,6 +1014,7 @@ function M.Build()
 
 	local w = T.Panel(UIParent, 440, 430)
 	w:SetFrameStrata("DIALOG")
+	w:SetClampedToScreen(true)      -- la mise en page place le bord gauche a 99 % de l'ecran : sans cela la fenetre (440 px) sort de l'ecran
 	w:EnableMouse(true)
 	w:Hide()
 	w.title = T.Text(w, 13, T.c.text, "LEFT")

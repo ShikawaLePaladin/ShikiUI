@@ -194,8 +194,6 @@ function M.Parse(s)
 		end
 	end
 	local now = GetTime()
-	M.lastPkt = now
-	M.estimated = false
 	local p = at + strlen(M.API)
 	local n = 0
 	while p <= stop and n < M.MAXREC do
@@ -218,6 +216,9 @@ function M.Parse(s)
 			p = sc + 1
 		end
 	end
+	if n == 0 and M.estimated and M.cfg.estimate then return 0 end   -- paquet vide : le serveur ne suit pas ce mob, on garde l estimation locale au lieu d afficher "rien"
+	M.lastPkt = now
+	M.estimated = false
 	M.nrec = n
 	M.Finish(now)
 	return n
@@ -1201,6 +1202,9 @@ function M.Tick()
 	if M.rosterDirty then M.ScanRoster() end
 	local combat = UnitAffectingCombat("player") and true or false
 	M.inCombat = combat
+	if not combat and UnitExists("target") and UnitAffectingCombat("target") then
+		M.Request(now)    -- cible deja en combat (comme TWThreat) alors que le joueur n'est pas marque en combat
+	end
 	if combat then
 		M.leftAt = nil
 		M.Request(now)
