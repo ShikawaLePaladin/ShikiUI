@@ -1392,40 +1392,179 @@ local function makeCell(parent, size)
 	return b
 end
 
-function M.MultiPickRefresh()
-	local f = M.pk
-	if not f or not f:IsShown() then return end
-	local n = 0
+-- ---------------------------------------------------------------- grille des sacs : categories
+-- Les objets de la grille sont classes (ressources, consommables, equipement, quete, autres), regroupes par sous-type du client
+-- (Herbes, Metal et pierre, Tissu, Potions...), un titre par groupe ; un clic sur un titre ajoute / retire tout le groupe.
+M.PKGROUPS = { "res", "consum", "equip", "quest", "other" }
+M.PKORDER = { res = 1, consum = 2, equip = 3, quest = 4, other = 5 }
+M.PKCOLS, M.PKCS, M.PKTOP, M.PKH, M.PKHEAD = 10, 24, 50, 400, 18
+M.pkFilter = "all"
+local PKTRADE = { "trade", "marchandise", "reagent", "composant", "recipe", "recette", "gem" }
+
+-- Groupe et sous-groupe d'un objet d'apres GetItemInfo (type / sous-type du client, FR ou EN). Mis en cache une fois l'objet connu.
+function M.PickGroup(id)
+	M.pkInfo = M.pkInfo or {}
+	local c = M.pkInfo[id]
+	if c then return c[1], c[2] end
+	local gi = getglobal("GetItemInfo")
+	if type(gi) ~= "function" then return "other", "" end
+	local nm, _, q, _, tyo, st, _, eq = gi(id)
+	if not nm then return "other", "" end
+	local ty = slower(tyo or "")
+	local g, sub = "other", tyo or ""
+	if ty == "quest" or sfind(ty, "^qu.-te$") then
+		g, sub = "quest", ""
+	elseif q == 0 then
+		g, sub = "other", "@junk"
+	elseif ty == "consumable" or ty == "consommable" then
+		g, sub = "consum", st or ""
+	else
+		local trade = sfind(ty, "^r.-actif$") and true or false
+		for i = 1, getn(PKTRADE) do
+			if sfind(ty, PKTRADE[i], 1, true) then trade = true end
+		end
+		if trade then
+			g = "res"
+			if sfind(ty, "trade", 1, true) or sfind(ty, "marchandise", 1, true) then sub = st or "" end
+		elseif (eq and eq ~= "" and eq ~= "INVTYPE_BAG" and eq ~= "INVTYPE_AMMO" and eq ~= "INVTYPE_QUIVER")
+			or ty == "weapon" or ty == "armor" or ty == "arme" or ty == "armure" then
+			g = "equip"
+		end
+	end
+	M.pkInfo[id] = { g, sub }
+	return g, sub
+end
+
+function M.PickCmp(a, b)
+	if a.gi ~= b.gi then return a.gi < b.gi end
+	if a.sub ~= b.sub then return a.sub < b.sub end
+	if a.name ~= b.name then return a.name < b.name end
+	if a.bag ~= b.bag then return a.bag < b.bag end
+	return a.slot < b.slot
+end
+
+-- Objets des sacs 0 a 4 passant le filtre, tries par groupe / sous-groupe / nom.
+function M.PickList()
+	local out, n = {}, 0
 	for bag = 0, 4 do
 		local size = GetContainerNumSlots(bag) or 0
 		for s = 1, size do
 			local id, name, tex, count = M.ItemAt(bag, s)
-			if id and n < getn(f.cells) then
-				n = n + 1
-				local b = f.cells[n]
-				b.bag, b.slot = bag, s
-				b.icon:SetTexture(tex)
-				setText(b.cnt, count > 1 and tostring(count) or "")
-				b.tipText = name
-				b.tipBag, b.tipSlot = bag, s
-				T.SetSelected(b, M.MultiFind(bag, s) ~= nil)
-				b:Show()
+			if id then
+				local g, sub = M.PickGroup(id)
+				if M.pkFilter == "all" or M.pkFilter == g then
+					n = n + 1
+					out[n] = { bag = bag, slot = s, id = id, name = name, tex = tex, count = count, g = g, sub = sub, gi = M.PKORDER[g] or 9 }
+				end
 			end
 		end
 	end
-	for i = n + 1, getn(f.cells) do f.cells[i]:Hide() end
+	table.sort(out, M.PickCmp)
+	return out, n
+end
+
+-- Clic sur un titre : tout le groupe est ajoute, ou retire s'il y est deja en entier.
+function M.PickGroupToggle(list, i1, i2)
+	if M.mrun then SUI.Print(L("msg.mail.m.busy")) return end
+	local all = true
+	for k = i1, i2 do
+		if not M.MultiFind(list[k].bag, list[k].slot) then all = false end
+	end
+	for k = i1, i2 do
+		local e = list[k]
+		local ix = M.MultiFind(e.bag, e.slot)
+		if all then
+			if ix then M.MultiRemove(ix) end
+		elseif not ix then
+			M.MultiAdd(e.bag, e.slot)
+		end
+	end
+end
+
+function M.PickHeadText(g, sub, n)
+	local t = L("msg.mail.pk." .. g)
+	if sub == "@junk" then t = t .. " : " .. L("msg.mail.pk.junk")
+	elseif sub ~= "" then t = t .. " : " .. sub end
+	return t .. " (" .. n .. ")"
+end
+
+function M.MultiPickRefresh()
+	local f = M.pk
+	if not f or not f:IsShown() then return end
+	for i = 1, getn(M.PKGROUPS) + 1 do
+		local fb = f.filters[i]
+		if fb then T.SetSelected(fb, fb.fkey == M.pkFilter) end
+	end
+	local list, total = M.PickList()
+	local COLS, CS, TOP, MAXH = M.PKCOLS, M.PKCS, M.PKTOP, M.PKH
+	local used, col, hn, cn, over = 0, 0, 0, 0, 0
+	local i = 1
+	local stop = false
+	while i <= total and not stop do
+		local e = list[i]
+		local j = i
+		while j < total and list[j + 1].g == e.g and list[j + 1].sub == e.sub do j = j + 1 end
+		if col > 0 then used = used + CS + 2 col = 0 end
+		local h = f.heads[hn + 1]
+		if not h or used + M.PKHEAD + CS + 2 > MAXH then
+			over = total - i + 1
+			break
+		end
+		hn = hn + 1
+		h.list, h.i1, h.i2 = list, i, j
+		setText(h.label, M.PickHeadText(e.g, e.sub, j - i + 1))
+		h:ClearAllPoints()
+		h:SetPoint("TOPLEFT", f, "TOPLEFT", 6, -(TOP + used))
+		local allsel = true
+		for k = i, j do
+			if not M.MultiFind(list[k].bag, list[k].slot) then allsel = false end
+		end
+		T.SetSelected(h, allsel)
+		h:Show()
+		used = used + M.PKHEAD
+		local k = i
+		while k <= j do
+			if col == 0 and used + CS + 2 > MAXH then
+				over = total - k + 1
+				stop = true
+				break
+			end
+			cn = cn + 1
+			local b = f.cells[cn]
+			if not b then over = total - k + 1 stop = true cn = cn - 1 break end
+			local c = list[k]
+			b.bag, b.slot = c.bag, c.slot
+			b.icon:SetTexture(c.tex)
+			setText(b.cnt, c.count > 1 and tostring(c.count) or "")
+			b.tipText = c.name
+			b.tipBag, b.tipSlot = c.bag, c.slot
+			T.SetSelected(b, M.MultiFind(c.bag, c.slot) ~= nil)
+			b:ClearAllPoints()
+			b:SetPoint("TOPLEFT", f, "TOPLEFT", 6 + col * (CS + 2), -(TOP + used))
+			b:Show()
+			col = col + 1
+			if col == COLS then used = used + CS + 2 col = 0 end
+			k = k + 1
+		end
+		i = j + 1
+	end
+	for k = cn + 1, getn(f.cells) do f.cells[k]:Hide() end
+	for k = hn + 1, getn(f.heads) do f.heads[k]:Hide() end
+	setText(f.more, over > 0 and L("msg.mail.pk.more", over) or "")
 end
 
 function M.BuildPicker()
 	if M.pk then return M.pk end
-	local COLS, ROWS, CS = 10, 14, 24
-	local f = T.Panel(M.mp, COLS * (CS + 2) + 14, ROWS * (CS + 2) + 34)
+	local COLS, CS, TOP, MAXH = M.PKCOLS, M.PKCS, M.PKTOP, M.PKH
+	local f = T.Panel(M.mp, COLS * (CS + 2) + 14, TOP + MAXH + 22)
 	f:SetFrameStrata("HIGH")
 	f:EnableMouse(true)
 	f:SetPoint("TOPLEFT", M.mp, "TOPRIGHT", 4, 0)
 	f:Hide()
 	f.cells = {}
 	f.bags = {}
+	f.filters = {}
+	f.heads = {}
 	for i = 0, 4 do
 		local b = T.Button(f, "B" .. i, 36, 18, function(btn)
 			M.MultiBag(btn.bagIdx)
@@ -1435,9 +1574,32 @@ function M.BuildPicker()
 		b:SetPoint("TOPLEFT", f, "TOPLEFT", 6 + i * 38, -6)
 		f.bags[i + 1] = b
 	end
-	for i = 1, COLS * ROWS do
-		local r = math.floor((i - 1) / COLS)
-		local c = i - 1 - r * COLS
+	-- filtres par categorie
+	local keys = { "all", "res", "consum", "equip", "quest", "other" }
+	for i = 1, getn(keys) do
+		local b = T.Button(f, L("msg.mail.pk.f." .. keys[i]), 42, 18, function(btn)
+			M.pkFilter = btn.fkey
+			M.MultiPickRefresh()
+		end)
+		b.fkey = keys[i]
+		b:SetPoint("TOPLEFT", f, "TOPLEFT", 6 + (i - 1) * 43, -28)
+		f.filters[i] = b
+	end
+	-- titres de groupe (cliquables)
+	for i = 1, 16 do
+		local h = T.Button(f, "", COLS * (CS + 2) - 2, 16, function(btn)
+			if btn.list then
+				M.PickGroupToggle(btn.list, btn.i1, btn.i2)
+				M.MultiPickRefresh()
+			end
+		end)
+		h.label:ClearAllPoints()
+		h.label:SetPoint("LEFT", h, "LEFT", 4, 0)
+		h.label:SetJustifyH("LEFT")
+		h:Hide()
+		f.heads[i] = h
+	end
+	for i = 1, COLS * math.floor(MAXH / (CS + 2)) do
 		local b = makeCell(f, CS)
 		b.onclick = function(btn)
 			if btn.bag then
@@ -1445,10 +1607,14 @@ function M.BuildPicker()
 				M.MultiPickRefresh()
 			end
 		end
-		b:SetPoint("TOPLEFT", f, "TOPLEFT", 6 + c * (CS + 2), -28 - r * (CS + 2))
 		b:Hide()
 		f.cells[i] = b
 	end
+	f.hint = T.Text(f, 9, T.c.dim, "LEFT")
+	f.hint:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", 6, 6)
+	setText(f.hint, L("msg.mail.pk.hint"))
+	f.more = T.Text(f, 9, T.c.dim, "RIGHT")
+	f.more:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -6, 6)
 	M.pk = f
 	return f
 end
