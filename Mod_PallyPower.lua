@@ -89,12 +89,30 @@ M.ROWS = 40
 M.MAXCLASS = 10
 
 -- ---------------------------------------------------------------- attributions
-function M.LoadAssign()
-	local db = C.GetGlobal("pallypower.assign")
-	if type(db) ~= "table" then
-		db = {}
-		C.SetGlobal("pallypower.assign", db)
+local function deepCopy(t)
+	local o = {}
+	for k, v in pairs(t) do
+		if type(v) == "table" then o[k] = deepCopy(v) else o[k] = v end
 	end
+	return o
+end
+
+-- Une grille PAR PERSONNAGE (ShikiUIDB.global.pallypower.assignc[Nom-Royaume]) ; la 1re fois, l'ancienne grille commune est copiee.
+function M.LoadAssign()
+	local all = C.GetGlobal("pallypower.assignc")
+	if type(all) ~= "table" then
+		all = {}
+		C.SetGlobal("pallypower.assignc", all)
+	end
+	M.allAssign = all
+	local key = C.CharKey() or "?"
+	local db = all[key]
+	if type(db) ~= "table" then
+		local old = C.GetGlobal("pallypower.assign")
+		db = type(old) == "table" and deepCopy(old) or {}
+		all[key] = db
+	end
+	M.assignKey = key
 	M.assign = db
 end
 
@@ -128,7 +146,10 @@ end
 
 local function saveAssign()
 	if M.demo then return end      -- demonstration : jamais ecrite dans la base
-	C.SetGlobal("pallypower.assign", M.assign)
+	if M.allAssign then
+		M.allAssign[M.assignKey or "?"] = M.assign
+		C.SetGlobal("pallypower.assignc", M.allAssign)
+	end
 	if M.mini and M.MiniPaint then M.MiniPaint() end
 	if M.SyncSoon then M.SyncSoon() end
 end
@@ -357,10 +378,61 @@ function M.CastName(b, single, unit)
 	return nm, single
 end
 
+-- Joueur atteignable pour une benediction : present, connecte, visible, a 30 yd (UnitXP / SuperWoW, sinon bande de 28 yd) et en vue (UnitXP).
+function M.Reachable(unit)
+	if unit == "player" then return true end
+	if not UnitExists(unit) then return false end
+	local ic = getglobal("UnitIsConnected")
+	if type(ic) == "function" and not ic(unit) then return false end
+	local vis = getglobal("UnitIsVisible")
+	if type(vis) == "function" and not vis(unit) then return false end
+	local api = SUI.Api
+	if api and type(api.Distance) == "function" then
+		local d, src = api.Distance(unit)
+		if src == "band" and d == nil then return false end
+		if type(d) == "number" and d > 30 then return false end
+	end
+	if api and type(api.InSight) == "function" then
+		if api.InSight(unit) == false then return false end
+	end
+	return true
+end
+
+-- Symboles des rois en sac (Benediction superieure) : nil si les sacs ne sont pas lisibles.
+M.SYMBOL_ID = 21177
+function M.SymbolCount()
+	local gn, gl, gi = getglobal("GetContainerNumSlots"), getglobal("GetContainerItemLink"), getglobal("GetContainerItemInfo")
+	if type(gn) ~= "function" or type(gl) ~= "function" then return nil end
+	local n = 0
+	for bag = 0, 4 do
+		for slot = 1, (gn(bag) or 0) do
+			local link = gl(bag, slot)
+			if link and sfind(link, "item:" .. M.SYMBOL_ID .. ":", 1, true) then
+				local cnt = 1
+				if type(gi) == "function" then
+					local _, c = gi(bag, slot)
+					if type(c) == "number" and c > 0 then cnt = c end
+				end
+				n = n + cnt
+			end
+		end
+	end
+	return n
+end
+
+-- Vrai si on sait qu'il n'y a plus aucun Symbole : les benedictions deviennent des benedictions simples (10 min).
+function M.NoSymbols()
+	local n = M.SymbolCount()
+	return n ~= nil and n <= 0
+end
+
 -- Construit la liste (unite, sort) de tout ce qui manque, dans l'ordre de la liste puis des benedictions.
 function M.BuildPairs()
 	M.npairs, M.qi, M.castn = 0, 0, 0
+	M.skipped = 0
 	M.buffNames = {}   -- les noms de buffs sont relus a chaque tour du cycle
+	M.noSym = M.NoSymbols()
+	if M.noSym then SUI.Print(L("msg.pallypower.nosymbol")) end
 	M.ScanKnown()      -- une benediction absente du livre de sorts (talent non appris) est ignoree au lieu d'echouer en silence
 	-- deux passes : d'abord les benedictions de classe (30 min), ensuite les benedictions simples (10 min).
 	-- Une benediction de classe touche TOUTE la classe : posee apres, elle ecraserait la benediction simple d'un autre joueur de la classe
@@ -374,7 +446,7 @@ function M.BuildPairs()
 					local b = M.BLESS[j]
 					if a[b] then
 						-- cible de bas niveau : benediction simple, au rang que son niveau permet (seconde passe)
-						local nm, single = M.CastName(b, M.IsSingle(a, b), r.unit)
+						local nm, single = M.CastName(b, M.IsSingle(a, b) or M.noSym, r.unit)
 						if nm and M.Knows(b) and (pass == 2) == single and not M.HasBuff(r.unit, M.SPELLS[b]) then
 							M.npairs = M.npairs + 1
 							M.pairs[M.npairs] = { unit = r.unit, name = nm, base = M.SPELLS[b], frb = GAMEFR and M.SPELLS_FR[b] or nil, who = r.name, tries = 0 }
@@ -403,11 +475,16 @@ end
 function M.CastStep()
 	if not M.on or not M.task then return end
 	if UnitIsDead("player") then return end      -- mort : le cycle attend (file gardee)
+	-- une incantation en cours (soin, ...) serait interrompue par la benediction : le tour est repousse
+	if M.busyUntil and GetTime() < M.busyUntil then return end
 	-- verification du dernier lancement (buffs relus a neuf) : le serveur ou le temps de recharge global a pu le refuser
 	local lp = M.lastp
 	if lp then
 		M.buffNames[lp.unit] = nil
 		if UnitExists(lp.unit) and not UnitIsDead(lp.unit) and not M.HasBuff(lp.unit, lp.base) and lp.tries < 2 then
+			lp.checks = (lp.checks or 0) + 1
+			if lp.checks < 2 then return end             -- laisser le temps au serveur (latence) : pas de 2e Symbole gaspille
+			lp.checks = 0
 			lp.tries = lp.tries + 1
 			castOn(lp.unit, lp.name)
 			return
@@ -421,7 +498,11 @@ function M.CastStep()
 		if p and UnitExists(p.unit) and not UnitIsDead(p.unit) and (not p.who or UnitName(p.unit) == p.who) then
 			-- buffs relus a neuf : une benediction superieure posee plus haut couvre peut-etre deja toute la classe, ou un autre paladin est passe
 			M.buffNames[p.unit] = nil
-			if not M.HasBuff(p.unit, p.base) then
+			if M.HasBuff(p.unit, p.base) then
+				-- deja couvert
+			elseif not M.Reachable(p.unit) then
+				M.skipped = (M.skipped or 0) + 1      -- hors de portee / de vue : ignore pour ce cycle
+			else
 				castOn(p.unit, p.name)
 				p.tries = 1
 				M.lastp = p
@@ -431,9 +512,11 @@ function M.CastStep()
 			end
 		end
 	end
+	local sk = M.skipped or 0
 	M.Stop()
 	M.PaintStatus()
 	if M.castn > 0 then SUI.Print(L("msg.pallypower.done", M.castn)) end
+	if sk > 0 then SUI.Print(L("msg.pallypower.range", sk)) end
 end
 
 function M.CastAll()
@@ -2008,23 +2091,28 @@ M.miniState = {}
 M.MINIGAP = 4
 
 function M.HasTex(unit, b)
-	if b == "sanctuary" then
-		-- icone de la benediction simple non relevee : lecture par le nom du buff (infobulle cachee)
-		M.buffNames[unit] = nil
-		return M.HasBuff(unit, M.SPELLS[b])
-	end
 	local pats = M.TEXPAT[b]
 	local ub = getglobal("UnitBuff")
-	if type(ub) ~= "function" or not pats then return false end
-	for i = 1, 32 do
-		local tex = ub(unit, i)
-		if not tex then break end
-		tex = slower(tex)
-		for j = 1, getn(pats) do
-			if sfind(tex, pats[j], 1, true) then return true end
+	if type(ub) ~= "function" then return false end
+	if pats then
+		for i = 1, 32 do
+			local tex = ub(unit, i)
+			if not tex then break end
+			tex = slower(tex)
+			for j = 1, getn(pats) do
+				if sfind(tex, pats[j], 1, true) then return true end
+			end
 		end
+		return false
 	end
-	return false
+	-- pas de motif d'icone (Sanctuaire...) : lecture du NOM du buff (comme le cycle), au plus toutes les 6 s par joueur
+	local now = GetTime()
+	M.nameAt = M.nameAt or {}
+	if (M.nameAt[unit] or 0) + 6 < now then
+		M.nameAt[unit] = now
+		M.buffNames[unit] = nil
+	end
+	return M.HasBuff(unit, M.SPELLS[b])
 end
 
 -- Etat par benediction : n = joueurs attribues, miss = noms qui la manquent, units = unites correspondantes.
@@ -2069,6 +2157,11 @@ function M.CastGreater(b)
 	local st = M.MiniScan()
 	local s = st[b]
 	if not s or getn(s.units) == 0 then SUI.Print(L("msg.pallypower.allset")) return false end
+	local ri
+	for k = 1, getn(s.units) do
+		if M.Reachable(s.units[k]) then ri = k break end
+	end
+	if not ri then SUI.Print(L("msg.pallypower.norange")) return false end
 	-- nom SUPERIEUR force (independant de l'option pallypower.greater) : EN ou FR selon le client
 	local nm
 	if GAMEFR and M.SPELLS_FR[b] then
@@ -2076,10 +2169,10 @@ function M.CastGreater(b)
 	else
 		nm = M.GREATERPFX .. M.SPELLS[b]
 	end
-	if M.LowLevel(s.units[1]) then nm = M.CastName(b, true, s.units[1]) end     -- cible trop basse : benediction simple au bon rang
-	if not nm then SUI.Print(L("msg.pallypower.lowlevel", s.miss[1])) return false end
-	castOn(s.units[1], nm)
-	M.lastCast = s.miss[1]
+	if M.LowLevel(s.units[ri]) or M.NoSymbols() then nm = M.CastName(b, true, s.units[ri]) end     -- cible trop basse ou plus de Symbole : benediction simple au bon rang
+	if not nm then SUI.Print(L("msg.pallypower.lowlevel", s.miss[ri])) return false end
+	castOn(s.units[ri], nm)
+	M.lastCast = s.miss[ri]
 	if M.mini then M.MiniPaint() end
 	return true
 end
@@ -2098,8 +2191,8 @@ function M.CastNext(b)
 				local s = st[bb]
 				if s then
 					for k = 1, getn(s.units) do
-						local nm, eff = M.CastName(bb, s.singles[k] and true or false, s.units[k])
-						if nm and eff == single then
+						local nm, eff = M.CastName(bb, (s.singles[k] or M.NoSymbols()) and true or false, s.units[k])
+						if nm and eff == single and M.Reachable(s.units[k]) then
 							castOn(s.units[k], nm)
 							M.lastCast = s.miss[k]
 							if M.mini then M.MiniPaint() end
@@ -2268,8 +2361,20 @@ function M.EnsureTip()
 	end
 end
 
+-- Mes incantations : le cycle attend la fin d'un soin en cours au lieu de l'interrompre.
+function M.OnCastEv(ev, a1)
+	if ev == "SPELLCAST_START" or ev == "SPELLCAST_CHANNEL_START" then
+		local ms = tonumber(a1)
+		M.busyUntil = (ms and ms > 0) and (GetTime() + ms / 1000) or nil
+	else
+		M.busyUntil = nil
+	end
+end
+M.CAST_EV = { "SPELLCAST_START", "SPELLCAST_STOP", "SPELLCAST_FAILED", "SPELLCAST_INTERRUPTED", "SPELLCAST_CHANNEL_START", "SPELLCAST_CHANNEL_STOP" }
+
 function M.Enable()
 	M.on = true
+	for i = 1, getn(M.CAST_EV) do SUI.On(M.CAST_EV[i], M.OnCastEv) end
 	M.LoadAssign()
 	SUI.WhenSafe(M.EnsureTip)
 	SUI.On("RAID_ROSTER_UPDATE", M.OnRoster)
@@ -2297,6 +2402,8 @@ function M.Disable()
 	if M.demo then M.Demo(false) end
 	if M.wtask then SUI.Cancel(M.wtask) M.wtask = nil end
 	M.on = false
+	for i = 1, getn(M.CAST_EV) do SUI.Off(M.CAST_EV[i], M.OnCastEv) end
+	M.busyUntil = nil
 	M.Stop()
 	if M.miniTask then SUI.Cancel(M.miniTask) M.miniTask = nil end
 	if M.mini then M.mini:Hide() end
