@@ -84,6 +84,7 @@ function M.ReadConfig()
 	cfg.hidebankslots = C.Get("bags.hidebankslots")
 	cfg.newitems = C.Get("bags.newitems")
 	cfg.setcat = C.Get("bags.setcat")
+	cfg.minecat = C.Get("bags.minecat")
 end
 
 -- ---------------------------------------------------------------- informations d'objets (cache par lien)
@@ -227,6 +228,15 @@ local function newItem(win, bag, slot)
 		ic:SetTexCoord(0.07, 0.93, 0.07, 0.93)
 	end
 	paintHighlight(b)
+	-- Alt + clic : marque l'objet comme utilise (categorie "Mes objets") ; tout autre clic garde le comportement du jeu
+	local oldClick = b:GetScript("OnClick")
+	b:SetScript("OnClick", function()
+		if IsAltKeyDown and IsAltKeyDown() and this and this.link then
+			M.ToggleMine(this)
+			return
+		end
+		if oldClick then oldClick() end
+	end)
 	h.btn[slot] = b
 	return b
 end
@@ -389,8 +399,8 @@ function M.UpdateValue(win)
 end
 
 -- ---------------------------------------------------------------- categories
-local CATKEYS = { "new", "set", "equip", "consum", "quest", "trade", "junk", "other", "free" }
-local CATIDX = { new = 1, set = 2, equip = 3, consum = 4, quest = 5, trade = 6, junk = 7, other = 8, free = 9 }
+local CATKEYS = { "new", "set", "mine", "equip", "consum", "quest", "trade", "junk", "other", "free" }
+local CATIDX = { new = 1, set = 2, mine = 3, equip = 4, consum = 5, quest = 6, trade = 7, junk = 8, other = 9, free = 10 }
 local TRADE = { "trade", "marchandise", "reagent", "composant", "recipe", "recette", "gem" }
 local GEARNO = { INVTYPE_BAG = true, INVTYPE_AMMO = true, INVTYPE_QUIVER = true }
 local HDRH, GAP = 16, 4
@@ -468,12 +478,51 @@ function M.CatOf(b)
 	local link = b.link
 	if not link then return "free" end
 	if cfg.newitems and M.IsFresh(INF.id[link]) then return "new" end
+	local id = INF.id[link]
+	local mt = cfg.minecat and M.mineT
+	if mt and mt[id] == true then return "mine" end              -- marque a la main (Alt + clic)
 	local c = M.Classify(INF.ltype[link] or "", INF.sub[link], b.q, INF.eq[link])
 	if c == "equip" and M.setLookup then
 		local code = SUI.Items.Code(link)
 		if code and M.setLookup[code] then return "set" end
 	end
+	-- equipement deja porte par ce compte (sauf si tu l'as retire a la main) : utilise, donc pas "a vendre"
+	if c == "equip" and cfg.minecat and M.wornT and M.wornT[id] and not (mt and mt[id] == false) then return "mine" end
 	return c
+end
+
+-- Objets "utilises" : marque a la main (prefs.mine[id] = true / false) ou deja equipes (prefs.worn[id], memorise au fil du jeu).
+function M.NoteWorn()
+	local pr = M.CacheRoot().prefs
+	if type(pr.worn) ~= "table" then pr.worn = {} end
+	for sl = 1, 19 do
+		local link = GetInventoryItemLink("player", sl)
+		if link then
+			local _, _, id = string.find(link, "item:(%d+)")
+			id = tonumber(id)
+			if id and id > 0 then pr.worn[id] = true end
+		end
+	end
+end
+
+-- Alt + clic sur un objet : le met dans "Mes objets" (utilise) ou l'en retire.
+function M.ToggleMine(b)
+	local link = b and b.link
+	if not link then return end
+	local id = INF.id[link]
+	if not id or id <= 0 then return end
+	local pr = M.CacheRoot().prefs
+	if type(pr.mine) ~= "table" then pr.mine = {} end
+	M.mineT, M.wornT = pr.mine, pr.worn
+	local isMine = (M.CatOf(b) == "mine")
+	pr.mine[id] = not isMine
+	M.mineT = pr.mine
+	local _, _, name = string.find(link, "%[(.-)%]")
+	SUI.Print(L(isMine and "msg.bags.mine.off" or "msg.bags.mine.on", name or "?"))
+	for k = 1, getn(M.order) do
+		local w = M.wins[M.order[k]]
+		if w then w.dLayout, w.dAll = true, true end
+	end
 end
 
 -- texte d'en-tete : "Equipement" devient "Equipement hors jeux" quand une categorie "jeux" existe
@@ -712,6 +761,10 @@ end
 function M.PlaceCats(win, w)
 	local sz, sp, cols = cfg.size, cfg.spacing, cfg.columns
 	local cg = win.cg
+	do
+		local pr = M.CacheRoot().prefs
+		M.mineT, M.wornT = pr.mine, pr.worn
+	end
 	M.setLookup = nil
 	if cfg.setcat and SUI.Items and SUI.Items.SetCodes and SUI.Items.Code then M.setLookup = SUI.Items.SetCodes() end
 	for k = 1, getn(CATKEYS) do
@@ -1999,9 +2052,13 @@ function M.Tick()
 end
 
 local EVENTS = { "BAG_UPDATE", "BAG_UPDATE_COOLDOWN", "ITEM_LOCK_CHANGED", "PLAYERBANKSLOTS_CHANGED", "PLAYERBANKBAGSLOTS_CHANGED",
-	"BANKFRAME_OPENED", "BANKFRAME_CLOSED", "PLAYER_MONEY", "PLAYER_REGEN_ENABLED" }
+	"BANKFRAME_OPENED", "BANKFRAME_CLOSED", "PLAYER_MONEY", "PLAYER_REGEN_ENABLED", "UNIT_INVENTORY_CHANGED" }
 
 function M.OnEvent(ev, a1)
+	if ev == "UNIT_INVENTORY_CHANGED" then
+		if a1 == "player" then M.NoteWorn() end
+		return
+	end
 	local bag = M.wins.bag
 	local bank = M.wins.bank
 	if M.bankOpen and (ev == "PLAYERBANKSLOTS_CHANGED" or ev == "PLAYERBANKBAGSLOTS_CHANGED"
@@ -2128,6 +2185,7 @@ function M.Enable()
 	M.task = SUI.Every(TICK, M.Tick, "bags.tick", true)
 	M.bankOpen, M.bankDirty, M.dep = false, false, nil
 	M.snapTask = SUI.After(5, function()
+		M.NoteWorn()
 		M.Snapshot("bags")
 		if type(M.CacheRoot().prefs.known) ~= "table" then M.MarkSeen("bag") end     -- premiere fois : tout ce que tu as deja n'est pas du butin
 	end, "bags.snap0")
@@ -2214,6 +2272,7 @@ local OPTS = {
 	{ key = "bags.hidebankslots", type = "bool", default = false, simple = true },
 	{ key = "bags.newitems", type = "bool", default = true, simple = true },
 	{ key = "bags.setcat", type = "bool", default = true, simple = true },
+	{ key = "bags.minecat", type = "bool", default = true, simple = true },
 }
 local options = {}
 for i = 1, getn(OPTS) do
