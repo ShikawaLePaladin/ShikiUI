@@ -2361,10 +2361,44 @@ function M.EnsureTip()
 	end
 end
 
+-- /sui pp debug : pour chaque benediction attribuee, ce que le module voit (portee, icone, nom du buff, textures).
+function M.Debug()
+	if M.nrost == 0 then M.ScanRoster() end
+	M.buffNames = {}
+	local n = 0
+	local ub = getglobal("UnitBuff")
+	for i = 1, M.nrost do
+		local r = M.roster[i]
+		local a = M.assign and M.assign[r.name]
+		if a then
+			local d, src = nil, nil
+			if SUI.Api and SUI.Api.Distance then d, src = SUI.Api.Distance(r.unit) end
+			local texs = EMPTY
+			if type(ub) == "function" then
+				for k = 1, 32 do
+					local t = ub(r.unit, k)
+					if not t then break end
+					texs = texs .. sgsub(t, "^.*\\", EMPTY) .. " "
+				end
+			end
+			for j = 1, getn(M.BLESS) do
+				local b = M.BLESS[j]
+				if a[b] then
+					n = n + 1
+					SUI.Print("PP " .. r.name .. " (" .. r.unit .. ") " .. b .. " : portee=" .. tostring(M.Reachable(r.unit)) .. " d=" .. tostring(d) .. "/" .. tostring(src) .. " tex=" .. tostring(M.HasTex(r.unit, b)) .. " nom=" .. tostring(M.HasBuff(r.unit, M.SPELLS[b])) .. " sort=" .. tostring((M.CastName(b, M.IsSingle(a, b), r.unit))))
+				end
+			end
+			SUI.Print("PP buffs de " .. r.name .. " : " .. texs)
+		end
+	end
+	SUI.Print("PP symboles=" .. tostring(M.SymbolCount()) .. " connus=" .. tostring(M.known and "oui" or "non") .. " occupe=" .. tostring(M.busyUntil ~= nil) .. " lignes=" .. n)
+end
+
 -- Mes incantations : le cycle attend la fin d'un soin en cours au lieu de l'interrompre.
-function M.OnCastEv(ev, a1)
+function M.OnCastEv(ev, a1, a2)
 	if ev == "SPELLCAST_START" or ev == "SPELLCAST_CHANNEL_START" then
-		local ms = tonumber(a1)
+		-- 1.12 : SPELLCAST_START (nom, duree ms) ; SPELLCAST_CHANNEL_START (duree ms, nom)
+		local ms = tonumber(ev == "SPELLCAST_START" and a2 or a1)
 		M.busyUntil = (ms and ms > 0) and (GetTime() + ms / 1000) or nil
 	else
 		M.busyUntil = nil
@@ -2473,6 +2507,8 @@ SUI.RegisterCommand("pp", function(rest)
 		for i = 1, getn(pl) do SUI.Print(pl[i]) end
 	elseif rest == "report" then
 		M.Report()
+	elseif rest == "debug" then
+		M.Debug()
 	elseif rest == "whisper" then
 		M.WhisperAll()
 	elseif rest == "demo" then
