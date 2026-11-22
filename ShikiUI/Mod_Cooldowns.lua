@@ -40,7 +40,9 @@ local function hookedSetTimer(cf, start, dur, enable)
 	if type(start) == "number" and start > 0 and type(dur) == "number" and dur > 0 then
 		M.watched[cf] = { start = start, dur = dur }
 	else
-		M.watched[cf] = nil          -- recharge finie / annulee
+		M.watched[cf] = nil          -- recharge finie / annulee / remise a zero par le jeu (ex. Holy Shock par Crusader Strike)
+		local t = M.texts[cf]
+		if t then t:SetText("") end  -- le chiffre restait affiche : plus aucun tour ne repasse sur un cadre qui n'est plus suivi
 	end
 end
 
