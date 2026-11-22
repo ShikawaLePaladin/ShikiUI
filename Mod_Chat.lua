@@ -153,13 +153,27 @@ function M.ScanRoster()
 			if name and cls then M.Learn(name, localized(cls)) end
 		end
 	end
-	if GetNumGuildMembers and not SUI.InCombat() then
+	M.guildPending = false
+	if GetNumGuildMembers and SUI.InCombat() then
+		M.guildPending = true                  -- relu des la fin du combat (la liste de guilde n'est pas lue en combat)
+	elseif GetNumGuildMembers then
 		for i = 1, GetNumGuildMembers() do
 			local name, _, _, _, cls = GetGuildRosterInfo(i)
 			if name and cls then M.Learn(name, localized(cls)) end
 		end
 	end
 	M.LearnUnit("player")
+end
+
+-- Le client ne remplit la liste de guilde que s'il la demande : sans cela les membres connectes apres l'ouverture du jeu n'ont pas de couleur.
+-- Au plus une demande toutes les 30 s ; GUILD_ROSTER_UPDATE relance ensuite la lecture.
+function M.RequestGuild()
+	local now = GetTime()
+	if M.guildAsked and now - M.guildAsked < 30 then return end
+	M.guildAsked = now
+	M.unknownSeen = false
+	local ig, gr = getglobal("IsInGuild"), getglobal("GuildRoster")
+	if type(ig) == "function" and ig() and type(gr) == "function" then gr() end
 end
 
 function M.OnWho()
@@ -198,7 +212,10 @@ local function colorName(whole, data, shown)
 		if dash and dash > 1 then tok = M.class[strsub(name, 1, dash - 1)] end
 	end
 	local h = tok and classHex(tok)
-	if not h then return whole end
+	if not h then
+		M.unknownSeen = true                   -- joueur inconnu : la liste de guilde sera redemandee (limitee) pour la prochaine fois
+		return whole
+	end
 	local open, inner, close = "", shown, ""
 	if n >= 2 and strsub(shown, 1, 1) == "[" and strsub(shown, n, n) == "]" then
 		open, inner, close = "[", strsub(shown, 2, n - 1), "]"
@@ -1334,7 +1351,8 @@ end
 
 -- ---------------------------------------------------------------- minuterie partagee
 function M.Tick()
-	if M.rosterDirty then M.ScanRoster() end
+	if M.rosterDirty or (M.guildPending and not SUI.InCombat()) then M.ScanRoster() end
+	if M.unknownSeen or not M.guildAsked then M.RequestGuild() end
 	local sel = M.TrueSel(nil)
 	if sel ~= M.selected then
 		M.selected = sel

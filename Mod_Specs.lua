@@ -33,6 +33,8 @@ M.MAXPRESETS = 12
 M.cur = nil                 -- dernier balayage : { n, id, total, pts = {}, names = {} }
 
 -- ---------------------------------------------------------------- petits outils
+local function announceBars() return C.Get("specs.announce") end
+
 local function say(key, a, b, c)
 	if key then SUI.Print(L(key, a, b, c)) end
 end
@@ -676,11 +678,52 @@ function M.Check(force)
 						local ok, key, a, b = M.Apply(nm, "auto")
 						if announce and key then say(key, a or nm, b) end
 					end
+					local pr = nm and M.GetPreset(nm)
+					if not (pr and type(pr.bars) == "table" and C.Get("specs.bars")) then M.RestoreAuto(s.id) end
 				end
 			end
 		end
 	end
 	M.Refresh()
+end
+
+-- ---------------------------------------------------------------- barres par spe (automatique)
+-- specs.autobars : les barres d'action de la spe en cours sont gardees en continu (store.autobars[spe]) ; au changement de spe (Goblin
+-- Brainwashing Device, PNJ, talents) celles de la nouvelle spe sont remises, sauf si son jeu lie contient deja ses propres barres.
+-- Jamais pendant la transition (balayage en attente : le client vide alors les emplacements dont le sort n'est plus connu), ni en combat.
+function M.AutoSave()
+	M.autoTask = nil
+	if not M.on or not C.Get("specs.autobars") or M.task or M.holding or SUI.InCombat() then return end
+	if not M.BarsOK() or M.CursorBusy() then return end
+	local c = store(false)
+	local id = c and c.last
+	if not id then return end
+	local snap, n = M.BarsSnapshot()
+	if not snap or not n or n < 1 then return end
+	c = store(true)
+	if not c then return end
+	if type(c.autobars) ~= "table" then c.autobars = {} end
+	c.autobars[id] = snap
+	M.autoSaved = (M.autoSaved or 0) + 1
+end
+
+function M.OnSlot()
+	if not M.on or not C.Get("specs.autobars") then return end
+	if M.autoTask then SUI.Cancel(M.autoTask) end
+	M.autoTask = SUI.After(8, M.AutoSave, "specs.autosave")
+end
+
+function M.RestoreAuto(id)
+	if not C.Get("specs.autobars") then return end
+	local c = store(false)
+	local snap = c and type(c.autobars) == "table" and c.autobars[id]
+	if type(snap) ~= "table" then return end
+	local ok, placed, missing = M.BarsRestore(snap)
+	if ok and announceBars() then
+		local txt = L("mod.specs.f.bars") .. " " .. placed
+		if missing > 0 then txt = txt .. " (" .. L("msg.specs.missing", missing) .. ")" end
+		say("msg.specs.autobars", txt)
+	end
 end
 
 -- Programme un balayage dans specs.delay secondes (les rafales d'evenements d'un changement de spe n'en font qu'un).
@@ -1335,6 +1378,8 @@ function M.Enable()
 	end
 	M.cur = M.Scan() or M.cur
 	SUI.On("ADDON_LOADED", M.OnAddon)
+	SUI.On("ACTIONBAR_SLOT_CHANGED", M.OnSlot)
+	M.OnSlot()
 	M.BtnApply()
 	M.Schedule()
 end
@@ -1342,6 +1387,9 @@ end
 function M.Disable()
 	M.on = false
 	SUI.Off("ADDON_LOADED", M.OnAddon)
+	SUI.Off("ACTIONBAR_SLOT_CHANGED", M.OnSlot)
+	if M.autoTask then SUI.Cancel(M.autoTask) end
+	M.autoTask = nil
 	if M.btnTask then SUI.Cancel(M.btnTask) end
 	M.btnTask = nil
 	M.MenuClose()
@@ -1462,7 +1510,8 @@ SUI.RegisterModule("specs", {
 		opt("announce", "bool", 11, true, { simple = true, global = true }),
 		opt("delay", "number", 12, 3, { min = 1, max = 10, step = 1, global = true }),
 		opt("minpoints", "number", 13, 5, { min = 0, max = 20, step = 1, global = true }),
-		opt("bars", "bool", 20, false, { simple = true, global = true }),
+		opt("autobars", "bool", 19, true, { simple = true, global = true }),
+		opt("bars", "bool", 20, true, { simple = true, global = true }),
 		opt("bars.clear", "bool", 21, false, { global = true }),
 		opt("btn", "bool", 30, true, { simple = true, global = true }),
 		opt("btnpos", "choice", 31, "bottom", { choices = { "bottom", "top", "side" }, global = true }),
