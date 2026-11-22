@@ -962,9 +962,32 @@ end
 function M.MultiFind(bag, slot)
 	for i = 1, M.nml do
 		local e = M.ml[i]
+		if not e then
+			M.MultiHeal()          -- entree manquante : la liste est reparee puis la recherche reprend
+			return M.MultiFind(bag, slot)
+		end
 		if e.bag == bag and e.slot == slot then return i end
 	end
 	return nil
+end
+
+-- Retire l'entree i en decalant les suivantes (compte tenu de M.nml seul : table.remove se fie a table.getn, qui se trompe si le tableau a un trou).
+local function dropEntry(i)
+	for j = i, M.nml - 1 do M.ml[j] = M.ml[j + 1] end
+	M.ml[M.nml] = nil
+	M.nml = M.nml - 1
+end
+
+-- Reconstruit la liste sans trou (securite : M.nml doit toujours designer des entrees existantes).
+function M.MultiHeal()
+	local k = 0
+	local n = M.nml
+	for i = 1, n do
+		local e = M.ml[i]
+		M.ml[i] = nil
+		if e then k = k + 1 M.ml[k] = e end
+	end
+	M.nml = k
 end
 
 function M.MultiAdd(bag, slot)
@@ -983,8 +1006,7 @@ end
 function M.MultiRemove(i)
 	if M.mrun then SUI.Print(L("msg.mail.m.busy")) return false end
 	if i < 1 or i > M.nml then return false end
-	table.remove(M.ml, i)
-	M.nml = M.nml - 1
+	dropEntry(i)
 	M.marmTo = nil
 	local last = math.floor((M.nml - 1) / M.PAGE)
 	if last < 0 then last = 0 end
@@ -1083,7 +1105,7 @@ function M.MultiResolve(e)
 				local taken = false
 				for j = 1, M.nml do
 					local o = M.ml[j]
-					if o ~= e and not o.done and o.bag == bag and o.slot == s then taken = true end
+					if o and o ~= e and not o.done and o.bag == bag and o.slot == s then taken = true end
 				end
 				if not taken then
 					e.bag, e.slot = bag, s
@@ -1120,8 +1142,8 @@ function M.MultiRecap(to)
 			names = names .. ", ..."
 			break
 		end
-		local e = M.ml[i]
-		names = names .. (i > 1 and ", " or "") .. (e.name or "?") .. (e.count > 1 and ("x" .. e.count) or "")
+		local e = M.ml[i] or {}
+		names = names .. (i > 1 and ", " or "") .. (e.name or "?") .. ((e.count or 1) > 1 and ("x" .. e.count) or "")
 	end
 	local g = M.MultiGold()
 	return L("msg.mail.m.recap", n, to, g > 0 and L("msg.mail.m.recap.gold", g) or "", names)
@@ -1169,10 +1191,7 @@ function M.MultiFinish(why)
 	local setm = getglobal("SetSendMailMoney")
 	if type(setm) == "function" then setm(0) end     -- l'or par courrier ne doit pas rester dans le champ du jeu
 	for i = M.nml, 1, -1 do
-		if M.ml[i].done then
-			table.remove(M.ml, i)
-			M.nml = M.nml - 1
-		end
+		if M.ml[i] and M.ml[i].done then dropEntry(i) end
 	end
 	local last = math.floor((M.nml - 1) / M.PAGE)
 	if last < 0 then last = 0 end
@@ -1217,9 +1236,10 @@ function M.MultiStep()
 	if M.mstop then M.MultiFinish("cancel") return end
 	if M.mcons >= 3 then M.MultiFinish("errors") return end
 	if GetTime() < M.mnext then return end
-	while M.mi <= M.nml and M.ml[M.mi].done do M.mi = M.mi + 1 end
+	while M.mi <= M.nml and M.ml[M.mi] and M.ml[M.mi].done do M.mi = M.mi + 1 end
 	if M.mi > M.nml then M.MultiFinish(nil) return end
 	local e = M.ml[M.mi]
+	if not e then M.MultiHeal() M.MultiFinish(nil) return end
 	if not M.MultiResolve(e) then
 		M.MultiSkip(e, "missing")
 		M.mi = M.mi + 1
@@ -1344,7 +1364,12 @@ local function cellTip(b)
 	local g = getglobal("GameTooltip")
 	if g and b.tipText then
 		g:SetOwner(b, "ANCHOR_RIGHT")
-		g:SetText(b.tipText, nil, nil, nil, nil, 1)
+		-- vraie infobulle de l'objet (stats, effets, prix...) quand il est encore dans cette case du sac ; sinon son nom seul
+		if b.tipBag and b.tipSlot and g.SetBagItem and GetContainerItemLink(b.tipBag, b.tipSlot) then
+			g:SetBagItem(b.tipBag, b.tipSlot)
+		else
+			g:SetText(b.tipText, nil, nil, nil, nil, 1)
+		end
 		g:Show()
 	end
 end
@@ -1382,6 +1407,7 @@ function M.MultiPickRefresh()
 				b.icon:SetTexture(tex)
 				setText(b.cnt, count > 1 and tostring(count) or "")
 				b.tipText = name
+				b.tipBag, b.tipSlot = bag, s
 				T.SetSelected(b, M.MultiFind(bag, s) ~= nil)
 				b:Show()
 			end
@@ -1587,6 +1613,8 @@ function M.MultiRefresh()
 			b.icon:SetTexture(e.tex)
 			setText(b.cnt, e.count > 1 and tostring(e.count) or "")
 			b.tipText = e.name
+			b.tipBag, b.tipSlot = nil, nil
+			if not e.done and e.bag and e.slot and M.ItemAt(e.bag, e.slot) == e.id then b.tipBag, b.tipSlot = e.bag, e.slot end
 			b:SetAlpha(e.done and 0.4 or 1)
 			b:Show()
 		else
