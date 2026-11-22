@@ -392,7 +392,7 @@ local function onLogin()
 		if SUI.ModuleWanted(name) then SUI.EnableModule(name) end
 	end
 	SUI.Print(SUI.L("msg.loaded", SUI.VERSION))
-	if SUI.Config.GetGlobal("firstRun") then
+	if SUI.Config.GetGlobal("firstRun") and not SUI.liteAddons then
 		-- premiere installation : la mise en page "Shiki : classique" est appliquee d office (l assistant peut en choisir une autre)
 		SUI.After(1.5, function()
 			if not SUI.noAutoPreset and SUI.Layout and SUI.Layout.ApplyPreset and not (SUI.Config.cur and SUI.Config.cur.layout) then

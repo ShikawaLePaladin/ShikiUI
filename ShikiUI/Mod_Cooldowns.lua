@@ -1,8 +1,8 @@
 -- ShikiUI Cooldowns : temps restant affiche SUR les cadres de recharge de Blizzard (OmniCC-like, code reecrit).
 -- Principe : envelopper la fonction globale CooldownFrame_SetTimer (le client y passe pour chaque lancement de
 -- recharge) pour memoriser debut + duree de chaque cadre, puis une seule minuterie affiche le temps restant dans
--- un texte pose au centre du cadre. Les barres d'action ShikiUI n'utilisent PAS CooldownFrame_SetTimer (textes
--- maison) : aucun doublon quand les deux coexistent. Rien dans le combat : le texte est seulement cache/affiche.
+-- un texte pose au centre du cadre. Les barres d'action ShikiUI passent par CooldownFrame_SetTimer pour leur balayage mais
+-- ont leur propre chiffre : leur modele est marque suiOwn et ignore ici (sinon 2 timers sur le meme sort). Rien dans le combat : le texte est seulement cache/affiche.
 ShikiUI = ShikiUI or {}
 local SUI = ShikiUI
 local L = SUI.L
@@ -37,6 +37,7 @@ M.origSetTimer = nil
 local function hookedSetTimer(cf, start, dur, enable)
 	if M.origSetTimer then M.origSetTimer(cf, start, dur, enable) end
 	if not M.active or type(cf) ~= "table" then return end
+	if cf.suiOwn then return end      -- balayage des barres ShikiUI : elles affichent deja leur propre chiffre (sinon 2 timers)
 	if type(start) == "number" and start > 0 and type(dur) == "number" and dur > 0 then
 		M.watched[cf] = { start = start, dur = dur }
 	else

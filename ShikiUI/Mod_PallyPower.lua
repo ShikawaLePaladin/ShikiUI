@@ -427,7 +427,43 @@ function M.NoSymbols()
 end
 
 -- Construit la liste (unite, sort) de tout ce qui manque, dans l'ordre de la liste puis des benedictions.
+-- Mes classes sans aucune benediction cote ShikiUI mais attribuees dans l'addon d'origine : on les reprend (jamais d'ecrasement).
+function M.PullFromPallyPower()
+	local me = UnitName("player")
+	if not me then return end
+	local seen, changed = {}, false
+	for i = 1, M.nrost do
+		local file = M.roster[i].file
+		if file and not seen[file] then
+			seen[file] = true
+			local any = false
+			for k = 1, M.nrost do
+				local r = M.roster[k]
+				local a = M.assign[r.name]
+				if r.file == file and a then
+					for j = 1, getn(M.BLESS) do if a[M.BLESS[j]] then any = true end end
+				end
+			end
+			if not any then
+				local b = M.OrigBless(me, file)
+				if b and M.Knows(b) then
+					for k = 1, M.nrost do
+						local r = M.roster[k]
+						if r.file == file then
+							local a = asg(r.name)
+							a[b] = true
+							changed = true
+						end
+					end
+				end
+			end
+		end
+	end
+	if changed then saveAssign() end
+end
+
 function M.BuildPairs()
+	M.PullFromPallyPower()
 	M.npairs, M.qi, M.castn = 0, 0, 0
 	M.skipped = 0
 	M.buffNames = {}   -- les noms de buffs sont relus a chaque tour du cycle
@@ -1695,6 +1731,19 @@ function M.MyClassSingle(file, b)
 	return any
 end
 
+-- Si l'addon PallyPower d'origine est charge en meme temps, il garde sa propre table (PallyPower_Assignments) et sa grille restait vide
+-- pour moi apres "Auto equipe" : on y recopie ma benediction de classe (identifiants 0-5, -1 = aucune ; classes 0-8 = SYNC_CLS).
+function M.MirrorToPallyPower(file, b)
+	local pa = getglobal("PallyPower_Assignments")
+	local me = UnitName("player")
+	local cid = M.SYNC_CLS and M.SYNC_CLS[file]
+	if type(pa) ~= "table" or not me or cid == nil then return end
+	if type(pa[me]) ~= "table" then return end
+	pa[me][cid] = b and M.SYNC_BID[b] or -1
+	local up = getglobal("PallyPower_UpdateUI")
+	if type(up) == "function" then pcall(up) end
+end
+
 -- Je donne EXACTEMENT cette benediction (ou aucune) a toute la classe ; single = 10 min.
 function M.ApplyClassAssign(file, b, single)
 	for i = 1, M.nrost do
@@ -1711,6 +1760,7 @@ function M.ApplyClassAssign(file, b, single)
 		end
 	end
 	saveAssign()
+	M.MirrorToPallyPower(file, b)
 	M.PaintCells()
 	M.PaintRows()
 end
@@ -1772,8 +1822,26 @@ function M.TeamKnows(name, b)
 	return k[M.SYNC_BID[b]] and true or false
 end
 
+-- Benediction de classe d'un paladin telle que l'addon PallyPower d'origine la connait (il recoit les messages de tout le monde) :
+-- nil = pas de table pour lui ; false = aucune ; sinon l'identifiant (wisdom, might...).
+function M.OrigBless(name, file)
+	local pa = getglobal("PallyPower_Assignments")
+	local cid = M.SYNC_CLS[file]
+	if type(pa) ~= "table" or type(pa[name]) ~= "table" or cid == nil then return nil end
+	local v = pa[name][cid]
+	if type(v) ~= "number" then return nil end
+	if v < 0 then return false end
+	return bessOfBid(v) or false
+end
+
 function M.TeamGet(name, file)
-	if name == UnitName("player") then return M.MyClassBless(file) end
+	if name == UnitName("player") then
+		local mine = M.MyClassBless(file)
+		if mine then return mine end
+		return M.OrigBless(name, file) or nil       -- classe incomplete chez moi : on montre ce que l'addon d'origine a retenu
+	end
+	local o = M.OrigBless(name, file)
+	if o ~= nil then return o or nil end            -- l'addon d'origine fait foi quand il est la : plus de ligne qui diverge
 	local p = M.peers[name]
 	local cid = M.SYNC_CLS[file]
 	local bid = p and cid and p[cid]
@@ -1840,6 +1908,7 @@ function M.TeamAuto()
 	local load = {}
 	for i = 1, getn(pal) do load[pal[i]] = 0 end
 	local plan = {}
+	local stick = {}      -- benediction (Puissance et Sagesse comptent pour une) -> paladin qui la donne deja : chaque paladin garde la sienne sur toutes les classes
 	for idx = 1, getn(M.CORDER) do
 		local file = M.CORDER[idx]
 		if M.classes[file] then
@@ -1849,6 +1918,10 @@ function M.TeamAuto()
 				if def[M.TEAMWANT[k]] then tinsert(want, M.TEAMWANT[k]) end
 			end
 			if C.Get("pallypower.autosalv") then tinsert(want, "salvation") end
+			-- plus de paladins que de benedictions : les suivants donnent Lumiere puis Salut (comme l'attribution de l'addon PallyPower d'origine)
+			local function hasW(w) for q = 1, getn(want) do if want[q] == w then return true end end return false end
+			if getn(pal) > getn(want) and not hasW("light") then tinsert(want, "light") end
+			if getn(pal) > getn(want) and not hasW("salvation") then tinsert(want, "salvation") end
 			-- les benedictions que peu de paladins connaissent sont placees d'abord
 			local cap = {}
 			for k = 1, getn(want) do
@@ -1869,14 +1942,20 @@ function M.TeamAuto()
 			plan[file] = {}
 			for k = 1, getn(want) do
 				local best
-				for i = 1, getn(pal) do
-					local p = pal[i]
-					if not used[p] and M.TeamKnows(p, want[k]) and (not best or load[p] < load[best]) then best = p end
+				local sk = (want[k] == "might" or want[k] == "wisdom") and "mw" or want[k]
+				local pv = stick[sk]
+				if pv and not used[pv] and M.TeamKnows(pv, want[k]) then best = pv end
+				if not best then
+					for i = 1, getn(pal) do
+						local p = pal[i]
+						if not used[p] and M.TeamKnows(p, want[k]) and (not best or load[p] < load[best]) then best = p end
+					end
 				end
 				if best then
 					used[best] = true
 					load[best] = load[best] + 1
 					plan[file][best] = want[k]
+					stick[sk] = best
 				end
 			end
 		end
