@@ -39,6 +39,7 @@ Bind.lua
 Perf.lua
 Menu.lua
 Menu_Pages.lua
+Menu_Profiles.lua
 Addons.lua
 Cmd.lua
 Locale_PallyPower.lua

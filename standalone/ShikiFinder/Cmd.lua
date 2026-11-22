@@ -120,7 +120,7 @@ local function handler(msg)
 	elseif cmd == "simple" or cmd == "expert" then
 		SUI.Menu.Show(cmd)
 	elseif cmd == "wizard" then
-		SUI.Menu.ShowWizard(1)
+		if SUI.Menu.ShowWizard then SUI.Menu.ShowWizard(1) end
 	elseif cmd == "status" then
 		status()
 	elseif cmd == "perf" then
