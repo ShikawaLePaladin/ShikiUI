@@ -16,6 +16,16 @@ Deux modules de ShikiUI sont aussi disponibles **seuls**, pour les joueurs qui n
 
 Le jeu peut être en français ou en anglais : les textes suivent la langue du client.
 
+## Réglages
+
+Le module est entièrement configurable, comme dans ShikiUI complet :
+
+- la **roue dentée** en haut de la fenêtre du module (grille PallyPower, fenêtre du Finder) ouvre directement sa page de réglages ;
+- ou `/sui` puis la page **PallyPower** / **Finder** (groupe « Groupe ») ;
+- le menu a deux niveaux : **Essentiel** (les réglages courants) et **Tout** (toutes les options) — bouton en haut du menu ;
+- le menu donne aussi accès à **Général**, **Style** (thèmes), **Disposition** (déplacer les fenêtres, `/sui move`), **Mode / Perf** et **Profils** ;
+- les réglages sont sauvegardés dans `ShikiUIDB` et se sauvegardent / se transfèrent comme ceux de ShikiUI.
+
 ## Bon à savoir
 
 - **Rien d'autre à installer.** Chaque dossier embarque le socle de ShikiUI (réglages, thème, déplacement des fenêtres).
