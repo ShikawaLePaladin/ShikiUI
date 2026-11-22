@@ -2250,7 +2250,7 @@ function M.BuildMini()
 	g:SetWidth(M.MC)
 	g:SetHeight(M.MC)
 	g.txt = T.Text(g, 13, T.c.text, "CENTER", true)
-	g.txt:SetPoint("CENTER", g, "CENTER", 0, 0)
+	g.txt:SetPoint("CENTER", g, "CENTER", -2, -3)     -- decale : le petit o occupe le coin haut droit
 	g:SetScript("OnClick", function()
 		if arg1 == "RightButton" then return end
 		M.CastNext()
@@ -2263,10 +2263,13 @@ function M.BuildMini()
 	end)
 	g:SetScript("OnLeave", function() GameTooltip:Hide() end)
 	f.go = g
-	local oBtn = iconBtn(f, "InterfaceIconsSpell_Magic_PolymorphPorc")
-	oBtn:SetWidth(16)
-	oBtn:SetHeight(16)
-	oBtn.txt = T.Text(oBtn, 11, T.c.text, "CENTER", true)
+	-- petit bouton o : pose sur le coin de la case du nombre (ouvre la grille) ; un clic ailleurs sur la case = benir le suivant
+	local oBtn = iconBtn(g, "InterfaceIconsSpell_Magic_PolymorphPorc")
+	oBtn:SetWidth(12)
+	oBtn:SetHeight(12)
+	oBtn:SetPoint("TOPRIGHT", g, "TOPRIGHT", -1, -1)
+	oBtn:SetFrameLevel(g:GetFrameLevel() + 3)
+	oBtn.txt = T.Text(oBtn, 10, T.c.text, "CENTER", true)
 	oBtn.txt:SetPoint("CENTER", oBtn, "CENTER", 0, 0)
 	oBtn.txt:SetText("o")
 	oBtn:SetScript("OnClick", function() M.Open() end)
@@ -2283,20 +2286,29 @@ function M.BuildMini()
 	return f
 end
 
+-- Disposition du mini-panneau : "row" (une ligne), "col" (une colonne) ou "grid" (2 colonnes).
+function M.MiniCols(mode, n)
+	local cols = n
+	if mode == "col" then cols = 1 elseif mode == "grid" then cols = 2 end
+	if cols > n then cols = n end
+	if cols < 1 then cols = 1 end
+	return cols
+end
+
 function M.MiniPaint()
 	local f = M.mini
 	if not f then return end
 	local st = M.MiniScan()
-	local shown, total = 0, 0
+	local total = 0
 	local tc = T.c
 	local mc, gap = M.MC, 3
+	local list, shown = {}, 0
 	for j = 1, getn(M.BLESS) do
 		local b = f.btn[j]
 		local s = st[M.BLESS[j]]
 		if s and s.n > 0 then
 			shown = shown + 1
-			b:ClearAllPoints()
-			b:SetPoint("TOPLEFT", f, "TOPLEFT", 4 + (shown - 1) * (mc + gap), -4)
+			list[shown] = b
 			local nm = getn(s.miss)
 			total = total + nm
 			local col = tc.good
@@ -2312,16 +2324,22 @@ function M.MiniPaint()
 		f:Hide()
 		return
 	end
+	list[shown + 1] = f.go                       -- dernier : le bouton "suivant" (porte le petit o)
+	local n = shown + 1
+	local cols = M.MiniCols(C.Get("pallypower.minilayout"), n)
+	local rows = math.floor((n + cols - 1) / cols)
+	for i = 1, n do
+		local c = SUI.Mod(i - 1, cols)
+		local r = math.floor((i - 1) / cols)
+		list[i]:ClearAllPoints()
+		list[i]:SetPoint("TOPLEFT", f, "TOPLEFT", 4 + c * (mc + gap), -4 - r * (mc + gap))
+	end
 	f.oBtn:Show()
-		f.go:ClearAllPoints()
-	f.go:SetPoint("TOPLEFT", f, "TOPLEFT", 4 + shown * (mc + gap), -4)
 	f.go.txt:SetText(total > 0 and total or EMPTY)
 	local col = (total > 0) and tc.warn or tc.good
 	f.go:SetBackdropBorderColor(col[1], col[2], col[3], 1)
-	-- petit bouton o : ouvre la grille, a droite du bouton suivant (16 px, centre verticalement)
-	f.oBtn:SetPoint("TOPLEFT", f, "TOPLEFT", 4 + (shown + 1) * (mc + gap) + 2, -4 + (mc - 16) / 2)
-	f:SetWidth(8 + (shown + 2) * mc + shown * gap + 4)
-	f:SetHeight(mc + 8)
+	f:SetWidth(8 + cols * mc + (cols - 1) * gap)
+	f:SetHeight(8 + rows * mc + (rows - 1) * gap)
 	f:Show()
 end
 
@@ -2347,6 +2365,7 @@ function M.OnKey(key)
 		end
 		if M.win and M.win:IsShown() then M.PaintStatus() end
 		if key == "pallypower.mini" then M.MiniTick() end
+		if key == "pallypower.minilayout" and M.mini then M.MiniPaint() end
 	end
 end
 
@@ -2465,6 +2484,7 @@ local function opt(key, typ, order, def, extra)
 end
 
 local function judgeText(o, v) return L("choice.pallypower.judge." .. v) end
+local function miniText(o, v) return L("choice.pallypower.minilayout." .. v) end
 
 SUI.RegisterModule("pallypower", {
 	default = true,
@@ -2473,6 +2493,7 @@ SUI.RegisterModule("pallypower", {
 		opt("greater", "bool", 10, true, { simple = true }),
 		opt("compact", "bool", 15, true, { simple = true }),
 		opt("mini", "bool", 16, true, { simple = true }),
+		opt("minilayout", "choice", 16.5, "row", { choices = { "row", "col", "grid" }, choiceText = miniText, simple = true }),
 		opt("autosingle", "bool", 17, false, { simple = true }),
 		opt("autosalv", "bool", 18, false),
 		opt("sync", "bool", 19, true),
