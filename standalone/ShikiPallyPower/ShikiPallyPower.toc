@@ -1,0 +1,46 @@
+## Interface: 11200
+## Title: |cff4dc4e8Shiki|r|cffffffffPallyPower|r
+## Title-frFR: |cff4dc4e8Shiki|r|cffffffffPallyPower|r
+## Notes: Benedictions de raid pour paladin : grille d'attribution, cycle de pose, synchro entre paladins. Commande /sui pp (module de ShikiUI, version autonome).
+## Notes-frFR: Benedictions de raid pour paladin : grille d'attribution, cycle de pose, synchro entre paladins. Commande /sui pp (module de ShikiUI, version autonome).
+## Author: Shikiwa
+## Version: 1.1.0
+## SavedVariables: ShikiUIDB
+## OptionalDeps: ShikiUI
+
+Lite_Start.lua
+Core.lua
+Locale.lua
+Locale_Mode.lua
+Locale_Target.lua
+Locale_Units.lua
+Locale_Style.lua
+Locale_Layout.lua
+Locale_Menu.lua
+Locale_Setup.lua
+Locale_Preview.lua
+Locale_Mover.lua
+Locale_Bind.lua
+Locale_Addons.lua
+Locale_Visibility.lua
+Serial.lua
+Api.lua
+Config.lua
+Backup.lua
+Migrate.lua
+Mode.lua
+Theme.lua
+Visibility.lua
+Style.lua
+Style_Shiki.lua
+Layouts.lua
+Mover.lua
+Bind.lua
+Perf.lua
+Menu.lua
+Menu_Pages.lua
+Addons.lua
+Cmd.lua
+Locale_PallyPower.lua
+Mod_PallyPower.lua
+Lite_End.lua

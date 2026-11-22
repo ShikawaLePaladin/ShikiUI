@@ -27,6 +27,11 @@ Chaque module est activable/coupable individuellement, a ses propres réglages
 (mode Simple par défaut, Expert pour tout), sa visibilité conditionnelle
 (toujours / combat / groupe / raid / spé...) et son déplacement libre (`/sui move`).
 
+## Addons autonomes (sans ShikiUI)
+
+**ShikiPallyPower** (bénédictions de paladin) et **ShikiFinder** (chercheur de groupe) existent aussi comme addons séparés dans `standalone/`,
+pour les joueurs qui n'utilisent pas ShikiUI. Voir [standalone/README.md](standalone/README.md).
+
 ## Commandes
 
 ```

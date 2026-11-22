@@ -1,0 +1,46 @@
+## Interface: 11200
+## Title: |cff4dc4e8Shiki|r|cffffffffFinder|r
+## Title-frFR: |cff4dc4e8Shiki|r|cffffffffFinder|r
+## Notes: Chercheur de groupe (LFG / LFM) : analyse des annonces des canaux publics, alertes, annonce. Commande /sui lfg (module de ShikiUI, version autonome).
+## Notes-frFR: Chercheur de groupe (LFG / LFM) : analyse des annonces des canaux publics, alertes, annonce. Commande /sui lfg (module de ShikiUI, version autonome).
+## Author: Shikiwa
+## Version: 1.1.0
+## SavedVariables: ShikiUIDB
+## OptionalDeps: ShikiUI
+
+Lite_Start.lua
+Core.lua
+Locale.lua
+Locale_Mode.lua
+Locale_Target.lua
+Locale_Units.lua
+Locale_Style.lua
+Locale_Layout.lua
+Locale_Menu.lua
+Locale_Setup.lua
+Locale_Preview.lua
+Locale_Mover.lua
+Locale_Bind.lua
+Locale_Addons.lua
+Locale_Visibility.lua
+Serial.lua
+Api.lua
+Config.lua
+Backup.lua
+Migrate.lua
+Mode.lua
+Theme.lua
+Visibility.lua
+Style.lua
+Style_Shiki.lua
+Layouts.lua
+Mover.lua
+Bind.lua
+Perf.lua
+Menu.lua
+Menu_Pages.lua
+Addons.lua
+Cmd.lua
+Locale_Finder.lua
+Mod_Finder.lua
+Lite_End.lua
