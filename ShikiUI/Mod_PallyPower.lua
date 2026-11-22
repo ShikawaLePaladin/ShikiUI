@@ -392,10 +392,11 @@ local function castOn(unit, name)
 		CastSpellByName(name, unit)
 		return
 	end
-	local was = UnitName("target")
+	local had = UnitExists("target")
 	TargetUnit(unit)
 	CastSpellByName(name)
-	if was then TargetUnit(was) end
+	if SpellIsTargeting and SpellIsTargeting() then SpellStopTargeting() end      -- cible refusee : pas de sort "en attente" au curseur
+	if had then TargetLastTarget() else ClearTarget() end                          -- (TargetUnit attend un jeton d'unite, pas un nom)
 end
 
 -- Un tour du cycle : pose UNE benediction (GCD), planifie le tour suivant ; arret propre quand tout est pose.
@@ -416,7 +417,8 @@ function M.CastStep()
 	while M.qi < M.npairs do
 		M.qi = M.qi + 1
 		local p = M.pairs[M.qi]
-		if p and UnitExists(p.unit) and not UnitIsDead(p.unit) then
+		-- le jeton "raidN" peut designer un autre joueur si le raid a change depuis la construction de la file
+		if p and UnitExists(p.unit) and not UnitIsDead(p.unit) and (not p.who or UnitName(p.unit) == p.who) then
 			-- buffs relus a neuf : une benediction superieure posee plus haut couvre peut-etre deja toute la classe, ou un autre paladin est passe
 			M.buffNames[p.unit] = nil
 			if not M.HasBuff(p.unit, p.base) then
@@ -1999,13 +2001,18 @@ end
 -- jaune (partiel), verte (complet). Clic = pose cette benediction au joueur suivant qui la manque ; clic droit = grille ;
 -- bouton "Benir" / touche SHIKIUI_PALLYPOWER_NEXT = prochaine benediction manquante (une par appui, GCD respecte).
 -- Lecture par TEXTURE (UnitBuff, pas d'infobulle) : quelques lectures par joueur toutes les 2 s, sans cout notable.
-M.TEXPAT = { kings = { "magearmor", "spell_magic_greaterblessingofkings" }, wisdom = { "sealofwisdom", "greaterblessingofwisdom" },
+M.TEXPAT = { kings = { "spell_magic_magearmor", "spell_magic_greaterblessingofkings" }, wisdom = { "sealofwisdom", "greaterblessingofwisdom" },
 	might = { "fistofjustice", "spell_holy_greaterblessingofkings" }, salvation = { "sealofsalvation", "greaterblessingofsalvation" },
 	light = { "prayerofhealing02", "greaterblessingoflight" } }
 M.miniState = {}
 M.MINIGAP = 4
 
 function M.HasTex(unit, b)
+	if b == "sanctuary" then
+		-- icone de la benediction simple non relevee : lecture par le nom du buff (infobulle cachee)
+		M.buffNames[unit] = nil
+		return M.HasBuff(unit, M.SPELLS[b])
+	end
 	local pats = M.TEXPAT[b]
 	local ub = getglobal("UnitBuff")
 	if type(ub) ~= "function" or not pats then return false end
