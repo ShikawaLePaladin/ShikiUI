@@ -33,7 +33,7 @@ local MAXITEMS = 8000
 local NHIST = 14
 local NLOW = 8            -- offres les moins cheres gardees par objet pendant un scan
 local TICK = 0.3
-local WINW, WINH = 640, 470
+local WINW, WINH = 760, 470
 
 M.db = nil
 M.sc = nil            -- scan en cours : { page, pages, state, sentAt, acc, lots, items }
@@ -437,7 +437,21 @@ function M.Rebuild()
 	local filt = slower(M.filter or "")
 	local scanId = db.scan.id
 	local watch = (M.mode == "watch") and M.WatchList() or nil
-	for id, e in pairs(db.items) do
+	if M.mode == "craft" then
+		for id, rc in pairs(M.CraftBook()) do
+			local e = db.items[id]
+			local cost, sale = M.CraftCost(id, rc)
+			if e and cost and sale and (filt == "" or sfind(slower(e.n or ""), filt, 1, true)) then
+				local cut = C.Get("market.cut") or 5
+				local profit = floor(sale * (100 - cut) / 100) - cost
+				if profit >= minprofit then
+					n = n + 1
+					list[n] = { id = id, e = e, name = slower(e.n or ""), now = cost, val = sale, pct = floor(profit * 100 / cost), profit = profit, offers = e.no }
+				end
+			end
+		end
+	end
+	for id, e in pairs(M.mode == "craft" and {} or db.items) do
 		local ok = true
 		if (e.q or 0) < minq then ok = false end
 		if ok and filt ~= "" and not sfind(slower(e.n or ""), filt, 1, true) then ok = false end
@@ -472,6 +486,61 @@ function M.Rebuild()
 	M.Refresh()
 end
 
+-- ---------------------------------------------------------------- recettes (cout de fabrication)
+-- Les recettes sont lues a l'ouverture d'une fenetre de metier : db.craft[idProduit] = { c = quantite fabriquee, r = { [idComposant] = quantite } }
+function M.CraftBook()
+	local db = M.LoadDB()
+	if type(db.craft) ~= "table" then db.craft = {} end
+	return db.craft
+end
+
+function M.CraftCount()
+	local n = 0
+	for _ in pairs(M.CraftBook()) do n = n + 1 end
+	return n
+end
+
+-- Cout des composants (plus bas prix de la base) et valeur de vente du produit ; nil si un prix manque
+function M.CraftCost(id, rc)
+	local items = M.LoadDB().items
+	local cost = 0
+	for rid, q in pairs(rc.r) do
+		local e = items[rid]
+		if not e or not e.mn then return nil, nil end
+		cost = cost + e.mn * q
+	end
+	local pe = items[id]
+	local val = pe and (pe.md or pe.mn)
+	if not val or cost <= 0 then return nil, nil end
+	return cost, val * (rc.c or 1)
+end
+
+function M.ScanTrade()
+	if not M.on or not GetNumTradeSkills then return end
+	local book = M.CraftBook()
+	local added = 0
+	for i = 1, GetNumTradeSkills() do
+		local name, kind = GetTradeSkillInfo(i)
+		local link = name and kind ~= "header" and GetTradeSkillItemLink and GetTradeSkillItemLink(i)
+		local id = link and idOf(link)
+		if id then
+			local r, any = {}, false
+			for j = 1, (GetTradeSkillNumReagents(i) or 0) do
+				local rl = GetTradeSkillReagentItemLink(i, j)
+				local rid = rl and idOf(rl)
+				local _, _, cnt = GetTradeSkillReagentInfo(i, j)
+				if rid then r[rid] = cnt or 1; any = true end
+			end
+			if any then
+				local made = GetTradeSkillNumMade and GetTradeSkillNumMade(i) or 1
+				if not book[id] then added = added + 1 end
+				book[id] = { c = made and made > 0 and made or 1, r = r }
+			end
+		end
+	end
+	if added > 0 then SUI.Print(L("msg.market.craft.learned", added)) end
+end
+
 -- L'objet choisi est-il dans la liste d'achats ?
 function M.IsTracked(id)
 	local e = id and M.LoadDB().items[id]
@@ -501,7 +570,7 @@ end
 
 function M.SetMode(m)
 	M.mode = m
-	if m == "deals" or m == "vendor" then
+	if m == "deals" or m == "vendor" or m == "craft" then
 		M.sortKey, M.sortDesc = "profit", true
 	else
 		M.sortKey, M.sortDesc = "name", false
@@ -573,12 +642,12 @@ end
 
 -- ---------------------------------------------------------------- fenetre
 local COLS = {
-	{ key = "name", x = 30, w = 200, j = "LEFT", tk = "msg.market.col.item" },
-	{ key = "now", x = 232, w = 86, j = "RIGHT", tk = "msg.market.col.now" },
-	{ key = "val", x = 322, w = 86, j = "RIGHT", tk = "msg.market.col.value" },
-	{ key = "pct", x = 412, w = 50, j = "RIGHT", tk = "msg.market.col.pct" },
-	{ key = "profit", x = 466, w = 90, j = "RIGHT", tk = "msg.market.col.profit" },
-	{ key = "offers", x = 560, w = 48, j = "RIGHT", tk = "msg.market.col.offers" },
+	{ key = "name", x = 30, w = 300, j = "LEFT", tk = "msg.market.col.item" },
+	{ key = "now", x = 332, w = 86, j = "RIGHT", tk = "msg.market.col.now" },
+	{ key = "val", x = 422, w = 86, j = "RIGHT", tk = "msg.market.col.value" },
+	{ key = "pct", x = 512, w = 50, j = "RIGHT", tk = "msg.market.col.pct" },
+	{ key = "profit", x = 566, w = 90, j = "RIGHT", tk = "msg.market.col.profit" },
+	{ key = "offers", x = 660, w = 48, j = "RIGHT", tk = "msg.market.col.offers" },
 }
 
 local function ageText(t)
@@ -624,15 +693,17 @@ function M.Build()
 	f.bar.txt = T.Text(f.bar, 10, T.c.text, "CENTER")
 	f.bar.txt:SetPoint("CENTER", f.bar, "CENTER", 0, 0)
 	-- rangee mode + filtre
-	f.bDeals = T.Button(f, L("msg.market.mode.deals"), 120, 22, function() M.SetMode("deals") end)
+	f.bDeals = T.Button(f, L("msg.market.mode.deals"), 110, 22, function() M.SetMode("deals") end)
 	f.bDeals:SetPoint("TOPLEFT", f, "TOPLEFT", 12, -64)
 	f.bAll = T.Button(f, L("msg.market.mode.all"), 120, 22, function() M.SetMode("all") end)
 	f.bAll:SetPoint("LEFT", f.bDeals, "RIGHT", 4, 0)
-	f.bWatch = T.Button(f, L("msg.market.mode.watch"), 110, 22, function() M.SetMode("watch") end)
+	f.bWatch = T.Button(f, L("msg.market.mode.watch"), 100, 22, function() M.SetMode("watch") end)
 	f.bWatch:SetPoint("LEFT", f.bAll, "RIGHT", 4, 0)
-	f.bVendor = T.Button(f, L("msg.market.mode.vendor"), 150, 22, function() M.SetMode("vendor") end)
+	f.bVendor = T.Button(f, L("msg.market.mode.vendor"), 130, 22, function() M.SetMode("vendor") end)
 	f.bVendor:SetPoint("LEFT", f.bWatch, "RIGHT", 4, 0)
-	f.edit = T.Edit(f, 180, 22)
+	f.bCraft = T.Button(f, L("msg.market.mode.craft"), 100, 22, function() M.SetMode("craft") end)
+	f.bCraft:SetPoint("LEFT", f.bVendor, "RIGHT", 4, 0)
+	f.edit = T.Edit(f, 140, 22)
 	f.edit:SetPoint("TOPRIGHT", f, "TOPRIGHT", -12, -64)
 	f.edit:SetScript("OnTextChanged", function()
 		local t = this:GetText() or ""
@@ -762,12 +833,16 @@ function M.Refresh()
 	f.bAll:SetAlpha(M.mode == "all" and 1 or 0.6)
 	f.bWatch:SetAlpha(M.mode == "watch" and 1 or 0.6)
 	f.bVendor:SetAlpha(M.mode == "vendor" and 1 or 0.6)
+	f.bCraft:SetAlpha(M.mode == "craft" and 1 or 0.6)
 	for i = 1, getn(COLS) do
 		local c = COLS[i]
 		local mark = ""
 		if M.sortKey == c.key then mark = M.sortDesc and " v" or " ^" end
 		local tk = c.tk
 		if c.key == "val" and M.mode == "vendor" then tk = "msg.market.col.vendor" end
+		if M.mode == "craft" then
+			if c.key == "now" then tk = "msg.market.col.cost" elseif c.key == "val" then tk = "msg.market.col.sale" end
+		end
 		f.heads[i].label:SetText(L(tk) .. mark)
 	end
 	-- lignes
@@ -813,7 +888,7 @@ function M.Refresh()
 	end
 	if M.nlist == 0 then
 		local key = "msg.market.empty.nodata"
-		if M.Count() > 0 then key = (M.mode == "deals") and "msg.market.empty.deals" or (M.mode == "watch" and "msg.market.empty.watch" or (M.mode == "vendor" and "msg.market.empty.vendor" or "msg.market.empty.filter")) end
+		if M.Count() > 0 then key = (M.mode == "deals") and "msg.market.empty.deals" or (M.mode == "watch" and "msg.market.empty.watch" or (M.mode == "vendor" and "msg.market.empty.vendor" or (M.mode == "craft" and "msg.market.empty.craft" or "msg.market.empty.filter"))) end
 		setText(f.empty, L(key))
 		f.empty:Show()
 	else
@@ -1019,6 +1094,7 @@ function M.Enable()
 	M.LoadDB()
 	SUI.On("AUCTION_HOUSE_SHOW", M.OnShow)
 	SUI.On("AUCTION_HOUSE_CLOSED", M.OnClose)
+	SUI.On("TRADE_SKILL_SHOW", M.ScanTrade)
 	SUI.After(1, M.Attach, "market.attach")
 	if not M.watching then
 		M.watching = true
@@ -1034,6 +1110,7 @@ function M.Disable()
 	M.SnipeRefresh()
 	SUI.Off("AUCTION_HOUSE_SHOW", M.OnShow)
 	SUI.Off("AUCTION_HOUSE_CLOSED", M.OnClose)
+	SUI.Off("TRADE_SKILL_SHOW", M.ScanTrade)
 	if M.sc then M.Stop(true) end
 	M.Close()
 	if M.tab then M.tab:Hide() end
