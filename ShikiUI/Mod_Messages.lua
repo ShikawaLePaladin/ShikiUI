@@ -688,7 +688,8 @@ function M.BuildWindow(i)
 	f.tbar:SetPoint("TOPLEFT", f, "TOPLEFT", 0, 0)
 	f.tbar:SetPoint("TOPRIGHT", f, "TOPRIGHT", -94, 0)
 	f.tbar:SetHeight(22)
-	f.tbar:SetScript("OnClick", function() M.TitleClick(i) end)
+	f.tbar:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+	f.tbar:SetScript("OnClick", function() M.TitleClick(i, arg1) end)
 	dragSrc(f.tbar, f, "messages.win" .. i)
 	dragSrc(f, f, "messages.win" .. i)
 	f.close = T.Button(f, "x", 16, 16, function() M.CloseSlot(i) end)
@@ -777,9 +778,37 @@ function M.ToggleMin(i)
 	end
 end
 
-function M.TitleClick(i)
+-- Actions sur l'interlocuteur : clic droit sur le titre = menu du jeu (inviter, /who, ami, ignorer...), Maj + clic gauche = /who
+-- (niveau, race, zone dans le chat), comme un clic sur un nom dans le chat.
+function M.PlayerMenu(name)
+	local f = getglobal("FriendsFrame_ShowDropdown")
+	if type(f) == "function" then
+		local ok, err = pcall(f, name, 1)
+		if not ok then SUI.Report("messages menu", err) end
+		return true
+	end
+	return false
+end
+
+function M.WhoName(name)
+	local f = getglobal("SendWho")
+	if type(f) ~= "function" or not name then return false end
+	f("n-" .. name)
+	return true
+end
+
+function M.TitleClick(i, button)
 	if M.JustDragged() then return end
 	local w = M.win[i]
+	local conv = w and w.conv and M.convs[w.conv]
+	if conv and button == "RightButton" then
+		M.PlayerMenu(conv.name)
+		return
+	end
+	if conv and IsShiftKeyDown and IsShiftKeyDown() then
+		M.WhoName(conv.name)
+		return
+	end
 	if w and w.min then M.ToggleMin(i) elseif w then w.edit:SetFocus() end
 end
 
