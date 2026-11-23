@@ -93,6 +93,8 @@ Locale_ChatTabs.lua
 Mod_ChatTabs.lua
 Locale_ClickHeal.lua
 Mod_ClickHeal.lua
+Locale_Codex.lua
+Mod_Codex.lua
 Locale_Cooldowns.lua
 Mod_Cooldowns.lua
 Locale_Cursor.lua
