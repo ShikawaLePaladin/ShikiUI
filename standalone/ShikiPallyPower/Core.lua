@@ -188,7 +188,8 @@ end
 evFrame:SetScript("OnEvent", dispatch)
 
 -- ---------------------------------------------------------------- minuterie partagee (un seul OnUpdate)
-local tickFrame = CreateFrame("Frame", "ShikiUI_Tick", UIParent)
+-- Sans parent : la carte du monde masque UIParent, et un OnUpdate sous un parent cache ne tourne plus (les epingles du Codex n etaient jamais posees).
+local tickFrame = CreateFrame("Frame", "ShikiUI_Tick", nil)
 SUI.tickFrame = tickFrame
 local minNext = 1e9
 
