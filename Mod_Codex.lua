@@ -1771,9 +1771,34 @@ function M.PinIsOff(arg)
 	return arg == "off" or arg == "clear" or arg == "effacer"
 end
 
+-- Diagnostic (/sui codex pin debug) : etat interne des epingles, en une ou deux lignes de chat
+function M.PinDebug()
+	local rec = M.pin
+	local wm, btn = glob("WorldMapFrame"), glob("WorldMapButton")
+	local c, z = M.MapCur()
+	local shown = 0
+	for i = 1, getn(M.pins) do
+		if M.pins[i]:IsShown() then shown = shown + 1 end
+	end
+	SUI.Print("pin=" .. tostring(rec and rec.id) .. " map=" .. tostring(wm and wm:IsShown()) .. " btn=" .. tostring(btn ~= nil)
+		.. " cur=" .. tostring(c) .. "," .. tostring(z) .. " watch=" .. tostring(M.pinWatch ~= nil) .. " pool=" .. getn(M.pins)
+		.. " shown=" .. shown .. " banner=" .. tostring(M.banner and M.banner:IsShown() or false) .. " refresh=" .. tostring(M.pinRefreshes)
+		.. " retry=" .. tostring(M.pinRetry))
+	if rec then
+		for i = 1, getn(rec.zones) do
+			local g = rec.zones[i]
+			SUI.Print("zone " .. tostring(g.en) .. " map=" .. tostring(g.map) .. " res=" .. tostring(g.res) .. " c=" .. tostring(g.c)
+				.. " z=" .. tostring(g.z) .. " n=" .. g.n .. " pins=" .. getn(g.pins)
+				.. (g.pins[1] and (" p1=" .. g.pins[1].k .. g.pins[1].x .. "," .. g.pins[1].y) or ""))
+		end
+	end
+end
+
 function M.PinCommand(arg)
 	if arg == "" then
 		M.PinStatus()
+	elseif slower(arg) == "debug" then
+		M.PinDebug()
 	elseif M.PinIsOff(arg) then
 		M.PinOff()
 	else
