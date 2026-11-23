@@ -1,0 +1,92 @@
+ShikiCodexData_Quests - NOTICE (credits et licences des donnees)
+============================================================
+
+Ce dossier est un jeu de DONNEES GENERE par tools/build_codex_data.js (depot ShikiUI). Il contient les quetes (titres, niveaux, PNJ de depart et de fin, epingles de carte) et les recompenses des quetes de donjon. Il depend de ShikiCodexData.
+Date de construction : 2026-11-23.
+
+Licence de ce dossier : GNU General Public License version 2 (fichier LICENSE). Elle s'impose parce que les listes de butin, les pages de sets et de
+reputation et les recompenses de quetes de donjon sont derivees d'Atlas-CFM (GPL v2). Le code de ShikiUI (dossier ShikiUI\, licence MIT) est SEPARE :
+ces donnees sont chargees a la demande (LoadOnDemand) et ne sont liees a aucun fichier de code.
+
+Sources
+-------
+1. Atlas-CFM_Core 1.87 (Atlas-CFM) : butin des boss, pages de sets / reputation / cles, quetes de donjon et leurs recompenses.
+   Licence GPL v2. Auteur indique par l'addon : "CFM, etc". En-tete de licence d'origine :
+
+   | # Atlas-CFM a World of Warcraft addon.
+   | 
+   | # This program is free software; you can redistribute it and/or modify
+   | # it under the terms of the GNU General Public License as published by
+   | # the Free Software Foundation; either version 2 of the License, or
+   | # (at your option) any later version.
+   | #
+   | # This program is distributed in the hope that it will be useful,
+   | # but WITHOUT ANY WARRANTY; without even the implied warranty of
+   | # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   | # GNU General Public License for more details.
+   | #
+   | # You should have received a copy of the GNU General Public License
+   | # along with this program; if not, write to the Free Software
+   | # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
+
+2. pfQuest 8.0.0 : base de donnees de quetes, PNJ, objets, zones, noms anglais et francais. Licence MIT.
+   Origine des donnees indiquee par pfQuest : base serveur VMaNGOS, traductions de MaNGOS Extras.
+
+   | MIT License
+   | 
+   | Copyright (c) 2017-2021 Eric Mauser (Shagu)
+   | 
+   | Permission is hereby granted, free of charge, to any person obtaining a copy
+   | of this software and associated documentation files (the "Software"), to deal
+   | in the Software without restriction, including without limitation the rights
+   | to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+   | copies of the Software, and to permit persons to whom the Software is
+   | furnished to do so, subject to the following conditions:
+   | 
+   | The above copyright notice and this permission notice shall be included in all
+   | copies or substantial portions of the Software.
+   | 
+   | THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+   | IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+   | FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+   | AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+   | LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+   | OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+   | SOFTWARE.
+
+3. pfQuest-octo-plus 1.0.0 : donnees du serveur OctoWoW pour pfQuest (fichiers *-turtle, extra\), noms anglais. Licence MIT.
+   Il n'existe pas de francais pour ces ajouts : les noms francais ne viennent que de la base pfQuest d'origine, et ne sont gardes que s'ils
+   correspondent encore au texte anglais de base (sinon repli sur l'anglais).
+
+   | MIT License
+   | 
+   | Copyright (c) 2021 Eric Mauser (Shagu)
+   | Copyright (c) 2021-2026 the pfQuest-octo contributors
+   | Copyright (c) 2026 Salahaja (the additions under extra/ and tools/)
+   | 
+   | Permission is hereby granted, free of charge, to any person obtaining a copy
+   | of this software and associated documentation files (the "Software"), to deal
+   | in the Software without restriction, including without limitation the rights
+   | to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+   | copies of the Software, and to permit persons to whom the Software is
+   | furnished to do so, subject to the following conditions:
+   | 
+   | The above copyright notice and this permission notice shall be included in all
+   | copies or substantial portions of the Software.
+   | 
+   | THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+   | IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+   | FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+   | AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+   | LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+   | OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+   | SOFTWARE.
+
+Transformation
+--------------
+Les donnees sont lues par l'outil dans les addons du joueur (lecture seule), fusionnees comme le fait pfQuest-octo-plus (remplacement par id, "_" = suppression,
+extra\ en ajout seul), filtrees (profils de serveur d'Atlas, quetes de test), normalisees, compactees (tableaux paralleles, chaines empaquetees) et ecrites en
+Lua 5.0 pur ASCII. Aucune donnee n'est inventee ; ce que les sources ne contiennent pas (qualite et icone des objets, gains de reputation, recompenses
+hors quetes de donjon) est absent.
+
+Textes francais saisis a la main par l'outil (tools/codex_i18n.js) : descriptions courtes d'Atlas, noms de quelques factions, classes. Non verifies en jeu.
