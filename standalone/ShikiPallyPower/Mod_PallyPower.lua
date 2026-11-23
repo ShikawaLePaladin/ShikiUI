@@ -343,10 +343,10 @@ function M.SpellName(b, single)
 end
 
 -- Niveaux d'apprentissage des rangs (1.12) : le client refuse un rang trop haut sur une cible de bas niveau ("niveau trop bas").
--- Une benediction superieure n'existe qu'au niveau 52+ : sur une cible de niveau < 60 on pose donc la benediction simple, au bon rang. [donnees du jeu]
+-- Benediction superieure (30 min) : posee sur TOUS les niveaux par defaut (verifie par le joueur en jeu) ; l'option pallypower.greaterlvl permet de repasser en 10 min sous un niveau donne.
 M.RANKLVL = { might = { 4, 12, 22, 32, 42, 52, 60 }, wisdom = { 14, 24, 34, 44, 54, 60 }, kings = { 20 }, salvation = { 26 },
 	light = { 40, 50, 60 }, sanctuary = { 30, 40, 50, 60 } }
-M.GREATERLVL = 60
+M.GREATERLVL = 0
 
 -- Rang a lancer sur une unite : nil = rang maximum (pas de suffixe) ; n = rang n (au minimum 1 : sur une cible plus basse que le rang 1, on tente le rang 1 et le serveur tranche).
 function M.RankFor(b, unit)
@@ -366,7 +366,7 @@ end
 function M.LowLevel(unit)
 	local ul = getglobal("UnitLevel")
 	local lv = type(ul) == "function" and ul(unit)
-	return type(lv) == "number" and lv > 0 and lv < M.GREATERLVL
+	return type(lv) == "number" and lv > 0 and lv < (C.Get("pallypower.greaterlvl") or M.GREATERLVL)
 end
 
 -- Nom complet du sort pour une unite : single = 10 min ; rang adapte au niveau.
@@ -2570,6 +2570,7 @@ SUI.RegisterModule("pallypower", {
 	cost = "medium",
 	options = {
 		opt("greater", "bool", 10, true, { simple = true }),
+		opt("greaterlvl", "number", 10.5, M.GREATERLVL, { min = 0, max = 60, step = 1 }),
 		opt("compact", "bool", 15, true, { simple = true }),
 		opt("mini", "bool", 16, true, { simple = true }),
 		opt("minilayout", "choice", 16.5, "row", { choices = { "row", "col", "grid" }, choiceText = miniText, simple = true }),
@@ -2585,6 +2586,45 @@ SUI.RegisterModule("pallypower", {
 	enable = function() M.Enable() end,
 	disable = function() M.Disable() end,
 })
+
+-- /sui pp focus : 5 s pour poser la souris sur un bouton, puis dit quel cadre RECOIT la souris et l'etat du mini-panneau / de la fenetre
+-- (diagnostic "je n'arrive pas a cliquer" : un cadre transparent par-dessus apparait ici avec son nom).
+local function probeFrame(f)
+	local nm = (f.GetName and f:GetName()) or "?"
+	local me = "?"
+	if f.IsMouseEnabled then me = f:IsMouseEnabled() and "mouse" or "nomouse" end
+	return nm .. "[" .. tostring(f:GetFrameStrata()) .. "/" .. tostring(f:GetFrameLevel()) .. " " .. me .. "]"
+end
+
+function M.FocusProbe()
+	SUI.Print(L("msg.pallypower.focus.wait"))
+	SUI.After(5, function()
+		local gf = getglobal("GetMouseFocus")
+		local f = type(gf) == "function" and gf() or nil
+		local s = EMPTY
+		local n = 0
+		while f and n < 8 do
+			s = s .. probeFrame(f) .. " < "
+			f = f.GetParent and f:GetParent() or nil
+			n = n + 1
+		end
+		SUI.Print("FOCUS " .. (s ~= EMPTY and s or "none"))
+		local mm = M.mini
+		if mm then
+			local l, b = mm:GetLeft(), mm:GetBottom()
+			SUI.Print("MINI " .. probeFrame(mm) .. " shown=" .. tostring(mm:IsShown()) .. " x=" .. tostring(l and math.floor(l)) .. " y="
+				.. tostring(b and math.floor(b)) .. " w=" .. tostring(math.floor(mm:GetWidth())) .. " h=" .. tostring(math.floor(mm:GetHeight()))
+				.. " scale=" .. tostring(mm:GetEffectiveScale()))
+		else
+			SUI.Print("MINI none")
+		end
+		if M.win then
+			SUI.Print("WIN " .. probeFrame(M.win) .. " shown=" .. tostring(M.win:IsShown()))
+		else
+			SUI.Print("WIN none")
+		end
+	end, "pp.focus")
+end
 
 -- Le module reste actif en mode Raid : les benedictions d'urgence se posent EN combat.
 SUI.RegisterCommand("pp", function(rest)
@@ -2610,6 +2650,8 @@ SUI.RegisterCommand("pp", function(rest)
 		M.Report()
 	elseif rest == "debug" then
 		M.Debug()
+	elseif rest == "focus" then
+		M.FocusProbe()
 	elseif rest == "whisper" then
 		M.WhisperAll()
 	elseif rest == "demo" then
