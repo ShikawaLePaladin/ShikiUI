@@ -1652,6 +1652,8 @@ function M.PinClick(p, button)
 	end
 	f:Show()
 	M.popPin = p
+	local tt = glob("WorldMapTooltip") or glob("GameTooltip")
+	if tt then tt:Hide() end       -- la fenetre remplace l'infobulle de survol (sinon deux cadres se superposent)
 end
 
 -- Bandeau en haut de la carte : ce qui est epingle et ou le voir (clic : zone suivante). Cree hors combat.

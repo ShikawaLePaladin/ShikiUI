@@ -19,7 +19,7 @@ SUI.Places = M
 
 M.on = false
 M.ADDON = "ShikiCodexData_Places"
-M.CELL = 2.5                 -- cote (en % de la carte) d'une cellule de regroupement
+M.CELL = 4.5                 -- cote (en % de la carte) d'une cellule de regroupement
 M.TIPMAX = 8                 -- lignes de l'infobulle d'une epingle
 M.ENTMAX = 40                -- entrees gardees par epingle (la fenetre de clic en montre 8)
 
