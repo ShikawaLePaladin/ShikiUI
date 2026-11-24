@@ -729,6 +729,31 @@ function M.EntryRec(Cx, e)
 	return rec or nil
 end
 
+-- Rendu d'une quete NON terminee : les memes epingles "?" que celles d'une quete finie, mais grisees (comme le "?" gris du jeu au-dessus du PNJ)
+function M.GreyEndRec(Cx, e)
+	if e.complete then return nil end
+	local id = M.Resolve(e)
+	if not id then return nil end
+	local key = id .. ":G"
+	local rec = M.recs[key]
+	if rec == nil then
+		local full = Cx.PinBuild(id)
+		rec = full and filtered(full, "E") or false
+		if rec then
+			rec.greyEnd = true
+			for i = 1, getn(rec.zones) do
+				local g = rec.zones[i]
+				for k = 1, getn(g.pins) do
+					local p = g.pins[k]
+					g.pins[k] = { k = p.k, x = p.x, y = p.y, nm = p.nm, ek = p.ek, grey = true }
+				end
+			end
+		end
+		M.recs[key] = rec
+	end
+	return rec or nil
+end
+
 -- Fournisseur appele par le Codex (carte ouverte seulement) : une liste d'enregistrements resolus pour les quetes du journal
 function M.Recs(c, z, ctx)
 	local Cx = codex()
@@ -742,6 +767,10 @@ function M.Recs(c, z, ctx)
 	for i = 1, getn(view) do
 		local rec = M.EntryRec(Cx, view[i])
 		if rec then tinsert(out, rec) end
+		if ctx ~= "arrow" then
+			local gr = M.GreyEndRec(Cx, view[i])
+			if gr then tinsert(out, gr) end
+		end
 	end
 	if wantGiv then
 		if M.gready then
@@ -905,7 +934,7 @@ function M.MiniMove()
 	local pa = 0.35 + 0.35 * math.sin(GetTime() * 4)
 	for i = 1, n do
 		local q = M.mact[i].p
-		if q.kind == "E" then
+		if q.kind == "E" and not (q.data and q.data.grey) then
 			q.hl:SetAlpha(pa)
 			q.hl:Show()
 		end
@@ -934,7 +963,7 @@ function M.MiniMove()
 		end
 		local show = true
 		if far then
-			if e.tracked and (edge or p.kind == "E") then
+			if e.tracked and (edge or (p.kind == "E" and not (p.data and p.data.grey))) then
 				local k
 				if square then
 					local ax, ay = sx < 0 and -sx or sx, sy < 0 and -sy or sy
@@ -1009,13 +1038,13 @@ function M.MiniTick()
 				p.rec, p.data = e.rec, e.d
 				Cx.PaintIcon(p, e.d, vk)
 				-- rendre une quete : "?" plus grand, au-dessus des autres epingles et qui pulse (voir M.MiniMove)
-				local sz2 = (vk == "E") and (M.MINI_SIZE * 1.5) or M.MINI_SIZE
+				local sz2 = (vk == "E" and not e.d.grey) and (M.MINI_SIZE * 1.5) or M.MINI_SIZE
 				p:SetWidth(sz2)
 				p:SetHeight(sz2)
 				p.hl:SetWidth(sz2 * 1.7)
 				p.hl:SetHeight(sz2 * 1.7)
-				p:SetFrameLevel(mm:GetFrameLevel() + ((vk == "E") and 9 or 6))
-				if vk == "E" then
+				p:SetFrameLevel(mm:GetFrameLevel() + ((vk == "E" and not e.d.grey) and 9 or 6))
+				if vk == "E" and not e.d.grey then
 					p.hl:SetVertexColor(1, 0.85, 0.2)
 				else
 					p.hl:Hide()
