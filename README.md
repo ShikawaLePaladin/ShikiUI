@@ -81,6 +81,19 @@ Main command: **`/sui`** (menu, first-run wizard included). Codex: the **Codex**
 
 ## Screenshots
 
+### The interface
+
+| | |
+|---|---|
+| ![Menu home](screenshots/ui-menu-home.png) | ![Module list](screenshots/ui-menu-modules.png) |
+| *The /sui menu: pick a task, a role and a style* | *Every module on one page: on/off, cost, settings* |
+| ![Bags](screenshots/ui-bags.png) | ![Character window](screenshots/ui-character.png) |
+| *Bags sorted by category, with search* | *Character window with stats and a role view* |
+
+![In-game overview](screenshots/ui-overview.png)
+
+### The Codex
+
 | | |
 |---|---|
 | ![Codex home](screenshots/codex-home.png) | ![Codex monster and quest search](screenshots/codex-search-monsters.png) |

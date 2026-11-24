@@ -80,6 +80,19 @@ Commande principale : **`/sui`** (menu, assistant de premier lancement inclus). 
 
 ## Captures d'ecran
 
+### L'interface
+
+| | |
+|---|---|
+| ![Accueil du menu](screenshots/ui-menu-home.png) | ![Liste des modules](screenshots/ui-menu-modules.png) |
+| *Le menu /sui : choisir une tache, un role, un style* | *Tous les modules sur une page : actif/coupe, cout, reglages* |
+| ![Sacs](screenshots/ui-bags.png) | ![Fenetre du personnage](screenshots/ui-character.png) |
+| *Sacs tries par categorie, avec recherche* | *Fenetre du personnage : stats et vue par role* |
+
+![Vue d'ensemble en jeu](screenshots/ui-overview.png)
+
+### Le Codex
+
 | | |
 |---|---|
 | ![Accueil du Codex](screenshots/codex-home.png) | ![Recherche de quetes et de monstres](screenshots/codex-search-monsters.png) |
