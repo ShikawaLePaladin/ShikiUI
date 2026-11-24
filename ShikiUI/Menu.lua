@@ -762,7 +762,7 @@ function M.LoadState()
 	local p = C.GetGlobal("menuPage")
 	if type(p) == "string" then
 		M.page = "home"
-		if p == "modules" or p == "styles" or p == "addons" or p == "profiles" then
+		if p == "modules" or p == "styles" or p == "addons" or p == "profiles" or p == "errors" then
 			M.page = p
 		else
 			local _, _, c = string.find(p, "^cat:([a-z0-9]+)$")
@@ -783,7 +783,7 @@ end
 -- Navigation : page = "home" | "modules" | "styles" | "cat" (cat = categorie ou module). Efface la recherche.
 function M.Open(page, cat)
 	if page == "cat" and not M.CatExists(cat) then page = "home" end
-	if page ~= "home" and page ~= "modules" and page ~= "styles" and page ~= "addons" and page ~= "profiles" and page ~= "cat" then page = "home" end
+	if page ~= "home" and page ~= "modules" and page ~= "styles" and page ~= "addons" and page ~= "profiles" and page ~= "errors" and page ~= "cat" then page = "home" end
 	M.page = page
 	if page == "cat" then M.cat = cat end
 	M.ClearHl()
@@ -805,7 +805,7 @@ function M.Route(arg)
 	if mm then
 		M.mode = mm
 		SUI.Config.SetGlobal("menuMode", mm)
-	elseif arg == "home" or arg == "modules" or arg == "styles" or arg == "addons" or arg == "profiles" then
+	elseif arg == "home" or arg == "modules" or arg == "styles" or arg == "addons" or arg == "profiles" or arg == "errors" then
 		M.page = arg
 		M.StorePage()
 	elseif M.CatExists(arg) then
