@@ -517,12 +517,22 @@ function M.Legend()
 		f.zs, f.ds = {}, {}
 		for i = 1, 24 do
 			local a = legendCol(f, "LEFT")
-			a:SetPoint("TOPLEFT", f, "TOPLEFT", 14, -(48 + (i - 1) * 14))
+			a:SetPoint("TOPLEFT", f, "TOPLEFT", 14, -(72 + (i - 1) * 14))
 			f.zs[i] = a
 			local b = legendCol(f, "RIGHT")
 			b:SetPoint("TOPRIGHT", f, "TOPRIGHT", -14, -(160 + (i - 1) * 14))
 			f.ds[i] = b
 		end
+		f.bShow = T.Button(f, "", 96, 18, function()
+			C.Set("questtrack.legend", not C.Get("questtrack.legend"))
+			M.LegendPaint()
+		end)
+		f.bShow:SetPoint("TOPLEFT", f, "TOPLEFT", 14, -46)
+		f.bMine = T.Button(f, "", 110, 18, function()
+			C.Set("questtrack.legendmine", not C.Get("questtrack.legendmine"))
+			M.LegendPaint()
+		end)
+		f.bMine:SetPoint("LEFT", f.bShow, "RIGHT", 6, 0)
 		f.t = 0
 		f:SetScript("OnUpdate", function()
 			this.t = this.t + (arg1 or 0)
@@ -541,13 +551,29 @@ function M.LegendPaint()
 	local c, z = 0, 0
 	local gc, gz = glob("GetCurrentMapContinent"), glob("GetCurrentMapZone")
 	if gc and gz then c, z = gc(), gz() end
-	local show = M.on and C.Get("questtrack.legend") and z == 0 and (c == 1 or c == 2)
-	-- jamais Hide() : un cadre cache ne recevrait plus OnUpdate
-	if not show then
+	local cont = M.on and z == 0 and (c == 1 or c == 2)
+	-- le cadre reste affiche (sinon plus d'OnUpdate) ; seuls les boutons se cachent
+	if not cont then
 		f:SetAlpha(0)
+		f.bShow:Hide()
+		f.bMine:Hide()
 		return
 	end
 	f:SetAlpha(1)
+	local on = C.Get("questtrack.legend") and true or false
+	local mine = C.Get("questtrack.legendmine") and true or false
+	f.bShow:Show()
+	T.SetButtonText(f.bShow, L("msg.questtrack.leg.show"))
+	T.SetSelected(f.bShow, on)
+	if on then
+		f.bMine:Show()
+		T.SetButtonText(f.bMine, L("msg.questtrack.leg.mine"))
+		T.SetSelected(f.bMine, mine)
+	else
+		f.bMine:Hide()
+		for i = 1, 24 do f.zs[i]:SetText("") f.ds[i]:SetText("") end
+		return
+	end
 	local pl = UnitLevel("player") or 1
 	local fr = (SUI.locale == "fr") or (SUI.locale == nil and GetLocale and GetLocale() == "frFR")
 	local n, m = 0, 0
@@ -556,7 +582,7 @@ function M.LegendPaint()
 	for i = 1, getn(zones) do have[slower(zones[i])] = true end
 	for i = 1, getn(M.ZL) do
 		local e = M.ZL[i]
-		if e[5] == c and (have[slower(e[1])] or have[slower(e[2])]) and n < 24 then
+		if e[5] == c and (have[slower(e[1])] or have[slower(e[2])]) and n < 24 and (not mine or (e[3] <= pl + 2 and e[4] >= pl - 2)) then
 			n = n + 1
 			local col = lvColor(e[3], e[4], pl)
 			local fsx = f.zs[n]
@@ -567,7 +593,7 @@ function M.LegendPaint()
 	for i = n + 1, 24 do f.zs[i]:SetText("") end
 	for i = 1, getn(M.DL) do
 		local e = M.DL[i]
-		if (e[5] == c or (c == 1 and e[2] == "Ahn'Qiraj")) and m < 24 then
+		if e[5] == c and m < 24 and (not mine or (e[3] <= pl + 2 and e[4] >= pl - 2)) then
 			m = m + 1
 			local col = lvColor(e[3], e[4], pl)
 			local fsx = f.ds[m]
@@ -1695,6 +1721,7 @@ SUI.RegisterModule("questtrack", {
 		opt("pinsize", "number", 24, 16, { min = 12, max = 32, step = 1 }),
 		opt("giverlow", "number", 26, 6, { min = 0, max = 20, step = 1 }),
 		opt("legend", "bool", 26.8, true),
+		opt("legendmine", "bool", 26.9, true),
 		opt("giverhigh", "number", 26.5, 3, { min = 0, max = 10, step = 1 }),
 		opt("max", "number", 30, 8, { min = 3, max = 15, step = 1 }),
 		opt("width", "number", 40, 230, { min = 160, max = 400, step = 10 }),
