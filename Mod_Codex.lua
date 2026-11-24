@@ -1582,7 +1582,7 @@ end
 -- Infobulle : titre de la quete, puis "Depart : <PNJ>" / "Fin : ..." / "Objectif : ..." (un nom d'objet est signale comme tel)
 function M.PinEnter(p)
 	local rec, d = p.rec or M.pin, p.data
-	local tt = glob("WorldMapTooltip") or glob("GameTooltip")
+	local tt = (not p.useGame and glob("WorldMapTooltip")) or glob("GameTooltip")
 	if not rec or not d or not tt then return end
 	p.hl:Show()
 	tt:SetOwner(p, "ANCHOR_LEFT")
@@ -1609,7 +1609,7 @@ end
 
 function M.PinLeave(p)
 	p.hl:Hide()
-	local tt = glob("WorldMapTooltip") or glob("GameTooltip")
+	local tt = (not p.useGame and glob("WorldMapTooltip")) or glob("GameTooltip")
 	if tt then tt:Hide() end
 end
 
