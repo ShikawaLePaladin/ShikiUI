@@ -630,6 +630,25 @@ local function refreshFrozen(f)
 	U.UpdateAuras(f)
 end
 
+-- Repere "monstre de quete" au coin du cadre (cibles et assimiles, pas le joueur ni les amis)
+function U.UpdateQuestMark(f, unit, name)
+	local Q = SUI.QuestTrack
+	local on = unit ~= "player" and Q and Q.MarkWanted and Q.MarkWanted() and not UnitIsPlayer(unit) and not UnitIsFriend("player", unit)
+		and Q.UnitObjective(name) and true or false
+	if on then
+		if not f.qTex then
+			f.qTex = f:CreateTexture(nil, "OVERLAY")
+			f.qTex:SetWidth(14)
+			f.qTex:SetHeight(14)
+			f.qTex:SetTexture(Q.MARK_TEX)
+			f.qTex:SetPoint("BOTTOMLEFT", f, "TOPLEFT", 2, 1)
+		end
+		f.qTex:Show()
+	elseif f.qTex then
+		f.qTex:Hide()
+	end
+end
+
 function U.Refresh(f)
 	local unit = f.unit
 	if f.key == "focus" and not UnitExists(unit) then
@@ -647,6 +666,7 @@ function U.Refresh(f)
 		if lv and lv > 0 then prefix = lv .. " " elseif lv == -1 then prefix = "?? " end
 	end
 	f.nameText:SetText(prefix .. name)
+	U.UpdateQuestMark(f, unit, name)
 	if f.snap then
 		f.drawn = false          -- nouvelle unite : la barre saute a la bonne valeur au lieu de glisser depuis l'ancienne
 		f.snap = false
