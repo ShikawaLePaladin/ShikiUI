@@ -79,6 +79,15 @@ Main command: **`/sui`** (menu, first-run wizard included). Codex: the **Codex**
 - **Quest-mob markers** — a "!" on nameplates and on the target frame for monsters you need to kill, and a green line in their tooltip.
 - **Monster search** — find a monster by name (French or English), see its levels and pin where it lives.
 
+## Screenshots
+
+| | |
+|---|---|
+| ![Codex home](screenshots/codex-home.png) | ![Codex monster and quest search](screenshots/codex-search-monsters.png) |
+| *The Codex: loot, sets, reputations, quests, monsters* | *Search finds quests and monsters; a click pins them on the map* |
+| ![Quest tracker, direction arrow and minimap](screenshots/quest-tracker-arrow-minimap.png) | ![World map with monster and quest pins](screenshots/world-map-monster-pins.png) |
+| *Quest tracker, direction arrow and minimap pins* | *World map: monster spawn points, "!" and "?" pins* |
+
 ## Main modules (ShikiUI)
 
 | Category | Modules |

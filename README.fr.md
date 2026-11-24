@@ -78,6 +78,15 @@ Commande principale : **`/sui`** (menu, assistant de premier lancement inclus). 
 - **Reperes de monstres de quete** — un "!" sur les plaques de nom et le cadre de cible pour les monstres a tuer, et une ligne verte dans leur infobulle.
 - **Recherche de monstres** — trouver un monstre par son nom (francais ou anglais), voir ses niveaux et epingler ou il vit.
 
+## Captures d'ecran
+
+| | |
+|---|---|
+| ![Accueil du Codex](screenshots/codex-home.png) | ![Recherche de quetes et de monstres](screenshots/codex-search-monsters.png) |
+| *Le Codex : butin, sets, reputations, quetes, monstres* | *La recherche trouve quetes et monstres ; un clic les epingle sur la carte* |
+| ![Suivi de quetes, fleche et minicarte](screenshots/quest-tracker-arrow-minimap.png) | ![Carte du monde avec epingles de monstres et de quetes](screenshots/world-map-monster-pins.png) |
+| *Suivi de quetes, fleche de direction et epingles de minicarte* | *Carte du monde : points d'apparition des monstres, "!" et "?"* |
+
 ## Modules principaux (ShikiUI)
 
 | Categorie | Modules |
