@@ -39,8 +39,10 @@ local function glob(name)
 	return getglobal(name)
 end
 
--- Langue des textes : "fr" sur un client frFR, sinon "en".
+-- Langue des textes : celle de ShikiUI (reglage de langue de l'interface), pas celle du client WoW :
+-- un client anglais avec une interface francaise doit voir les quetes et les objets en francais.
 local function lang()
+	if SUI and SUI.locale then return SUI.locale == "fr" and "fr" or "en" end
 	if GetLocale and GetLocale() == "frFR" then return "fr" end
 	return "en"
 end
