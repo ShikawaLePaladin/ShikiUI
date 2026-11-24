@@ -745,7 +745,7 @@ function M.GreyEndRec(Cx, e)
 				local g = rec.zones[i]
 				for k = 1, getn(g.pins) do
 					local p = g.pins[k]
-					g.pins[k] = { k = p.k, x = p.x, y = p.y, nm = p.nm, ek = p.ek, grey = true }
+					g.pins[k] = { k = p.k, x = p.x, y = p.y, nm = p.nm, ek = p.ek, grey = "end" }
 				end
 			end
 		end
@@ -1043,7 +1043,7 @@ function M.MiniTick()
 				p:SetHeight(sz2)
 				p.hl:SetWidth(sz2 * 1.7)
 				p.hl:SetHeight(sz2 * 1.7)
-				p:SetFrameLevel(mm:GetFrameLevel() + ((vk == "E" and not e.d.grey) and 9 or 6))
+				p:SetFrameLevel(mm:GetFrameLevel() + ((vk == "E") and ((e.d.grey and 7) or 9) or 6))
 				if vk == "E" and not e.d.grey then
 					p.hl:SetVertexColor(1, 0.85, 0.2)
 				else
