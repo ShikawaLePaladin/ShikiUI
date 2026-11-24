@@ -114,6 +114,53 @@ function M.TitleIndex(Cx)
 end
 
 -- Numero de la quete d'une ligne du journal : niveau identique d'abord, sinon le plus petit numero ; false = inconnue ; nil = donnees indisponibles
+-- Mots d'un titre (sans accents ni petits mots), tronques a 4 lettres : "nettoyage" ~ "nettoyer", "tannepeau" ~ "tanneur"
+function M.TitleWords(t)
+	local out = {}
+	for w in string.gfind(M.FoldName(t), "[%a%d]+") do
+		if string.len(w) >= 4 then tinsert(out, string.sub(w, 1, 4)) end
+	end
+	return out
+end
+
+-- Quete la plus proche par les mots du titre (meme niveau que la ligne du journal, au moins la moitie des mots en commun) ; nil si aucune
+function M.FuzzyId(Cx, e)
+	local qd = Cx.P.Q()
+	if not qd or not qd.en or not qd.en.t then return nil end
+	local want = M.TitleWords(e.title)
+	local nw = getn(want)
+	if nw == 0 then return nil end
+	local best, bs = nil, 0
+	local function scan(tt)
+		if type(tt) ~= "table" then return end
+		for id, t in pairs(tt) do
+			if type(t) == "string" then
+				local lvl = Cx.P.QuestLevels(id)
+				if lvl == e.level or (lvl == nil and e.level == nil) then
+					local have = M.TitleWords(t)
+					local nh = getn(have)
+					if nh > 0 then
+						local hits = 0
+						for i = 1, nw do
+							for j = 1, nh do
+								if have[j] == want[i] then
+									hits = hits + 1
+									break
+								end
+							end
+						end
+						local sc = hits / (nw > nh and nw or nh)
+						if sc >= 0.5 and (sc > bs or (sc == bs and best and id < best)) then best, bs = id, sc end
+					end
+				end
+			end
+		end
+	end
+	scan(qd.fr and qd.fr.t)
+	scan(qd.en.t)
+	return best
+end
+
 function M.Resolve(e)
 	if e.id ~= nil then return e.id end
 	local Cx = codex()
@@ -122,8 +169,9 @@ function M.Resolve(e)
 	if not idx then return nil end
 	local l = idx[slower(e.title)]
 	if not l then
-		e.id = false
-		return false
+		-- titres du serveur francais differents des donnees ("Eagan Tannepeau" / "Eagan le tanneur") : rapprochement par mots
+		e.id = M.FuzzyId(Cx, e) or false
+		return e.id
 	end
 	local best, any = nil, nil
 	for k = 1, getn(l) do
@@ -975,11 +1023,7 @@ end
 
 -- Titre affiche : celui des donnees du Codex (francais quand l'interface l'est) si la quete est reconnue, sinon celui du client
 function M.Title(e)
-	local Cx = codex()
-	if Cx and type(e.id) == "number" and Cx.P.Q() then
-		local t = Cx.P.QuestTitle(e.id)
-		if type(t) == "string" and t ~= "" then return t end
-	end
+	-- le titre du client (serveur Turtle francais : peut differer des donnees du Codex)
 	return e.title
 end
 
