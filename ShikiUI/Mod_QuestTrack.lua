@@ -1429,6 +1429,14 @@ function M.ArrowPick()
 		local pinned = Cx.pin
 		if pinned and type(pinned.zones) == "table" and Cx.PinHere(pinned, c, z) then
 			srcs = { pinned }
+			-- quete deja dans le journal : la fleche vise ses objectifs / son rendu, jamais le point de depart ("!" trompeur)
+			for i = 1, getn(M.list) do
+				if M.list[i].id == pinned.id then
+					local r = M.EntryRec(Cx, M.list[i])
+					if r and Cx.PinHere(r, c, z) then srcs = { r } end
+					break
+				end
+			end
 		end
 	end
 	local best, bd = nil, nil
