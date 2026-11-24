@@ -16,12 +16,13 @@ Le zip de la release contient **4 dossiers** a copier ensemble dans `Interface\A
 | `ShikiCodexData` | donnees du Codex : butin des donjons et raids, sets, reputations, attunements | pour le Codex (onglets Donjons, Sets, Reputations) |
 | `ShikiCodexData_Quests` | donnees de quetes : titres, niveaux, PNJ, epingles de carte et de minicarte, fleche | pour les quetes dans le Codex, les "!" sur les cartes, la fleche |
 | `ShikiCodexData_Places` | lieux utiles : marchands, boites aux lettres, maitres de vol, herbes, minerais... | pour les epingles de lieux sur les cartes |
+| `ShikiCodexData_Mobs` | monstres : noms, niveaux, points de carte, sources de butin | pour la recherche de monstres du Codex (epingles sur les cartes) |
 
-Les trois dossiers `ShikiCodexData*` sont des **donnees generees** (jamais modifiees a la main) ; ils sont charges *a la demande* :
+Les quatre dossiers `ShikiCodexData*` sont des **donnees generees** (jamais modifiees a la main) ; ils sont charges *a la demande* :
 ils ne coutent ni memoire ni temps de chargement tant que tu n'ouvres pas le Codex ou une carte. Sans eux, ShikiUI fonctionne
 normalement mais le Codex et les epingles de quetes restent vides. Ils portent le meme numero de version que ShikiUI.
 
-**Manuel** : dezipper `ShikiUI-v1.2.8.zip` dans `Interface\AddOns\` (les 4 dossiers sont a la racine du zip), puis relancer le jeu
+**Manuel** : dezipper `ShikiUI-v1.2.9.zip` dans `Interface\AddOns\` (les 5 dossiers sont a la racine du zip), puis relancer le jeu
 (un nouvel addon demande un redemarrage complet la premiere fois ; ensuite `/reload` suffit).
 
 **OctoLauncher** : ajouter le lien `https://github.com/ShikawaLePaladin/ShikiUI` (installe `ShikiUI`), puis les donnees via leurs branches :

@@ -901,6 +901,15 @@ function M.MiniMove()
 	if n == 0 then return end
 	local mm, gp = glob("Minimap"), glob("GetPlayerMapPosition")
 	if not mm or not gp then return end
+	-- halo qui pulse autour des "?" (rendre une quete)
+	local pa = 0.35 + 0.35 * math.sin(GetTime() * 4)
+	for i = 1, n do
+		local q = M.mact[i].p
+		if q.kind == "E" then
+			q.hl:SetAlpha(pa)
+			q.hl:Show()
+		end
+	end
 	local px, py = gp("player")
 	if not px or (px == 0 and py == 0) then return end
 	local zoom = mm:GetZoom() or 0
@@ -925,7 +934,7 @@ function M.MiniMove()
 		end
 		local show = true
 		if far then
-			if e.tracked and edge then
+			if e.tracked and (edge or p.kind == "E") then
 				local k
 				if square then
 					local ax, ay = sx < 0 and -sx or sx, sy < 0 and -sy or sy
@@ -999,6 +1008,18 @@ function M.MiniTick()
 				p.kind = vk
 				p.rec, p.data = e.rec, e.d
 				Cx.PaintIcon(p, e.d, vk)
+				-- rendre une quete : "?" plus grand, au-dessus des autres epingles et qui pulse (voir M.MiniMove)
+				local sz2 = (vk == "E") and (M.MINI_SIZE * 1.5) or M.MINI_SIZE
+				p:SetWidth(sz2)
+				p:SetHeight(sz2)
+				p.hl:SetWidth(sz2 * 1.7)
+				p.hl:SetHeight(sz2 * 1.7)
+				p:SetFrameLevel(mm:GetFrameLevel() + ((vk == "E") and 9 or 6))
+				if vk == "E" then
+					p.hl:SetVertexColor(1, 0.85, 0.2)
+				else
+					p.hl:Hide()
+				end
 				local ent = Cx.PinEntries(e.rec, e.d)
 				local mk = Cx.PinMark(vk, ent and getn(ent) or 0)
 				if p.markText ~= mk then
@@ -1105,6 +1126,29 @@ function M.Row(i)
 		if GameTooltip then GameTooltip:Hide() end
 	end)
 	r = { btn = b, objs = {} }
+	-- mini bouton : la fleche de direction suit CETTE quete (re-clic : retour a la plus proche)
+	local ab = CreateFrame("Button", nil, f)
+	ab:SetWidth(13)
+	ab:SetHeight(13)
+	ab:SetPoint("RIGHT", b, "RIGHT", 0, 0)
+	ab:SetFrameLevel(b:GetFrameLevel() + 2)
+	ab.tex = ab:CreateTexture(nil, "ARTWORK")
+	ab.tex:SetAllPoints(ab)
+	ab.tex:SetTexture(M.ARROW_TEX)
+	ab:SetScript("OnClick", function()
+		if this.entry then M.SetArrowTarget(this.entry) end
+	end)
+	ab:SetScript("OnEnter", function()
+		if GameTooltip then
+			GameTooltip:SetOwner(this, "ANCHOR_LEFT")
+			GameTooltip:SetText(L("msg.questtrack.arrowbtn"))
+			GameTooltip:Show()
+		end
+	end)
+	ab:SetScript("OnLeave", function()
+		if GameTooltip then GameTooltip:Hide() end
+	end)
+	r.ab = ab
 	for j = 1, M.MAXOBJ do
 		local fs = T.Text(f, 10, T.c.text, "LEFT")
 		r.objs[j] = fs
@@ -1168,7 +1212,11 @@ function M.Paint()
 		b:SetPoint("TOPLEFT", f, "TOPLEFT", M.PAD, -y)
 		local col = e.complete and T.c.good or T.c.warn
 		b.txt:SetTextColor(col[1], col[2], col[3], col[4] or 1)
-		b.txt:SetWidth(w - 2 * M.PAD)
+		b.txt:SetWidth(w - 2 * M.PAD - 16)
+		r.ab.entry = e
+		local on = C.Get("questtrack.arrowq") == M.Key(e)
+		r.ab.tex:SetVertexColor(on and 1 or 0.7, on and 0.85 or 0.7, on and 0.2 or 0.7, on and 1 or 0.8)
+		r.ab:Show()
 		b.txt:SetText((e.level > 0 and ("[" .. e.level .. "] ") or "") .. M.Title(e))
 		b:Show()
 		y = y + 15
@@ -1192,6 +1240,7 @@ function M.Paint()
 	end
 	for i = n + 1, getn(M.rows) do
 		M.rows[i].btn:Hide()
+		M.rows[i].ab:Hide()
 		for j = 1, M.MAXOBJ do M.rows[i].objs[j]:Hide() end
 	end
 	f:SetHeight(y + M.PAD)
@@ -1308,6 +1357,22 @@ M.ARROW_PICK = 1             -- secondes entre deux choix de cible
 M.ARROW_EVERY = 0.05         -- secondes entre deux mises a jour de l'angle
 M.ARROW_NEAR = 20            -- yards : "arrive"
 M.ARROW_SIZE = 44
+M.ARROW_ICON_AT = 45         -- yards : sous cette distance la fleche laisse la place a l'icone du type d'objectif
+M.ICONS = {
+	S = "Interface\\GossipFrame\\AvailableQuestIcon",   -- prendre la quete
+	E = "Interface\\GossipFrame\\ActiveQuestIcon",      -- rendre la quete
+	u = "Interface\\Icons\\INV_Sword_04",               -- tuer / combattre
+	o = "Interface\\Icons\\INV_Misc_Gear_01",           -- utiliser / ramasser un objet du decor
+	i = "Interface\\Icons\\INV_Misc_Bag_08",            -- ramasser un objet
+	r = "Interface\\Icons\\INV_Misc_Bag_08",
+	O = "Interface\\Icons\\INV_Misc_Map_01",            -- autre objectif (explorer, parler ...)
+}
+
+-- Icone du type d'objectif d'un point (k = S / E / O, ek = u / o / i / r)
+function M.ArrowIcon(k, ek)
+	if k == "S" or k == "E" then return M.ICONS[k] end
+	return M.ICONS[ek] or M.ICONS.O
+end
 
 -- atan2 (math.atan2 en Lua 5.0 du client ; math.atan a deux arguments ailleurs)
 function M.Atan2(y, x)
@@ -1377,7 +1442,7 @@ function M.ArrowPick()
 			local d2 = dx * dx + dy * dy
 			if not bd or d2 < bd then
 				bd = d2
-				best = { x = d.x / 100, y = d.y / 100, w = sz[1], h = sz[2], title = rec.t }
+				best = { x = d.x / 100, y = d.y / 100, w = sz[1], h = sz[2], title = rec.t, k = d.k, ek = d.ek }
 			end
 		end
 	end
@@ -1409,9 +1474,24 @@ function M.ArrowUpdate()
 	local dx, dy = (t.x - px) * t.w, (t.y - py) * t.h
 	local dist = math.sqrt(dx * dx + dy * dy)
 	local near = dist < M.ARROW_NEAR
-	M.ArrowSetAngle(f.tex, -(M.Atan2(dx, -dy) + face))
-	local col = near and T.c.good or { T.Accent() }
-	f.tex:SetVertexColor(col[1], col[2], col[3], 1)
+	if t.k and dist < M.ARROW_ICON_AT then
+		-- tout pres : l'icone du type d'objectif (epee = combattre ...) remplace la fleche
+		local ic = M.ArrowIcon(t.k, t.ek)
+		if f.mode ~= ic then
+			f.mode = ic
+			f.tex:SetTexture(ic)
+			f.tex:SetTexCoord(0.07, 0.93, 0.07, 0.93)
+		end
+		f.tex:SetVertexColor(1, 1, 1, 1)
+	else
+		if f.mode then
+			f.mode = nil
+			f.tex:SetTexture(M.ARROW_TEX)
+		end
+		M.ArrowSetAngle(f.tex, -(M.Atan2(dx, -dy) + face))
+		local col = near and T.c.good or { T.Accent() }
+		f.tex:SetVertexColor(col[1], col[2], col[3], 1)
+	end
 	f.tex:Show()
 	f.txt:SetText(near and L("msg.questtrack.arrow.here") or L("msg.questtrack.arrow.dist", floor(dist + 0.5)))
 	if f.subFor ~= t.title then

@@ -4,7 +4,7 @@
 ## Notes: Chercheur de groupe (LFG / LFM) : analyse des annonces des canaux publics, alertes, annonce. Commande /sui lfg (module de ShikiUI, version autonome).
 ## Notes-frFR: Chercheur de groupe (LFG / LFM) : analyse des annonces des canaux publics, alertes, annonce. Commande /sui lfg (module de ShikiUI, version autonome).
 ## Author: Shikiwa
-## Version: 1.2.8
+## Version: 1.2.9
 ## SavedVariables: ShikiUIDB
 ## OptionalDeps: ShikiUI
 
