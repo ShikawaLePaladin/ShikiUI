@@ -1,0 +1,1 @@
+ShikiCodexData_Places - donnees derivees de pfQuest (MIT, shagu) et pfQuest-octo-plus (MIT). Liste d'entraineurs : lecture de la base d'un serveur Turtle (donnees de jeu publiques).

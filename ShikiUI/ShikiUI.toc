@@ -137,6 +137,8 @@ Locale_Nameplates.lua
 Mod_Nameplates.lua
 Locale_PallyPower.lua
 Mod_PallyPower.lua
+Locale_Places.lua
+Mod_Places.lua
 Locale_PowerAuras.lua
 Mod_PowerAuras.lua
 Locale_QuestTrack.lua
