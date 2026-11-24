@@ -362,7 +362,10 @@ function M.GiverRec(Cx, c, z)
 	local pl = ul and ul("player") or 0
 	if type(pl) ~= "number" or pl < 1 then return nil end
 	local low = C.Get("questtrack.giverlow")
+	local high = C.Get("questtrack.giverhigh")
+	if type(high) ~= "number" then high = 0 end
 	local rb, cb = M.PlayerBits()
+	M.zinfo = nil
 	local out = nil
 	M.gz = M.gz or {}
 	for zid, list in pairs(M.gby) do
@@ -378,9 +381,15 @@ function M.GiverRec(Cx, c, z)
 		end
 		if gz and Cx.PinHere(gz, c, z) then
 			local cells, pins = {}, {}
+			local zs = { lo = 0, hi = 0, ok = 0, up = 0 }
 			for i = 1, getn(list) do
 				local e = list[i]
-				local ok = (e.min == 0 or e.min <= pl) and (e.lvl == 0 or e.lvl >= pl - low)
+				if e.lvl and e.lvl > 0 then
+					if zs.lo == 0 or e.lvl < zs.lo then zs.lo = e.lvl end
+					if e.lvl > zs.hi then zs.hi = e.lvl end
+				end
+				local grey = e.min ~= 0 and e.min > pl
+				local ok = (e.min == 0 or e.min <= pl + high) and (e.lvl == 0 or e.lvl >= pl - low)
 				if ok and e.races ~= 0 and rb and not hasBit(e.races, rb) then ok = false end
 				if ok and e.classes ~= 0 and cb and not hasBit(e.classes, cb) then ok = false end
 				if ok then
@@ -391,14 +400,17 @@ function M.GiverRec(Cx, c, z)
 						if not pin then
 							local def = P.Quest(e.id)
 							local ref = def and def.start and def.start[e.ref]
-							pin = { k = "S", x = e.x, y = e.y, nm = ref and P.QName(ref.kind, ref.id) or nil, ek = ref and ref.kind or nil, lines = {}, more = 0, q = {} }
+							pin = { k = "S", x = e.x, y = e.y, nm = ref and P.QName(ref.kind, ref.id) or nil, ek = ref and ref.kind or nil, lines = {}, more = 0, q = {}, grey = grey }
 							cells[key] = pin
 							tinsert(pins, pin)
 						end
-						tinsert(pin.q, { id = e.id, lvl = e.lvl, title = title })
+						if not grey then pin.grey = false end
+						if grey then zs.up = zs.up + 1 else zs.ok = zs.ok + 1 end
+						tinsert(pin.q, { id = e.id, lvl = e.lvl, title = title, min = e.min, grey = grey })
 					end
 				end
 			end
+			M.zinfo = zs
 			if pins[1] then
 				for i = 1, getn(pins) do
 					local pin = pins[i]
@@ -409,7 +421,7 @@ function M.GiverRec(Cx, c, z)
 					for k = 1, getn(pin.q) do
 						local qe = pin.q[k]
 						if k <= M.GTIPMAX then
-							tinsert(pin.lines, (qe.lvl > 0 and ("[" .. qe.lvl .. "] ") or "") .. qe.title)
+							tinsert(pin.lines, (qe.lvl > 0 and ("[" .. qe.lvl .. "] ") or "") .. qe.title .. (qe.grey and (" " .. L("msg.questtrack.needlvl", qe.min)) or ""))
 						elseif k == M.GTIPMAX + 1 then
 							tinsert(pin.lines, L("msg.questtrack.more", getn(pin.q) - M.GTIPMAX))
 						end
@@ -425,6 +437,146 @@ function M.GiverRec(Cx, c, z)
 		end
 	end
 	return out
+end
+
+-- Ligne d'information au bas de la carte du monde : niveaux des quetes de la zone affichee, a prendre pour toi, plus haut niveau
+function M.ZoneLabel()
+	local wm = glob("WorldMapFrame")
+	if not wm then return end
+	local f = M.zlabel
+	if not f then
+		local btn = glob("WorldMapButton") or wm
+		f = T.Text(btn, 12, T.c.text, "LEFT", true)
+		f:SetPoint("BOTTOMLEFT", btn, "BOTTOMLEFT", 10, 8)
+		M.zlabel = f
+	end
+	local z = M.zinfo
+	if not z or not M.on or not C.Get("questtrack.givers") or z.hi == 0 then
+		f:SetText("")
+		return
+	end
+	f:SetText(L("msg.questtrack.zinfo", z.lo, z.hi, z.ok, z.up))
+end
+
+-- Tranches de niveau des zones et donjons (vue d'un continent), ecrites dans la mer de la carte du monde
+M.ZL = {
+	{ "Ashenvale", "Orneval", 18, 30, 1 }, { "Azshara", "Azshara", 45, 55, 1 }, { "The Barrens", "Les Tarides", 10, 25, 1 },
+	{ "Darkshore", "Sombrevallon", 10, 20, 1 }, { "Desolace", "Desolace", 30, 40, 1 }, { "Durotar", "Durotar", 1, 10, 1 },
+	{ "Dustwallow Marsh", "Marecage d'Aprefange", 35, 45, 1 }, { "Felwood", "Gangrebois", 48, 55, 1 }, { "Feralas", "Feralas", 40, 50, 1 },
+	{ "Moonglade", "Reflet-de-Lune", 55, 60, 1 }, { "Mulgore", "Mulgore", 1, 10, 1 }, { "Silithus", "Silithus", 55, 60, 1 },
+	{ "Stonetalon Mountains", "Les Serres-Rocheuses", 15, 27, 1 }, { "Tanaris", "Tanaris", 40, 50, 1 }, { "Teldrassil", "Teldrassil", 1, 10, 1 },
+	{ "Thousand Needles", "Mille pointes", 25, 35, 1 }, { "Un'Goro Crater", "Cratere d'Un'Goro", 48, 55, 1 }, { "Winterspring", "Berceau-de-l'Hiver", 53, 60, 1 },
+	{ "Alterac Mountains", "Montagnes d'Alterac", 30, 40, 2 }, { "Arathi Highlands", "Hautes-terres d'Arathi", 30, 40, 2 }, { "Badlands", "Terres ingrates", 35, 45, 2 },
+	{ "Blasted Lands", "Terres foudroyees", 45, 55, 2 }, { "Burning Steppes", "Steppes ardentes", 50, 58, 2 }, { "Deadwind Pass", "Defile de Deuillevent", 55, 60, 2 },
+	{ "Dun Morogh", "Dun Morogh", 1, 10, 2 }, { "Duskwood", "Bois de la Penombre", 18, 30, 2 }, { "Eastern Plaguelands", "Maleterres de l'est", 53, 60, 2 },
+	{ "Elwynn Forest", "Foret d'Elwynn", 1, 10, 2 }, { "Hillsbrad Foothills", "Contreforts de Hautebrande", 20, 30, 2 }, { "Loch Modan", "Loch Modan", 10, 20, 2 },
+	{ "Redridge Mountains", "Les Carmines", 15, 25, 2 }, { "Searing Gorge", "Gorge des Vents brulants", 43, 50, 2 }, { "Silverpine Forest", "Foret des Pins argentes", 10, 20, 2 },
+	{ "Stranglethorn Vale", "Vallee de Strangleronce", 30, 45, 2 }, { "Swamp of Sorrows", "Marais des Chagrins", 35, 45, 2 }, { "The Hinterlands", "Les Hinterlands", 40, 50, 2 },
+	{ "Tirisfal Glades", "Clairieres de Tirisfal", 1, 10, 2 }, { "Western Plaguelands", "Maleterres de l'ouest", 51, 58, 2 }, { "Westfall", "Marche de l'Ouest", 10, 20, 2 },
+	{ "Wetlands", "Les Paluns", 20, 30, 2 },
+}
+M.DL = {
+	{ "Ragefire Chasm", "Gouffre de Ragefeu", 13, 18, 1 }, { "Wailing Caverns", "Cavernes des lamentations", 15, 25, 1 }, { "Blackfathom Deeps", "Profondeurs de Brassenoire", 24, 32, 1 },
+	{ "Razorfen Kraul", "Kraal de Tranchebauge", 29, 38, 1 }, { "Razorfen Downs", "Souilles de Tranchebauge", 37, 46, 1 }, { "Zul'Farrak", "Zul'Farrak", 44, 54, 1 },
+	{ "Maraudon", "Maraudon", 46, 55, 1 }, { "Dire Maul", "Hache-tripes", 55, 60, 1 }, { "Onyxia's Lair", "Repaire d'Onyxia", 60, 60, 1 },
+	{ "Ahn'Qiraj", "Ahn'Qiraj", 60, 60, 1 },
+	{ "The Deadmines", "Les Mortemines", 18, 23, 2 }, { "Shadowfang Keep", "Donjon d'Ombrecroc", 22, 30, 2 }, { "The Stockade", "La Prison", 24, 32, 2 },
+	{ "Gnomeregan", "Gnomeregan", 29, 38, 2 }, { "Scarlet Monastery", "Monastere ecarlate", 34, 45, 2 }, { "Uldaman", "Uldaman", 41, 51, 2 },
+	{ "Sunken Temple", "Temple d'Atal'Hakkar", 50, 60, 2 }, { "Blackrock Depths", "Profondeurs de Blackrock", 52, 60, 2 }, { "Blackrock Spire", "Pic Blackrock", 55, 60, 2 },
+	{ "Stratholme", "Stratholme", 58, 60, 2 }, { "Scholomance", "Scholomance", 58, 60, 2 }, { "Molten Core", "Coeur du Magma", 60, 60, 2 },
+	{ "Blackwing Lair", "Repaire de l'Aile noire", 60, 60, 2 }, { "Zul'Gurub", "Zul'Gurub", 60, 60, 2 }, { "Naxxramas", "Naxxramas", 60, 60, 2 },
+}
+
+-- Couleur relative a ton niveau : gris (trop bas), vert, jaune (a ta hauteur), rouge (trop haut)
+local function lvColor(lo, hi, pl)
+	if hi < pl - 8 then return T.c.dim end
+	if lo > pl + 4 then return T.c.warn end
+	if lo <= pl and hi >= pl then return T.c.good end
+	return T.c.text
+end
+
+local function legendCol(f, side)
+	local fs = T.Text(f, 12, T.c.text, side, true)
+	fs:SetWidth(210)
+	fs:SetJustifyH(side)
+	return fs
+end
+
+function M.LegendEvent()
+	if M.Legend() then M.LegendPaint() end
+end
+
+function M.Legend()
+	local btn = glob("WorldMapButton")
+	if not btn then return end
+	local f = M.leg
+	if not f then
+		f = CreateFrame("Frame", nil, btn)
+		f:SetAllPoints(btn)
+		f:SetFrameLevel(btn:GetFrameLevel() + 2)
+		f.zs, f.ds = {}, {}
+		for i = 1, 24 do
+			local a = legendCol(f, "LEFT")
+			a:SetPoint("TOPLEFT", f, "TOPLEFT", 14, -(48 + (i - 1) * 14))
+			f.zs[i] = a
+			local b = legendCol(f, "RIGHT")
+			b:SetPoint("TOPRIGHT", f, "TOPRIGHT", -14, -(160 + (i - 1) * 14))
+			f.ds[i] = b
+		end
+		f.t = 0
+		f:SetScript("OnUpdate", function()
+			this.t = this.t + (arg1 or 0)
+			if this.t < 0.5 then return end
+			this.t = 0
+			M.LegendPaint()
+		end)
+		M.leg = f
+	end
+	return f
+end
+
+function M.LegendPaint()
+	local f = M.leg
+	if not f then return end
+	local c, z = 0, 0
+	local gc, gz = glob("GetCurrentMapContinent"), glob("GetCurrentMapZone")
+	if gc and gz then c, z = gc(), gz() end
+	local show = M.on and C.Get("questtrack.legend") and z == 0 and (c == 1 or c == 2)
+	-- jamais Hide() : un cadre cache ne recevrait plus OnUpdate
+	if not show then
+		f:SetAlpha(0)
+		return
+	end
+	f:SetAlpha(1)
+	local pl = UnitLevel("player") or 1
+	local fr = (SUI.locale == "fr") or (SUI.locale == nil and GetLocale and GetLocale() == "frFR")
+	local n, m = 0, 0
+	local zones = glob("GetMapZones") and { glob("GetMapZones")(c) } or {}
+	local have = {}
+	for i = 1, getn(zones) do have[slower(zones[i])] = true end
+	for i = 1, getn(M.ZL) do
+		local e = M.ZL[i]
+		if e[5] == c and (have[slower(e[1])] or have[slower(e[2])]) and n < 24 then
+			n = n + 1
+			local col = lvColor(e[3], e[4], pl)
+			local fsx = f.zs[n]
+			fsx:SetText((fr and e[2] or e[1]) .. "  " .. e[3] .. "-" .. e[4])
+			fsx:SetTextColor(col[1], col[2], col[3], 1)
+		end
+	end
+	for i = n + 1, 24 do f.zs[i]:SetText("") end
+	for i = 1, getn(M.DL) do
+		local e = M.DL[i]
+		if (e[5] == c or (c == 1 and e[2] == "Ahn'Qiraj")) and m < 24 then
+			m = m + 1
+			local col = lvColor(e[3], e[4], pl)
+			local fsx = f.ds[m]
+			local lv = e[3] == e[4] and tostring(e[3]) or (e[3] .. "-" .. e[4])
+			fsx:SetText((fr and e[2] or e[1]) .. "  " .. lv)
+			fsx:SetTextColor(col[1], col[2], col[3], 1)
+		end
+	end
+	for i = m + 1, 24 do f.ds[i]:SetText("") end
 end
 
 -- Enregistrement de carte d'une quete du journal (objectifs, ou rendu si terminee) ; nil si inconnue / sans epingle. Mis en cache.
@@ -461,6 +613,7 @@ function M.Recs(c, z, ctx)
 			if not c then c, z = Cx.MapCur() end
 			local g = M.GiverRec(Cx, c, z)
 			for i = 1, g and getn(g) or 0 do tinsert(out, g[i]) end
+			if ctx == nil then M.ZoneLabel() end
 		else
 			M.GiverStart()
 		end
@@ -1432,7 +1585,7 @@ function M.OnKey(key, value)
 	if key == "questtrack.hide" or key == "questtrack.arrowq" then
 		M.LogPaint()
 	end
-	if key == "questtrack.pins" or key == "questtrack.givers" or key == "questtrack.giverlow" or key == "questtrack.hide" then
+	if key == "questtrack.pins" or key == "questtrack.givers" or key == "questtrack.giverlow" or key == "questtrack.giverhigh" or key == "questtrack.hide" then
 		local Cx = SUI.Codex
 		if Cx and Cx.PinOnMapEvent then Cx.PinOnMapEvent() end
 	end
@@ -1443,6 +1596,7 @@ function M.Enable()
 	SUI.On("QUEST_LOG_UPDATE", M.Queue)
 	SUI.On("PLAYER_ENTERING_WORLD", M.Queue)
 	SUI.On("ZONE_CHANGED_NEW_AREA", M.OnZone)
+	SUI.On("WORLD_MAP_UPDATE", M.LegendEvent)
 	if not M.watching then
 		M.watching = true
 		C.Watch("questtrack.", M.OnKey)
@@ -1452,6 +1606,8 @@ function M.Enable()
 	M.RingButton()
 	M.ArrowSync()
 	M.LogSync()
+	M.Legend()
+	M.LegendPaint()
 end
 
 function M.Disable()
@@ -1462,6 +1618,7 @@ function M.Disable()
 	SUI.Off("QUEST_LOG_UPDATE", M.Queue)
 	SUI.Off("PLAYER_ENTERING_WORLD", M.Queue)
 	SUI.Off("ZONE_CHANGED_NEW_AREA", M.OnZone)
+	SUI.Off("WORLD_MAP_UPDATE", M.LegendEvent)
 	if M.task then
 		SUI.Cancel(M.task)
 		M.task = nil
@@ -1537,6 +1694,8 @@ SUI.RegisterModule("questtrack", {
 		opt("angle", "number", 21.5, 270, { min = 0, max = 355, step = 5 }),
 		opt("pinsize", "number", 24, 16, { min = 12, max = 32, step = 1 }),
 		opt("giverlow", "number", 26, 6, { min = 0, max = 20, step = 1 }),
+		opt("legend", "bool", 26.8, true),
+		opt("giverhigh", "number", 26.5, 3, { min = 0, max = 10, step = 1 }),
 		opt("max", "number", 30, 8, { min = 3, max = 15, step = 1 }),
 		opt("width", "number", 40, 230, { min = 160, max = 400, step = 10 }),
 	},
