@@ -24,6 +24,7 @@ M.DELAY = 0.3                -- silence attendu apres le dernier QUEST_LOG_UPDAT
 M.MAXQ = 15                  -- plafond dur de quetes affichees
 M.MAXOBJ = 8                 -- objectifs affiches par quete
 M.PAD = 6
+M.ver = 0                    -- change a chaque modification du journal (invalide les caches)
 M.list = {}                  -- quetes lues : { i, title, level, complete, objs = { { text, done } }, id = nil | false | numero }
 M.rows = {}                  -- lignes du cadre (creees a la demande)
 M.sig = nil
@@ -332,6 +333,27 @@ local function inLog(title)
 	return false
 end
 
+-- Titres du journal en minuscules (recalcule quand la liste change)
+local function logTitles()
+	if M.lts and M.ltsVer == M.ver then return M.lts end
+	local t = {}
+	for i = 1, getn(M.list) do t[slower(M.list[i].title)] = true end
+	M.lts, M.ltsVer = t, M.ver
+	return t
+end
+
+-- Vrai si la quete `id` du Codex est deja dans le journal, quel que soit la langue du titre (anglais ou francais)
+local function inLogId(P, id)
+	local lt = logTitles()
+	local qd = P.Q()
+	if not qd then return false end
+	local en = qd.en and qd.en.t and qd.en.t[id]
+	local fr = qd.fr and qd.fr.t and qd.fr.t[id]
+	if en and lt[slower(en)] then return true end
+	if fr and lt[slower(fr)] then return true end
+	return false
+end
+
 -- Enregistrements des donneurs de la zone affichee (c, z) selon le niveau, la race et la classe du joueur ; nil si aucun
 function M.GiverRec(Cx, c, z)
 	if not M.gready or not c or not z or z <= 0 then return nil end
@@ -363,7 +385,7 @@ function M.GiverRec(Cx, c, z)
 				if ok and e.classes ~= 0 and cb and not hasBit(e.classes, cb) then ok = false end
 				if ok then
 					local title = P.QuestTitle(e.id)
-					if title and not inLog(title) then
+					if title and not inLog(title) and not inLogId(P, e.id) then
 						local key = floor(e.x / M.GCELL) * 1000 + floor(e.y / M.GCELL)
 						local pin = cells[key]
 						if not pin then
@@ -497,12 +519,29 @@ function M.MiniFrame(i)
 	if p then return p end
 	local mm = glob("Minimap")
 	if i > M.MINI_MAX or not mm then return nil end
-	p = CreateFrame("Frame", nil, mm)
+	p = CreateFrame("Button", nil, mm)
 	p:SetWidth(M.MINI_SIZE)
 	p:SetHeight(M.MINI_SIZE)
 	p:SetFrameLevel(mm:GetFrameLevel() + 6)
+	p:EnableMouse(true)
 	p.tex = p:CreateTexture(nil, "ARTWORK")
 	p.tex:SetAllPoints(p)
+	p.hl = p:CreateTexture(nil, "OVERLAY")
+	p.hl:SetTexture("Interface\\Minimap\\UI-Minimap-ZoomButton-Highlight")
+	p.hl:SetBlendMode("ADD")
+	p.hl:SetPoint("CENTER", p, "CENTER", 0, 0)
+	p.hl:SetWidth(M.MINI_SIZE * 1.6)
+	p.hl:SetHeight(M.MINI_SIZE * 1.6)
+	p.hl:Hide()
+	p.useGame = true
+	p:SetScript("OnEnter", function()
+		local Cx = SUI.Codex
+		if Cx and Cx.PinEnter then Cx.PinEnter(this) end
+	end)
+	p:SetScript("OnLeave", function()
+		local Cx = SUI.Codex
+		if Cx and Cx.PinLeave then Cx.PinLeave(this) end
+	end)
 	p.mark = T.Text(p, 9, T.c.text, "RIGHT", true)
 	p.mark:SetPoint("BOTTOMRIGHT", p, "BOTTOMRIGHT", 3, -2)
 	p.kind = "S"
@@ -525,7 +564,7 @@ function M.MiniList(Cx, c, z, px, py)
 	M.miniC, M.miniZ = c, z
 	local rz = glob("GetRealZoneText")
 	local ul = glob("UnitLevel")
-	local key = tostring(rz and rz() or "") .. "|" .. c .. "," .. z .. "|" .. tostring(ul and ul("player") or 0) .. "|" .. getn(M.list)
+	local key = tostring(rz and rz() or "") .. "|" .. c .. "," .. z .. "|" .. tostring(ul and ul("player") or 0) .. "|" .. M.ver .. "|" .. (C.Get("questtrack.hide") or "")
 	local now = GetTime()
 	if M.miniKey == key and M.miniList and now < (M.miniNext or 0) then return M.miniList end
 	M.miniKey, M.miniNext = key, now + M.MINI_REFRESH
@@ -644,6 +683,11 @@ function M.MiniTick()
 		M.MiniHideAll()
 		return
 	end
+	local now = GetTime()
+	if now >= (M.mapNext or 0) then
+		M.mapNext = now + 1
+		M.SyncMap()
+	end
 	local px, py = gp("player")
 	local c, z = Cx.MapCur()
 	if not px or not c or not z or z <= 0 or (px == 0 and py == 0) then
@@ -665,6 +709,7 @@ function M.MiniTick()
 				if not p then break end
 				local vk = Cx.PinVisual(e.d)
 				p.kind = vk
+				p.rec, p.data = e.rec, e.d
 				Cx.PaintIcon(p, e.d, vk)
 				local ent = Cx.PinEntries(e.rec, e.d)
 				local mk = Cx.PinMark(vk, ent and getn(ent) or 0)
@@ -886,6 +931,7 @@ function M.Scan()
 	local sig = M.Signature(list)
 	if sig == M.sig then return end
 	M.sig = sig
+	M.ver = M.ver + 1
 	-- numeros deja resolus : repris par titre + niveau (la lecture repart de zero a chaque changement)
 	local old = M.list
 	M.list = list
@@ -998,8 +1044,17 @@ function M.ArrowSetAngle(tex, a)
 	tex:SetTexCoord(ulx, uly, llx, lly, urx, ury, lrx, lry)
 end
 
+-- La carte interne doit montrer la zone ou tu te trouves (sinon ni la position ni la zone courante ne servent) ; carte du monde ouverte : intacte
+function M.SyncMap()
+	local wm = glob("WorldMapFrame")
+	if wm and wm:IsShown() then return end
+	local f = glob("SetMapToCurrentZone")
+	if f then f() end
+end
+
 -- Cible : { x, y (0..1 sur la carte de la zone), w, h (yards), title } ou nil
 function M.ArrowPick()
+	M.SyncMap()
 	local Cx = codex()
 	local gp = glob("GetPlayerMapPosition")
 	if not Cx or not gp then return nil end

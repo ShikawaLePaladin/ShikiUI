@@ -634,6 +634,7 @@ end
 
 -- Le panneau passe sous la fenetre du courrier quand ils se recouvrent (jamais de clic vole) ; il retrouve sa strate sinon.
 function M.SinkPanel()
+	if M.frame and live(getglobal("MailFrame")) and M.frame:GetParent() == getglobal("MailFrame") then return false end
 	local f, mf = M.frame, getglobal("MailFrame")
 	if not live(f) or not live(mf) then return false end
 	local want = "MEDIUM"
@@ -770,9 +771,12 @@ function M.Refresh()
 	local recent = M.Recent()
 	local max = C.Get("mail.maxrecent")
 	if max > 8 then max = 8 end
+	local rb = M.mp and M.mp.recent or {}
 	for i = 1, 8 do
-		local b = f.recent[i]
-		if i <= max and recent[i] then
+		local b = rb[i]
+		if not b then
+			-- panneau pas encore cree
+		elseif i <= max and recent[i] then
 			setText(b.label, recent[i])
 			b.name = recent[i]
 			b:Show()
@@ -801,6 +805,7 @@ function M.Tick()
 		M.FieldsTick()
 		if M.frame and M.frame:IsShown() and not SUI.InCombat() then M.SinkPanel() end
 	end
+	M.SyncBar()
 	if M.active then M.Step() end
 	if M.sending then M.SendStep() end
 	M.Sync()
@@ -811,7 +816,7 @@ end
 function M.ApplyOptions()
 	local f = M.frame
 	if not f then return end
-	if M.open and C.Get("mail.panel") then f:Show() else f:Hide() end
+	M.SyncBar()
 end
 
 -- Deplacement : Maj + glisser sur le fond du panneau (hors boutons), en plus de la poignee du mode "Deplacer l'interface".
@@ -854,58 +859,117 @@ function M.Place(f)
 	f:SetScript("OnHide", function() M.DragStop(f) end)
 end
 
+-- Dans la fenetre du courrier (aucune fenetre en plus) : une barre sous le titre de l'onglet Reception (etat, Tout prendre, Envoyer la liste) ;
+-- l'envoi multiple est un 3e onglet "Multiple" a cote de Reception / Envoi (voir M.BuildMulti et M.BuildTab).
+M.EW, M.EX, M.EY = 365, 12, -30
+
 function M.Build()
 	if M.frame then return end
-	local f = T.Panel(UIParent, 250, 136)
-	f:SetFrameStrata("MEDIUM")
-	f:EnableMouse(true)
+	local mf = getglobal("MailFrame")
+	local emb = live(mf)
+	local f = CreateFrame("Frame", "ShikiUI_MailBar", emb and mf or UIParent)
+	f:SetWidth(M.EW)
+	f:SetHeight(42)
+	f:SetFrameLevel(((emb and mf:GetFrameLevel()) or 0) + 20)
 	f:Hide()
+	if emb then f:SetPoint("TOPLEFT", mf, "TOPLEFT", M.EX, M.EY) else f:SetPoint("CENTER", UIParent, "CENTER", 0, 200) end
 	f.status = T.Text(f, 11, T.c.text, "LEFT")
-	f.status:SetPoint("TOPLEFT", f, "TOPLEFT", 8, -8)
-	f.status:SetWidth(212)
-	f.take = T.Button(f, L("msg.mail.btn.take"), 112, 20, function()
+	f.status:SetPoint("TOPLEFT", f, "TOPLEFT", 0, 0)
+	f.status:SetWidth(M.EW - 24)
+	f.take = T.Button(f, L("msg.mail.btn.take"), (M.EW - 6) / 2, 20, function()
 		if M.active then M.StopCollect(false) else M.StartCollect() end
 	end)
-	f.take:SetPoint("TOPLEFT", f, "TOPLEFT", 8, -26)
-	f.send = T.Button(f, L("msg.mail.btn.send"), 112, 20, function()
+	f.take:SetPoint("TOPLEFT", f, "TOPLEFT", 0, -18)
+	f.send = T.Button(f, L("msg.mail.btn.send"), (M.EW - 6) / 2, 20, function()
 		local box = getglobal("SendMailNameEditBox")
 		local to = box and box:GetText() or ""
 		if to == "" then to = M.Recent()[1] or "" end
 		M.RequestSend(to, true)
 	end)
-	f.send:SetPoint("TOPRIGHT", f, "TOPRIGHT", -8, -26)
-	-- engrenage : ouvre les reglages du module (coin haut droit du panneau ; le niveau est recale a chaque affichage)
-	T.GearButton(f, "mail", { size = 16, point = "TOPRIGHT", x = -8, y = -6, title = L("msg.mail.gear") })
+	f.send:SetPoint("TOPRIGHT", f, "TOPRIGHT", 0, -18)
+	-- engrenage : ouvre les reglages du module
+	T.GearButton(f, "mail", { size = 16, point = "TOPRIGHT", x = 0, y = 2, title = L("msg.mail.gear") })
 	M.Tip(f.take, "tip.mail.btn.take")
 	M.Tip(f.send, "tip.mail.btn.send")
-	-- Aide a la saisie : repare les champs du courrier (voir M.RepairInput) et place le curseur dans le destinataire.
-	f.fix = T.Button(f, L("msg.mail.btn.fix"), 234, 18, function() M.OnRepair() end)
-	f.fix:SetPoint("TOPLEFT", f, "TOPLEFT", 8, -90)
-	M.Tip(f.fix, "tip.mail.btn.fix")
-	f.multi = T.Button(f, L("msg.mail.m.title"), 234, 18, function()
-		M.mhide = not M.mhide
-		M.Sync()
-	end)
-	f.multi:SetPoint("TOPLEFT", f, "TOPLEFT", 8, -110)
-	f.recent = {}
-	for i = 1, 8 do
-		local b = T.Button(f, "", 56, 16, function(btn)
-			local box = getglobal("SendMailNameEditBox")
-			if box and btn.name then
-				box:SetText(btn.name)
-				local sj = getglobal("SendMailSubjectEditBox")
-				if live(sj) and sj.SetFocus then sj:SetFocus() end      -- destinataire pose : on passe a l'objet
-			end
-		end)
-		b.label:SetWidth(52)
-		local r = math.floor((i - 1) / 4)
-		b:SetPoint("TOPLEFT", f, "TOPLEFT", 8 + (i - 1 - r * 4) * 58, -52 - r * 18)
-		f.recent[i] = b
-	end
 	M.frame = f
-	M.Place(f)
 	for i = 1, MAXLOG do M.log[i] = { t = 0, sender = "", name = nil, count = 0, money = 0 } end
 	M.ApplyOptions()
+end
+
+-- La fenetre du courrier n'existe pas toujours quand le module se construit : la barre s'y accroche a l'ouverture
+function M.Embed()
+	local f, mf = M.frame, getglobal("MailFrame")
+	if not f or not live(mf) or f:GetParent() == mf then return end
+	f:SetParent(mf)
+	f:SetFrameLevel((mf:GetFrameLevel() or 0) + 20)
+	f:ClearAllPoints()
+	f:SetPoint("TOPLEFT", mf, "TOPLEFT", M.EX, M.EY)
+end
+
+-- Vrai quand l'onglet Reception est celui qui est affiche
+function M.InboxTabVisible()
+	local inf = getglobal("InboxFrame")
+	if live(inf) and inf.IsVisible then return inf:IsVisible() and true or false end
+	return true
+end
+
+-- Montre la barre de la reception seulement boite ouverte, option allumee, onglet Reception
+function M.SyncBar()
+	local f = M.frame
+	if not f then return end
+	local want = M.open and C.Get("mail.panel") and M.InboxTabVisible() and not M.mmode
+	if want and not f:IsShown() then
+		f:Show()
+		M.dirty = true
+	elseif not want and f:IsShown() then
+		f:Hide()
+	end
+end
+
+-- Corps du message cache pendant l'onglet Multiple (le panneau le recouvre), rendu apres
+function M.RestoreBody()
+	local sf = getglobal("SendMailScrollFrame")
+	if M.bodyHidden and live(sf) then sf:Show() end
+	M.bodyHidden = false
+end
+
+-- Onglet "Multiple" : l'onglet Envoi reste celui du jeu (destinataire, argent), le panneau d'envoi multiple prend la place du corps du message
+function M.SetMulti(on)
+	if on and (not M.open or not C.Get("mail.multi") or M.OtherMail()) then return false end
+	if on and not M.SendTabVisible() then
+		local t2 = getglobal("MailFrameTab2")
+		if live(t2) and t2.Click then t2:Click() end
+	end
+	M.mmode = on and true or false
+	M.mdirty = true
+	M.Sync()
+	M.SyncBar()
+	return true
+end
+
+function M.BuildTab()
+	if M.tab then return M.tab end
+	local mf = getglobal("MailFrame")
+	if not live(mf) then return nil end
+	local t2 = getglobal("MailFrameTab2")
+	local b = T.Button(mf, L("msg.mail.m.tab"), 84, 24, function() M.SetMulti(not M.mmode) end)
+	if live(t2) then b:SetPoint("LEFT", t2, "RIGHT", 6, 0) else b:SetPoint("BOTTOMLEFT", mf, "BOTTOMLEFT", 180, -28) end
+	-- choisir Reception ou Envoi quitte l'onglet Multiple
+	for i = 1, 2 do
+		local t = getglobal("MailFrameTab" .. i)
+		if live(t) and not t.suiMailTab then
+			t.suiMailTab = true
+			local old = t:GetScript("OnClick")
+			t:SetScript("OnClick", function()
+				M.mmode = false
+				M.Sync()
+				M.SyncBar()
+				if old then old() end
+			end)
+		end
+	end
+	M.tab = b
+	return b
 end
 
 -- ---------------------------------------------------------------- ENVOI MULTIPLE (panneau, grille des sacs, file d'attente)
@@ -1347,14 +1411,18 @@ end
 function M.MultiPlace()
 	local f = M.mp
 	if not f then return end
-	local ref, how = M.MultiAnchorTarget()
-	if M.manchor == ref and M.mhow == how then return end
+	local mf = getglobal("MailFrame")
+	local ref, how = mf, "embed"
+	if not live(mf) then ref, how = UIParent, "center" end
+	if M.manchor == ref and M.mhow == how and (how ~= "embed" or f:GetParent() == ref) then return end
 	M.manchor, M.mhow = ref, how
 	f:ClearAllPoints()
-	if how == "below" then
-		f:SetPoint("TOPLEFT", ref, "BOTTOMLEFT", 0, -4)
-	elseif how == "right" then
-		f:SetPoint("TOPLEFT", ref, "TOPRIGHT", 4, 0)
+	if how == "embed" then
+		if f:GetParent() ~= ref then
+			f:SetParent(ref)
+			f:SetFrameLevel((ref:GetFrameLevel() or 0) + 30)
+		end
+		f:SetPoint("TOPLEFT", ref, "TOPLEFT", 12, -95)
 	else
 		f:SetPoint("CENTER", ref, "CENTER", 0, 0)
 	end
@@ -1688,14 +1756,16 @@ end
 
 function M.BuildMulti()
 	if M.mp then return M.mp end
-	local W0, CS = 250, 26
-	local f = T.Panel(UIParent, W0, 232)
-	f:SetFrameStrata("MEDIUM")
+	local W0, H0, CS = 365, 292, 26
+	local mf = getglobal("MailFrame")
+	local emb = live(mf)
+	local f = T.Panel(emb and mf or UIParent, W0, H0)
+	if emb then f:SetFrameLevel((mf:GetFrameLevel() or 0) + 30) else f:SetFrameStrata("MEDIUM") end
 	f:EnableMouse(true)
 	f:Hide()
 	f.title = T.Text(f, 11, T.c.text, "LEFT")
 	f.title:SetPoint("TOPLEFT", f, "TOPLEFT", 8, -8)
-	f.title:SetWidth(170)
+	f.title:SetWidth(250)
 	f.prev = T.Button(f, "<", 20, 16, function() if M.mpage > 0 then M.mpage = M.mpage - 1 M.mdirty = true end end)
 	f.prev:SetPoint("TOPRIGHT", f, "TOPRIGHT", -32, -6)
 	f.next = T.Button(f, ">", 20, 16, function()
@@ -1704,8 +1774,8 @@ function M.BuildMulti()
 	f.next:SetPoint("TOPRIGHT", f, "TOPRIGHT", -8, -6)
 	f.cells = {}
 	for i = 1, M.PAGE do
-		local r = math.floor((i - 1) / 8)
-		local c = i - 1 - r * 8
+		local r = math.floor((i - 1) / 12)
+		local c = i - 1 - r * 12
 		local b = makeCell(f, CS)
 		b.idx = i
 		b.onclick = function(btn)
@@ -1717,16 +1787,16 @@ function M.BuildMulti()
 	end
 	f.empty = T.Text(f, 10, T.c.dim or T.c.text, "CENTER")
 	f.empty:SetPoint("TOP", f, "TOP", 0, -50)
-	f.empty:SetWidth(220)
+	f.empty:SetWidth(330)
 	-- destinataire : le champ du jeu reste la source ; ce bouton lui donne le focus, la fleche ouvre les derniers destinataires
-	f.to = T.Button(f, "", 202, 18, function()
+	f.to = T.Button(f, "", 317, 18, function()
 		local box = getglobal("SendMailNameEditBox")
 		if box and box.SetFocus then box:SetFocus() end
 	end)
-	f.to.label:SetWidth(196)
-	f.to:SetPoint("TOPLEFT", f, "TOPLEFT", 8, -112)
+	f.to.label:SetWidth(310)
+	f.to:SetPoint("TOPLEFT", f, "TOPLEFT", 8, -92)
 	f.dropb = T.Button(f, "v", 28, 18, function() M.MultiDrop() end)
-	f.dropb:SetPoint("TOPRIGHT", f, "TOPRIGHT", -8, -112)
+	f.dropb:SetPoint("TOPRIGHT", f, "TOPRIGHT", -8, -92)
 	f.drop = T.Panel(f, 130, 150)
 	f.drop:SetFrameStrata("HIGH")
 	f.drop:SetPoint("TOPLEFT", f.dropb, "BOTTOMRIGHT", -130, -2)
@@ -1738,27 +1808,46 @@ function M.BuildMulti()
 		b:SetPoint("TOPLEFT", f.drop, "TOPLEFT", 4, -3 - (i - 1) * 18)
 		f.drop.items[i] = b
 	end
-	f.gold = T.Button(f, "", 112, 20, function() M.MultiCycleGold() M.MultiRefresh() end)
-	f.gold:SetPoint("TOPLEFT", f, "TOPLEFT", 8, -134)
-	f.pick = T.Button(f, L("msg.mail.m.pick"), 112, 20, function() M.MultiPick() end)
-	f.pick:SetPoint("TOPRIGHT", f, "TOPRIGHT", -8, -134)
-	f.clear = T.Button(f, L("msg.mail.m.clear"), 70, 20, function() M.MultiClear() M.MultiRefresh() M.MultiPickRefresh() end)
-	f.clear:SetPoint("TOPLEFT", f, "TOPLEFT", 8, -158)
-	f.cancel = T.Button(f, L("msg.mail.m.cancel"), 70, 20, function() M.MultiCancel() M.MultiRefresh() end)
-	f.cancel:SetPoint("TOPLEFT", f, "TOPLEFT", 8, -158)
-	f.all = T.Button(f, L("msg.mail.m.sendall"), 156, 20, function() M.MultiSendClick() end)
-	f.all:SetPoint("TOPRIGHT", f, "TOPRIGHT", -8, -158)
+	-- derniers destinataires : un clic pose le nom dans le champ du jeu
+	f.recent = {}
+	for i = 1, 8 do
+		local b = T.Button(f, "", 82, 16, function(btn)
+			local box = getglobal("SendMailNameEditBox")
+			if box and btn.name then box:SetText(btn.name) end
+			M.mdirty = true
+			local sj = getglobal("SendMailSubjectEditBox")
+			if not M.mmode and live(sj) and sj.SetFocus then sj:SetFocus() end      -- destinataire pose : on passe a l'objet
+		end)
+		b.label:SetWidth(78)
+		local r = math.floor((i - 1) / 4)
+		b:SetPoint("TOPLEFT", f, "TOPLEFT", 8 + (i - 1 - r * 4) * 84, -116 - r * 18)
+		f.recent[i] = b
+	end
+	f.gold = T.Button(f, "", 158, 20, function() M.MultiCycleGold() M.MultiRefresh() end)
+	f.gold:SetPoint("TOPLEFT", f, "TOPLEFT", 8, -158)
+	f.pick = T.Button(f, L("msg.mail.m.pick"), 158, 20, function() M.MultiPick() end)
+	f.pick:SetPoint("TOPRIGHT", f, "TOPRIGHT", -8, -158)
+	f.clear = T.Button(f, L("msg.mail.m.clear"), 90, 20, function() M.MultiClear() M.MultiRefresh() M.MultiPickRefresh() end)
+	f.clear:SetPoint("TOPLEFT", f, "TOPLEFT", 8, -184)
+	f.cancel = T.Button(f, L("msg.mail.m.cancel"), 90, 20, function() M.MultiCancel() M.MultiRefresh() end)
+	f.cancel:SetPoint("TOPLEFT", f, "TOPLEFT", 8, -184)
+	f.all = T.Button(f, L("msg.mail.m.sendall"), 224, 20, function() M.MultiSendClick() end)
+	f.all:SetPoint("TOPRIGHT", f, "TOPRIGHT", -8, -184)
 	f.bar = T.Bar(f)
-	f.bar:SetWidth(234)
+	f.bar:SetWidth(349)
 	f.bar:SetHeight(12)
-	f.bar:SetPoint("TOPLEFT", f, "TOPLEFT", 8, -184)
+	f.bar:SetPoint("TOPLEFT", f, "TOPLEFT", 8, -212)
 	f.bar:SetMinMaxValues(0, 1)
 	f.bar:SetValue(0)
 	f.prog = T.Text(f.bar, 10, T.c.text, "CENTER")
 	f.prog:SetPoint("CENTER", f.bar, "CENTER", 0, 0)
 	f.report = T.Text(f, 10, T.c.text, "LEFT")
-	f.report:SetPoint("TOPLEFT", f, "TOPLEFT", 8, -200)
-	f.report:SetWidth(234)
+	f.report:SetPoint("TOPLEFT", f, "TOPLEFT", 8, -230)
+	f.report:SetWidth(349)
+	-- Aide a la saisie : repare les champs du courrier (voir M.RepairInput) et place le curseur dans le destinataire.
+	f.fix = T.Button(f, L("msg.mail.btn.fix"), 349, 18, function() M.OnRepair() end)
+	f.fix:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", 8, 8)
+	M.Tip(f.fix, "tip.mail.btn.fix")
 	M.Tip(f.pick, "tip.mail.m.pick")
 	M.Tip(f.dropb, "tip.mail.m.drop")
 	M.Tip(f.gold, "tip.mail.m.gold")
@@ -1834,7 +1923,19 @@ end
 
 -- Appelee par M.Tick (boite ouverte seulement) : montre / cache le panneau, le remet a cote, rafraichit.
 function M.Sync()
-	local want = M.open and C.Get("mail.multi") and not M.mhide and (M.mrun or M.SendTabVisible())
+	local want = M.open and C.Get("mail.multi") and M.mmode and (M.mrun or M.SendTabVisible()) and true or false
+	-- le corps du message est cache tant que l'onglet Multiple est affiche
+	local sf = getglobal("SendMailScrollFrame")
+	if want and M.SendTabVisible() and live(sf) and not M.bodyHidden then
+		M.bodyHidden = true
+		sf:Hide()
+	elseif not want and M.bodyHidden then
+		M.RestoreBody()
+	end
+	if M.tab then
+		T.SetSelected(M.tab, want)
+		if M.open and C.Get("mail.multi") and not M.OtherMail() then M.tab:Show() else M.tab:Hide() end
+	end
 	local f = M.mp
 	if want and not f and not SUI.InCombat() then f = M.BuildMulti() end
 	if not f then return end
@@ -1872,7 +1973,10 @@ function M.OnShow()
 	M.task = SUI.Every(TICK, M.Tick, "mail.tick")
 	M.sendVis, M.fieldTick = nil, 10
 	M.mhide, M.mfilled, M.marmTo = false, false, nil
+	M.mmode = false
 	M.mpage = 0
+	M.Embed()
+	if not SUI.InCombat() then M.BuildTab() end
 	M.HookOn()
 	M.ApplyOptions()
 	M.Refresh()
@@ -1903,6 +2007,9 @@ function M.Release()
 	end
 	M.HookOff()
 	M.marmTo = nil
+	M.mmode = false
+	M.RestoreBody()
+	if M.tab then M.tab:Hide() end
 	if M.mp then M.mp:Hide() end
 	M.active = false
 	M.sending = false
@@ -1977,9 +2084,8 @@ function M.MultiCommand(arg)
 		M.forceHook = not M.forceHook
 	else
 		if not M.open then SUI.Print(L("msg.mail.closed")) return end
-		M.mhide = not M.mhide
-		SUI.Print(L("msg.mail.m.shown", M.mhide and L("msg.mail.m.off") or L("msg.mail.m.on")))
-		M.Sync()
+		M.SetMulti(not M.mmode)
+		SUI.Print(L("msg.mail.m.shown", M.mmode and L("msg.mail.m.on") or L("msg.mail.m.off")))
 	end
 end
 
