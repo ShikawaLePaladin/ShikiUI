@@ -2402,43 +2402,84 @@ end
 -- (ids qui se suivent, 8 pieces au plus) et chaque groupe recoit une ligne d'en-tete ; une seule version : liste inchangee.
 function M.SetGroups(rows)
 	local n = getn(rows)
-	if n < 2 then return rows end
+	if n < 6 then return rows end
 	local sorted = {}
 	for i = 1, n do sorted[i] = rows[i] end
 	table.sort(sorted, function(a, b) return a.id < b.id end)
-	local cnt, last, groups = 0, nil, 0
-	local grp = {}
+	-- groupes : ids qui se suivent, 8 pieces au plus
+	local size, grp, groups, last = {}, {}, 0, nil
 	for i = 1, n do
 		local r = sorted[i]
-		if not last or r.id - last > 1 or cnt >= 8 then
+		if not last or r.id - last > 1 or size[groups] >= 8 then
 			groups = groups + 1
-			cnt = 0
+			size[groups] = 0
 		end
-		cnt = cnt + 1
+		size[groups] = size[groups] + 1
 		last = r.id
 		grp[r.id] = groups
 	end
-	if groups < 2 then return rows end
-	-- nom de chaque groupe : premier mot du nom de sa premiere piece (Lightforge, Soulforge...) quand tous les groupes ont un nom different
-	local names, first, same = {}, {}, false
-	for i = 1, n do
-		local g = grp[rows[i].id]
-		if not first[g] then first[g] = rows[i].id end
+	-- un groupe de moins de 3 pieces (anneau isole, page de 5 pieces) est rattache au groupe voisin : pas de fausse coupure
+	local map = {}
+	for g = 1, groups do map[g] = g end
+	local changed = true
+	while changed do
+		changed = false
+		local live = {}
+		for g = 1, groups do
+			if map[g] == g then tinsert(live, g) end
+		end
+		if getn(live) > 1 then
+			for k = 1, getn(live) do
+				local g = live[k]
+				if size[g] < 3 then
+					local into = live[k > 1 and k - 1 or k + 1]
+					size[into] = size[into] + size[g]
+					size[g] = 0
+					map[g] = into
+					for h = 1, groups do
+						if map[h] == g then map[h] = into end
+					end
+					changed = true
+					break
+				end
+			end
+		end
 	end
+	local order, idx = {}, {}
 	for g = 1, groups do
-		local nm = M.ItemName(first[g])
-		local sp = nm and string.find(nm, " ", 1, true)
-		names[g] = sp and string.sub(nm, 1, sp - 1) or nil
+		if map[g] == g then
+			tinsert(order, g)
+			idx[g] = getn(order)
+		end
+	end
+	if getn(order) < 2 then return rows end
+	local rank = {}
+	for i = 1, n do rank[rows[i].id] = idx[map[grp[rows[i].id]]] end
+	-- nom d'un groupe : premier mot partagé par au moins 4 pieces (Lightforge, Soulforge...), sinon Version n ; noms tous differents ou retour aux numeros
+	local names, same = {}, false
+	for g = 1, getn(order) do
+		local cnt = {}
+		for i = 1, n do
+			if rank[rows[i].id] == g then
+				local nm = M.ItemName(rows[i].id)
+				local sp = nm and string.find(nm, " ", 1, true)
+				local w = sp and string.sub(nm, 1, sp - 1)
+				if w then
+					cnt[w] = (cnt[w] or 0) + 1
+					if cnt[w] >= 4 then names[g] = w end
+				end
+			end
+		end
 		if not names[g] then same = true end
 		for h = 1, g - 1 do
 			if names[h] == names[g] then same = true end
 		end
 	end
 	local out = {}
-	for g = 1, groups do
+	for g = 1, getn(order) do
 		tinsert(out, { hdr = (not same and names[g]) and ("-- " .. names[g] .. " --") or L("msg.codex.set.part", g) })
 		for i = 1, n do
-			if grp[rows[i].id] == g then tinsert(out, rows[i]) end
+			if rank[rows[i].id] == g then tinsert(out, rows[i]) end
 		end
 	end
 	return out
