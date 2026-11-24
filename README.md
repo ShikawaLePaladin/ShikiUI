@@ -90,7 +90,7 @@ Main command: **`/sui`** (menu, first-run wizard included). Codex: the **Codex**
 | ![Bags](screenshots/ui-bags.png) | ![Character window](screenshots/ui-character.png) |
 | *Bags sorted by category, with search* | *Character window with stats and a role view* |
 
-![In-game overview](screenshots/ui-overview.png)
+![Full in-game interface](screenshots/ui-global.png)
 
 ### The Codex
 

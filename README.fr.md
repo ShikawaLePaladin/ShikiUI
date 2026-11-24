@@ -89,7 +89,7 @@ Commande principale : **`/sui`** (menu, assistant de premier lancement inclus). 
 | ![Sacs](screenshots/ui-bags.png) | ![Fenetre du personnage](screenshots/ui-character.png) |
 | *Sacs tries par categorie, avec recherche* | *Fenetre du personnage : stats et vue par role* |
 
-![Vue d'ensemble en jeu](screenshots/ui-overview.png)
+![Interface complete en jeu](screenshots/ui-global.png)
 
 ### Le Codex
 
