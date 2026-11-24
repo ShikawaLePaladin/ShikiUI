@@ -10,6 +10,23 @@ Bilingue **FR/EN** natif (client francais ou anglais), styles thematises, menu S
 
 > Projet personnel de Shikiwa (speedy8182), developpe avec l'aide de l'IA.
 
+## C'est quoi Shiki ?
+
+**ShikiUI** est l'interface : un seul addon qui remplace toute une pile d'addons separes. Cadres d'unites, barres d'action, plaques de nom, sacs, chat,
+minicarte, infobulles, compteur de degats, alarmes de boss, hotel des ventes, courrier… chacun est un module que tu actives ou coupes, deplaces et restyles depuis
+un seul menu (`/sui`). Tout est ecrit pour le client 1.12, en francais et en anglais.
+
+**ShikiCodex** est l'encyclopedie du jeu integree a ShikiUI — une fenetre (bouton **Codex** de la minicarte, ou `/sui codex`) et les donnees qui vont avec.
+Tu cherches quelque chose, et le Codex te le montre *et* le place sur ta carte :
+
+- *« Ou tombe cet objet ? »* — butin des donjons et raids, sets, recompenses de reputation.
+- *« Ou aller pour cette quete ? »* — ton journal avec une fleche de direction, des "!" et des "?" sur la carte du monde et la minicarte.
+- *« Ou trouver ce monstre ? »* — recherche par nom, niveaux, et epingles de ses points d'apparition.
+- *« Ou est le marchand, la boite aux lettres, le maitre de vol le plus proche ? »* — epingles de lieux : marchands, boites aux lettres, maitres de vol, herbes, minerais, entraineurs.
+
+Comme ces donnees sont volumineuses, elles ne sont **pas dans ShikiUI** : elles sont livrees dans quatre addons *ShikiCodexData* distincts, charges seulement quand tu ouvres
+le Codex ou une carte. C'est pourquoi ShikiUI est une **suite de paquets** : l'interface d'un cote, les donnees du Codex de l'autre, installees ensemble depuis un seul zip.
+
 ## Les paquets
 
 ```

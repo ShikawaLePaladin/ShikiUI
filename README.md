@@ -10,6 +10,23 @@ Native French and English (works with a French or an English client), themed sty
 
 > Personal project by Shikiwa (speedy8182), developed with AI assistance.
 
+## What is Shiki?
+
+**ShikiUI** is the interface: one addon that replaces a whole pile of separate ones. Unit frames, action bars, nameplates, bags, chat,
+minimap, tooltips, damage meter, boss alerts, auction house, mail… each one is a module you can switch on or off, move and restyle from a single
+menu (`/sui`). Everything is written for the 1.12 client, in French and English.
+
+**ShikiCodex** is the game encyclopedia built into ShikiUI — a window (the **Codex** button on the minimap, or `/sui codex`) plus the data behind it.
+You look something up, and the Codex shows it *and* puts it on your map:
+
+- *"Where does this item drop?"* — dungeon and raid loot, sets, reputation rewards.
+- *"Where do I go for this quest?"* — your quest log with a direction arrow, "!" and "?" pins on the world map and the minimap.
+- *"Where do I find this monster?"* — search by name, see its levels and pin its spawn points.
+- *"Where is the nearest vendor, mailbox or flight master?"* — place pins for vendors, mailboxes, flight masters, herbs, ore and trainers.
+
+Because that data is big, it is **not inside ShikiUI**: it ships as four separate *ShikiCodexData* addons that load only when you open the Codex
+or a map. That is why ShikiUI is a **suite of packages** — the interface on one side, the Codex data on the other, installed together from one zip.
+
 ## The packages
 
 ```
