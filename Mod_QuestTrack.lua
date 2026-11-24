@@ -487,6 +487,19 @@ M.DL = {
 	{ "Blackwing Lair", "Repaire de l'Aile noire", 60, 60, 2 }, { "Zul'Gurub", "Zul'Gurub", 60, 60, 2 }, { "Naxxramas", "Naxxramas", 60, 60, 2 },
 }
 
+-- Nom de zone sans accents ni majuscules (client francais : le jeu ecrit "Foret d'Elwynn" avec accents)
+local FOLD = {
+	{ "\195[\160-\165\128-\133]", "a" }, { "\195\167", "c" }, { "\195[\168-\171\136-\139]", "e" },
+	{ "\195[\172-\175\140-\143]", "i" }, { "\195[\178-\182\146-\150]", "o" }, { "\195[\185-\188\153-\156]", "u" },
+	{ "\226\128[\152\153]", "'" },
+}
+local function foldName(n)
+	n = slower(n or "")
+	for i = 1, getn(FOLD) do n = string.gsub(n, FOLD[i][1], FOLD[i][2]) end
+	return n
+end
+M.FoldName = foldName
+
 -- Couleur relative a ton niveau : gris (trop bas), vert, jaune (a ta hauteur), rouge (trop haut)
 local function lvColor(lo, hi, pl)
 	if hi < pl - 8 then return T.c.dim end
@@ -579,10 +592,10 @@ function M.LegendPaint()
 	local n, m = 0, 0
 	local zones = glob("GetMapZones") and { glob("GetMapZones")(c) } or {}
 	local have = {}
-	for i = 1, getn(zones) do have[slower(zones[i])] = true end
+	for i = 1, getn(zones) do have[foldName(zones[i])] = true end
 	for i = 1, getn(M.ZL) do
 		local e = M.ZL[i]
-		if e[5] == c and (have[slower(e[1])] or have[slower(e[2])]) and n < 24 and (not mine or (e[3] <= pl + 2 and e[4] >= pl - 2)) then
+		if e[5] == c and (have[foldName(e[1])] or have[foldName(e[2])]) and n < 24 and (not mine or (e[3] <= pl + 2 and e[4] >= pl - 2)) then
 			n = n + 1
 			local col = lvColor(e[3], e[4], pl)
 			local fsx = f.zs[n]
