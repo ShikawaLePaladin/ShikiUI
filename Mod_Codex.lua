@@ -1536,6 +1536,18 @@ end
 
 -- Pose l'icone d'un cadre (epingle de carte ou de minicarte) seulement si elle change
 function M.PaintIcon(p, d, vk)
+	-- quete trop haute pour toi : icone grisee
+	local g = d and d.grey and true or false
+	if p.greyOn ~= g then
+		p.greyOn = g
+		if g then
+			p.tex:SetVertexColor(0.6, 0.6, 0.6, 1)
+			if p.tex.SetDesaturated then p.tex:SetDesaturated(1) end
+		else
+			p.tex:SetVertexColor(1, 1, 1, 1)
+			if p.tex.SetDesaturated then p.tex:SetDesaturated(nil) end
+		end
+	end
 	local path, tc = M.PinIcon(d, vk)
 	local key = path .. (tc and (tc[1] .. "," .. tc[3]) or "")
 	if p.iconKey == key then return end
