@@ -376,7 +376,7 @@ end
 -- Une minuterie (M.MINI_EVERY s) n'existe que tant que l'option est active, le Codex est actif ET une epingle peut etre posee.
 M.MINI_EVERY = 0.25          -- tour lent (choix des epingles) ; la position est posee a chaque image par M.MiniMove
 M.MINI_MAX = 40
-M.MINI_SIZE = 18
+M.MINI_SIZE = 15
 M.MINI_REFRESH = 3           -- secondes entre deux recompositions de la liste d'epingles (la position, elle, est calculee a chaque tour)
 M.mpins = {}
 
@@ -968,7 +968,7 @@ SUI.RegisterModule("questtrack", {
 		opt("miniedge", "bool", 23, true),
 		opt("btn", "bool", 21, true),
 		opt("angle", "number", 21.5, 270, { min = 0, max = 355, step = 5 }),
-		opt("pinsize", "number", 24, 20, { min = 12, max = 32, step = 1 }),
+		opt("pinsize", "number", 24, 16, { min = 12, max = 32, step = 1 }),
 		opt("giverlow", "number", 26, 6, { min = 0, max = 20, step = 1 }),
 		opt("max", "number", 30, 8, { min = 3, max = 15, step = 1 }),
 		opt("width", "number", 40, 230, { min = 160, max = 400, step = 10 }),

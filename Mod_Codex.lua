@@ -23,9 +23,11 @@ M.RH = 18                    -- pas entre deux lignes
 M.RATEW = 76                 -- largeur de la colonne de droite "large" (marque + palier)
 M.W, M.H = 650, 420
 M.CHUNK = 4                  -- instances indexees par tour de minuterie
-M.tab = "inst"
+M.tab = "home"
+M.cat = "all"                -- filtre de la liste des instances (voir M.CATS)
+M.CATS = { "all", "dungeon", "raid", "world", "bg", "access" }
 M.sel = { inst = nil, boss = nil }
-M.off = { inst = 0, boss = 0, loot = 0, res = 0, fac = 0, tier = 0, ritem = 0 }
+M.off = { inst = 0, boss = 0, loot = 0, res = 0, fac = 0, tier = 0, ritem = 0, sfam = 0, scls = 0, sitem = 0 }
 M.insts = nil                -- liste triee des donjons (construite a la demande)
 M.bosses, M.loots, M.res = {}, {}, {}
 M.bcache = {}                -- boss d'un donjon (vide a chaque ouverture)
@@ -267,7 +269,7 @@ local function addInst(out, d, key, bit, fr)
 	if type(it) ~= "table" or type(it.boss) ~= "table" or not vis(it.m, bit) then return end
 	local name = it.n or key
 	if fr and it.f then name = it.f end
-	tinsert(out, { key = key, name = tostring(name), lvl = it.lv or 0, hi = it.hi or it.lv or 0, acr = it.acr, max = it.mx, kind = it.kd })
+	tinsert(out, { key = key, name = tostring(name), lvl = it.lv or 0, hi = it.hi or it.lv or 0, acr = it.acr, max = it.mx, kind = it.kd, att = it.att, keys = type(it.ky) == "table" and getn(it.ky) > 0 })
 end
 
 function P.Instances()
@@ -461,6 +463,49 @@ function P.RepRows(pg)
 	if type(p) ~= "table" then return out end
 	local _, bit = P.Profile()
 	addRows(out, d, p, bit, lang() == "fr")
+	return out
+end
+
+-- Familles de sets (menus de sets par classe : D.sets) visibles pour le profil, dans l'ordre d'affichage
+P.SETFAM = { "T0Set", "T1Set", "T1VPSet", "T2Set", "T35Set", "T3Set", "ZGSet", "AQ20Set", "AQ40Set" }
+
+function P.SetFamilies()
+	local out = {}
+	local d = P.Data()
+	if not d or type(d.sets) ~= "table" then return out end
+	local _, bit = P.Profile()
+	for i = 1, getn(P.SETFAM) do
+		local key = P.SETFAM[i]
+		local s = d.sets[key]
+		if type(s) == "table" then
+			local any = false
+			local j = 1
+			while s[j] do
+				if vis(s[j].m, bit) then any = true end
+				j = j + 1
+			end
+			if any then tinsert(out, { key = key }) end
+		end
+	end
+	return out
+end
+
+-- Classes d'une famille : { pg, name, cls (jeton de classe en majuscules) }
+function P.SetClasses(key)
+	local out = {}
+	local d = P.Data()
+	local s = d and d.sets and d.sets[key]
+	if type(s) ~= "table" then return out end
+	local _, bit = P.Profile()
+	local fr = lang() == "fr"
+	local j = 1
+	while s[j] do
+		local e = s[j]
+		if vis(e.m, bit) then
+			tinsert(out, { pg = e.pg, name = (fr and e.f) or e.n or e.pg, cls = string.upper(e.n or "") })
+		end
+		j = j + 1
+	end
 	return out
 end
 
@@ -795,6 +840,27 @@ function M.Instances()
 	end)
 	M.insts = list
 	return list
+end
+
+-- Un donjon passe-t-il le filtre de categorie ?
+function M.CatOK(it)
+	local c = M.cat
+	if c == "all" then return true end
+	if c == "access" then return (it.att or it.keys) and true or false end
+	return it.kind == c
+end
+
+-- Liste affichee (filtree) ; chaque element garde son rang dans la liste complete (fi) : les numeros de selection restent ceux de M.Instances()
+function M.InstView()
+	local all = M.Instances()
+	if M.view and M.viewFor == all and M.viewCat == M.cat then return M.view end
+	local out = {}
+	for k = 1, getn(all) do
+		all[k].fi = k
+		if M.CatOK(all[k]) then tinsert(out, all[k]) end
+	end
+	M.view, M.viewFor, M.viewCat = out, all, M.cat
+	return out
 end
 
 -- Boss d'un donjon : { name, n, index, key } (cache jusqu'a la prochaine ouverture).
@@ -1236,7 +1302,7 @@ M.PIN_POOL = 160              -- epingles posees a la fois (quete epinglee + sui
 M.providers = {}              -- fournisseurs d'epingles par cle : "track" (suivi des quetes), "places" (lieux utiles) : function(c, z, ctx) -> liste d'enregistrements
 M.PROVORDER = { "track", "places" }
 M.trackFn = nil               -- fournisseur des quetes du suivi (module questtrack) : function() -> liste d'enregistrements resolus
-M.PIN_SIZE = 20
+M.PIN_SIZE = 16
 M.ICONDIR = "Interface\\AddOns\\ShikiUI\\Media\\Icons\\"
 -- Icones des aspects de quete (pfQuest, MIT) : ! a prendre, ? a rendre, epee = creature, sac = objet, rouage = objet du monde
 M.PINICON = { S = "available_c", E = "complete_c", O = "cluster_mob", I = "cluster_item", B = "cluster_misc" }
@@ -1778,6 +1844,50 @@ function M.PinHere(rec, c, z)
 end
 
 -- Pose les epingles de la zone affichee (toutes les sources) ; cache tout ailleurs et quand la carte est fermee.
+M.spreadList = {}
+
+-- Ecarte les epingles qui se chevauchent (une ville peut en avoir dix au meme endroit) : quelques passes de repoussement,
+-- la quete epinglee et le lieu le plus proche ne bougent pas. Les positions sont en pixels de la carte (haut gauche = 0, 0).
+function M.PinSpread(list)
+	local n = getn(list)
+	local minD = M.PIN_SIZE * 0.95
+	for pass = 1, 4 do
+		local moved = false
+		for i = 1, n - 1 do
+			local a = list[i]
+			for j = i + 1, n do
+				local b = list[j]
+				local dx, dy = b.px - a.px, b.py - a.py
+				local d2 = dx * dx + dy * dy
+				if d2 < minD * minD then
+					local d = math.sqrt(d2)
+					if d < 0.5 then
+						dx, dy, d = (j - i) - math.floor((j - i) / 2) * 2 == 0 and 1 or -1, 0.5, 1.1
+					end
+					local push = (minD - d) / 2
+					local ux, uy = dx / d, dy / d
+					if a.fixed and not b.fixed then
+						b.px, b.py = b.px + ux * push * 2, b.py + uy * push * 2
+					elseif b.fixed and not a.fixed then
+						a.px, a.py = a.px - ux * push * 2, a.py - uy * push * 2
+					elseif not (a.fixed and b.fixed) then
+						a.px, a.py = a.px - ux * push, a.py - uy * push
+						b.px, b.py = b.px + ux * push, b.py + uy * push
+					end
+					moved = true
+				end
+			end
+		end
+		if not moved then break end
+	end
+	local btn = glob("WorldMapButton")
+	for i = 1, n do
+		local p = list[i]
+		p:ClearAllPoints()
+		p:SetPoint("CENTER", btn, "TOPLEFT", p.px, p.py)
+	end
+end
+
 function M.PinRefresh()
 	M.pinRetry = false
 	local wm, btn = glob("WorldMapFrame"), glob("WorldMapButton")
@@ -1795,6 +1905,8 @@ function M.PinRefresh()
 	local n, full = 0, false
 	local w, h = btn:GetWidth(), btn:GetHeight()
 	local firstHere = nil
+	local spread = M.spreadList
+	for i = getn(spread), 1, -1 do spread[i] = nil end
 	for s = 1, getn(srcs) do
 		local rec = srcs[s]
 		local here = M.PinHere(rec, c, z)
@@ -1824,14 +1936,16 @@ function M.PinRefresh()
 					p.markText = mk
 					p.mark:SetText(mk)
 				end
-				p:ClearAllPoints()
-				p:SetPoint("CENTER", btn, "TOPLEFT", d.x / 100 * w, -d.y / 100 * h)
+				p.px, p.py = d.x / 100 * w, -d.y / 100 * h
+				p.fixed = (s == 1 and M.pin ~= nil) or d.vk == "Pfocus" or nil
+				tinsert(spread, p)
 				p:Show()
 				n = n + 1
 			end
 		end
 	end
 	for i = n + 1, getn(M.pins) do M.pins[i]:Hide() end
+	M.PinSpread(spread)
 	local b = M.PinBanner()
 	if b then
 		local text
@@ -2148,6 +2262,11 @@ end
 function M.PaintPin()
 	local w = M.win
 	if not w or not w.pin then return end
+	if M.tab ~= "inst" and M.tab ~= "search" then
+		w.pin:Hide()
+		w.pinInfo:Hide()
+		return
+	end
 	local search = M.tab == "search"
 	local show = search or M.ChainSelected()
 	local mode = search and "search" or "chain"
@@ -2211,6 +2330,8 @@ end
 -- Aller a un objet trouve : onglet Donjons, donjon et boss choisis, listes defilees pour montrer la selection.
 function M.GoTo(inst, boss, item)
 	M.tab = "inst"
+	M.cat = "all"
+	M.view = nil
 	M.SelectInst(inst)
 	if boss then M.SelectBoss(boss) end
 	if item then
@@ -2224,10 +2345,87 @@ function M.GoTo(inst, boss, item)
 		clamp("loot", getn(M.loots))
 	end
 	M.off.inst = inst - 1
-	clamp("inst", getn(M.Instances()))
+	clamp("inst", getn(M.InstView()))
 	M.off.boss = (boss or 1) - 1
 	clamp("boss", getn(M.bosses))
 	if M.win then M.Paint() end
+end
+
+-- ---- sommaire, filtre de categorie et onglet Sets
+function M.GoCat(cat)
+	M.cat = cat
+	M.view = nil
+	M.tab = "inst"
+	M.off.inst = 0
+	local v = M.InstView()
+	if v[1] then M.SelectInst(v[1].fi) else M.sel.inst, M.bosses, M.loots = nil, {}, {} end
+	if M.win then M.Paint() end
+end
+
+function M.NextCat()
+	local cur = 1
+	for i = 1, getn(M.CATS) do
+		if M.CATS[i] == M.cat then cur = i end
+	end
+	M.GoCat(M.CATS[cur < getn(M.CATS) and cur + 1 or 1])
+end
+
+function M.SetFams()
+	if not M.setFams then M.setFams = P.SetFamilies() end
+	return M.setFams
+end
+
+function M.SelectSetFam(i)
+	local fam = M.SetFams()[i]
+	M.sel.sfam = fam and i or nil
+	M.setCls = fam and P.SetClasses(fam.key) or {}
+	local pick = 1
+	local uc = glob("UnitClass")
+	if uc then
+		local _, tok = uc("player")
+		for k = 1, getn(M.setCls) do
+			if M.setCls[k].cls == tok then pick = k end
+		end
+	end
+	M.SelectSetCls(pick)
+end
+
+function M.SelectSetCls(i)
+	local c = M.setCls and M.setCls[i]
+	M.sel.scls = c and i or nil
+	M.sel.sitem = nil
+	M.off.sitem = 0
+	M.setItems = c and P.RepRows(c.pg) or {}
+end
+
+function M.HomeGo(act, arg)
+	if act == "cat" then
+		M.GoCat(arg)
+		return
+	end
+	M.SetTab(arg)
+end
+
+-- Fiches du sommaire : identifiant (textes msg.codex.home.<id>.t / .d), action, argument
+M.HOME = {
+	{ "dungeon", "cat", "dungeon" }, { "raid", "cat", "raid" }, { "world", "cat", "world" }, { "bg", "cat", "bg" },
+	{ "sets", "tab", "sets" }, { "rep", "tab", "rep" }, { "access", "cat", "access" }, { "search", "tab", "search" },
+}
+
+function M.HomeCard(parent, n, id, act, arg)
+	local col, row = math.floor((n - 1) / 4), (n - 1) - math.floor((n - 1) / 4) * 4
+	local b = T.Button(parent, L("msg.codex.home." .. id .. ".t"), 306, 56, function() M.HomeGo(act, arg) end)
+	b:SetPoint("TOPLEFT", parent, "TOPLEFT", 12 + col * 316, -70 - row * 66)
+	b.label:ClearAllPoints()
+	b.label:SetPoint("TOPLEFT", b, "TOPLEFT", 10, -9)
+	b.label:SetJustifyH("LEFT")
+	b.label:SetWidth(286)
+	local d = T.Text(b, 10, T.c.dim, "LEFT")
+	d:SetPoint("BOTTOMLEFT", b, "BOTTOMLEFT", 10, 8)
+	d:SetWidth(286)
+	d:SetHeight(12)
+	d:SetText(L("msg.codex.home." .. id .. ".d"))
+	return b
 end
 
 -- ---- onglet Reputations
@@ -2307,7 +2505,10 @@ end
 
 function M.Wheel(col, delta)
 	local count = 0
-	if col == "inst" then count = getn(M.Instances())
+	if col == "inst" then count = getn(M.InstView())
+	elseif col == "sfam" then count = getn(M.SetFams())
+	elseif col == "scls" then count = getn(M.setCls or {})
+	elseif col == "sitem" then count = getn(M.setItems or {})
 	elseif col == "boss" then count = getn(M.bosses)
 	elseif col == "loot" then count = getn(M.loots)
 	elseif col == "fac" then count = getn(M.Reps())
@@ -2372,7 +2573,18 @@ end
 function M.RowClick(b)
 	local col, i = b.col, b.idx + M.off[b.col]
 	if col == "inst" then
-		M.SelectInst(i)
+		local it = M.InstView()[i]
+		if it then M.SelectInst(it.fi) end
+	elseif col == "sfam" then
+		M.SelectSetFam(i)
+	elseif col == "scls" then
+		M.SelectSetCls(i)
+	elseif col == "sitem" then
+		local r = M.setItems and M.setItems[i]
+		if r then
+			M.sel.sitem = r.id
+			M.LinkItem(r.id)
+		end
 	elseif col == "boss" then
 		local bs = M.bosses[i]
 		if bs and bs.rp then
@@ -2492,6 +2704,10 @@ function M.PaintStatus()
 		if bs and bs.att then txt = L("msg.codex.attune.hint") end
 	elseif M.tab == "rep" then
 		txt = M.RepStatus()
+	elseif M.tab == "home" then
+		txt = L("msg.codex.home.hint")
+	elseif M.tab == "sets" then
+		txt = L("msg.codex.sets.hint")
 	else
 		local ix = M.ix
 		if ix and not ix.done then
@@ -2573,9 +2789,63 @@ function M.PaintRep()
 			setRow(w.rRepItem[i], nil)
 		end
 	end
-	T.SetSelected(w.tabInst, false)
-	T.SetSelected(w.tabRep, true)
-	T.SetSelected(w.tabSearch, false)
+	M.PaintTabs()
+	M.PaintPin()
+	M.PaintStatus()
+end
+
+function M.PaintTabs()
+	local w = M.win
+	T.SetSelected(w.tabHome, M.tab == "home")
+	T.SetSelected(w.tabInst, M.tab == "inst")
+	T.SetSelected(w.tabSets, M.tab == "sets")
+	T.SetSelected(w.tabRep, M.tab == "rep")
+	T.SetSelected(w.tabSearch, M.tab == "search")
+end
+
+function M.HideLists()
+	local w = M.win
+	w.cInst:Hide() w.cBoss:Hide() w.cLoot:Hide() w.cRes:Hide() w.cRep:Hide() w.edit:Hide()
+end
+
+-- Sommaire : une fiche par grande famille de recherche
+function M.PaintHome()
+	local w = M.win
+	M.HideLists()
+	w.cSet:Hide()
+	w.cHome:Show()
+	M.PaintTabs()
+	M.PaintPin()
+	M.PaintStatus()
+end
+
+-- Onglet Sets : familles (Tier 0 ... Zul'Gurub), classes, objets du set
+function M.PaintSets()
+	local w = M.win
+	M.HideLists()
+	w.cHome:Hide()
+	w.cSet:Show()
+	local fams = M.SetFams()
+	if not fams[M.sel.sfam or 0] and fams[1] then M.SelectSetFam(1) end
+	clamp("sfam", getn(fams))
+	clamp("scls", getn(M.setCls or {}))
+	clamp("sitem", getn(M.setItems or {}))
+	local cls = M.setCls or {}
+	local items = M.setItems or {}
+	for i = 1, M.NROWS do
+		local fm = fams[i + M.off.sfam]
+		setRow(w.rSetFam[i], fm and L("msg.codex.set." .. fm.key) or nil, fm and (i + M.off.sfam) == M.sel.sfam)
+		local c = cls[i + M.off.scls]
+		setRow(w.rSetCls[i], c and c.name or nil, c and (i + M.off.scls) == M.sel.scls)
+		local it = items[i + M.off.sitem]
+		if it then
+			setRow(w.rSetItem[i], M.ItemName(it.id), it.id == M.sel.sitem, it.id, nil, it.shared, it.note, "")
+			M.QualityColor(w.rSetItem[i], it.id)
+		else
+			setRow(w.rSetItem[i], nil)
+		end
+	end
+	M.PaintTabs()
 	M.PaintPin()
 	M.PaintStatus()
 end
@@ -2583,6 +2853,16 @@ end
 function M.Paint()
 	local w = M.win
 	if not w then return end
+	w.cHome:Hide()
+	w.cSet:Hide()
+	if M.tab == "home" then
+		M.PaintHome()
+		return
+	end
+	if M.tab == "sets" then
+		M.PaintSets()
+		return
+	end
 	if M.tab == "rep" then
 		M.PaintRep()
 		return
@@ -2594,15 +2874,20 @@ function M.Paint()
 	end
 	if inst then
 		w.cInst:Show() w.cBoss:Show() w.cLoot:Show() w.edit:Hide() w.cRes:Hide()
-		local insts = M.Instances()
+		local insts = M.InstView()
 		clamp("inst", getn(insts))
+		local catText = L("msg.codex.catbtn", L("msg.codex.cat." .. M.cat), getn(insts))
+		if w.catBtn.shownText ~= catText then
+			w.catBtn.shownText = catText
+			T.SetButtonText(w.catBtn, catText)
+		end
 		clamp("boss", getn(M.bosses))
 		clamp("loot", getn(M.loots))
 		local jr = nil           -- journal de quetes : lu une fois par repeinture, seulement si une chaine est affichee (false = illisible)
 		for i = 1, M.NROWS do
 			local k = i + M.off.inst
 			local it = insts[k]
-			setRow(w.rInst[i], it and (it.name .. "  (" .. sformat(L("msg.codex.level"), M.LevelText(it)) .. ")") or nil, M.sel.inst == k)
+			setRow(w.rInst[i], it and (it.name .. "  (" .. sformat(L("msg.codex.level"), M.LevelText(it)) .. ")") or nil, it and M.sel.inst == it.fi)
 			local bk = i + M.off.boss
 			local bs = M.bosses[bk]
 			setRow(w.rBoss[i], bs and bs.name or nil, M.sel.boss == bk)
@@ -2654,9 +2939,7 @@ function M.Paint()
 			end
 		end
 	end
-	T.SetSelected(w.tabInst, inst)
-	T.SetSelected(w.tabRep, false)
-	T.SetSelected(w.tabSearch, not inst)
+	M.PaintTabs()
 	M.PaintPin()
 	M.PaintStatus()
 end
@@ -2692,14 +2975,18 @@ function M.Build()
 	w.close:SetPoint("TOPRIGHT", f, "TOPRIGHT", -8, -8)
 	w.prof = T.Text(f, 10, T.c.dim, "RIGHT")
 	w.prof:SetPoint("TOPRIGHT", f, "TOPRIGHT", -34, -13)
-	w.prof:SetWidth(280)
+	w.prof:SetWidth(110)
 	w.prof:SetHeight(12)
-	w.tabInst = T.Button(f, L("msg.codex.tab.inst"), 84, 22, function() M.SetTab("inst") end)
-	w.tabInst:SetPoint("TOPLEFT", f, "TOPLEFT", 90, -8)
-	w.tabRep = T.Button(f, L("msg.codex.tab.rep"), 84, 22, function() M.SetTab("rep") end)
-	w.tabRep:SetPoint("LEFT", w.tabInst, "RIGHT", 6, 0)
-	w.tabSearch = T.Button(f, L("msg.codex.tab.search"), 84, 22, function() M.SetTab("search") end)
-	w.tabSearch:SetPoint("LEFT", w.tabRep, "RIGHT", 6, 0)
+	w.tabHome = T.Button(f, L("msg.codex.tab.home"), 78, 22, function() M.SetTab("home") end)
+	w.tabHome:SetPoint("TOPLEFT", f, "TOPLEFT", 84, -8)
+	w.tabInst = T.Button(f, L("msg.codex.tab.inst"), 78, 22, function() M.SetTab("inst") end)
+	w.tabInst:SetPoint("LEFT", w.tabHome, "RIGHT", 3, 0)
+	w.tabSets = T.Button(f, L("msg.codex.tab.sets"), 62, 22, function() M.SetTab("sets") end)
+	w.tabSets:SetPoint("LEFT", w.tabInst, "RIGHT", 3, 0)
+	w.tabRep = T.Button(f, L("msg.codex.tab.rep"), 92, 22, function() M.SetTab("rep") end)
+	w.tabRep:SetPoint("LEFT", w.tabSets, "RIGHT", 3, 0)
+	w.tabSearch = T.Button(f, L("msg.codex.tab.search"), 78, 22, function() M.SetTab("search") end)
+	w.tabSearch:SetPoint("LEFT", w.tabRep, "RIGHT", 3, 0)
 
 	local top = -66
 	w.cInst = CreateFrame("Frame", nil, f)
@@ -2713,9 +3000,35 @@ function M.Build()
 	w.cRep = CreateFrame("Frame", nil, f)
 	w.cRep:SetAllPoints(f)
 	w.cRep:Hide()
+	w.cHome = CreateFrame("Frame", nil, f)
+	w.cHome:SetAllPoints(f)
+	w.cSet = CreateFrame("Frame", nil, f)
+	w.cSet:SetAllPoints(f)
+	w.cSet:Hide()
+	local ht = T.Text(w.cHome, 13, T.c.text, "LEFT", true)
+	ht:SetPoint("TOPLEFT", f, "TOPLEFT", 12, -44)
+	ht:SetText(L("msg.codex.home.title"))
+	for n = 1, getn(M.HOME) do
+		local h = M.HOME[n]
+		M.HomeCard(w.cHome, n, h[1], h[2], h[3])
+	end
+	w.catBtn = T.Button(w.cInst, "", 200, 20, function() M.NextCat() end)
+	w.catBtn:SetPoint("TOPLEFT", f, "TOPLEFT", 12, -42)
+	local s1 = T.Text(w.cSet, 11, T.c.dim, "LEFT")
+	s1:SetPoint("TOPLEFT", f, "TOPLEFT", 12, -44)
+	s1:SetText(L("msg.codex.col.setfam"))
+	local s2 = T.Text(w.cSet, 11, T.c.dim, "LEFT")
+	s2:SetPoint("TOPLEFT", f, "TOPLEFT", 218, -44)
+	s2:SetText(L("msg.codex.col.setcls"))
+	local s3 = T.Text(w.cSet, 11, T.c.dim, "LEFT")
+	s3:SetPoint("TOPLEFT", f, "TOPLEFT", 398, -44)
+	s3:SetText(L("msg.codex.col.ritem"))
+	w.rSetFam = M.MakeRows(w.cSet, "sfam", 12, top, 200, false, false)
+	w.rSetCls = M.MakeRows(w.cSet, "scls", 218, top, 174, false, false)
+	w.rSetItem = M.MakeRows(w.cSet, "sitem", 398, top, 240, true, false)
 	local h1 = T.Text(w.cInst, 11, T.c.dim, "LEFT")
 	h1:SetPoint("TOPLEFT", f, "TOPLEFT", 12, -44)
-	h1:SetText(L("msg.codex.col.inst"))
+	h1:SetText("")
 	local h2 = T.Text(w.cBoss, 11, T.c.dim, "LEFT")
 	h2:SetPoint("TOPLEFT", f, "TOPLEFT", 218, -44)
 	h2:SetText(L("msg.codex.col.boss"))
@@ -2806,6 +3119,9 @@ end
 -- Oublie les listes calculees (niveau minimum ou profil de serveur change) : tout est recalcule a la prochaine ouverture.
 function M.Reset()
 	M.insts = nil
+	M.view = nil
+	M.setFams, M.setCls, M.setItems = nil, nil, nil
+	M.sel.sfam, M.sel.scls = nil, nil
 	M.bcache = {}
 	M.repList = nil
 	M.repAll, M.repTiers, M.repItems = {}, {}, {}
