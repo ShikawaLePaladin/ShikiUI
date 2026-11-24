@@ -43,8 +43,8 @@ absent des cartes du client tombe simplement sans correspondance : ne pas epingl
 
 ## 3. Titres et noms
 
-* `Q.en.t[id]` : titre anglais de la quete (6610). `Q.fr.t[id]` : titre francais, SEULEMENT s'il existe, differe de l'anglais, et que le texte anglais de BASE de pfQuest (titre + objectif + description) est identique
-  au texte anglais FUSIONNE (sinon Turtle a reecrit la quete et le francais decrirait l'ancienne). 3856 titres francais. Repli : `Q.fr.t[id] or Q.en.t[id]`.
+* `Q.en.t[id]` : titre anglais de la quete (6610). `Q.fr.t[id]` : titre francais, SEULEMENT s'il existe et differe de l'anglais. Deux origines : (1) le titre francais de pfQuest, garde quand le titre anglais de BASE de pfQuest est identique au titre anglais FUSIONNE
+  (Turtle reecrit souvent le texte d'une quete sans changer son titre ; si le titre change, le francais decrirait l'ancienne quete) ; (2) une traduction faite pour ce projet (les quetes ajoutees par Turtle n'ont aucun francais), ecrite dans `tools/fr_extra/t*.tsv` et fusionnee par l'outil. 6508 titres francais. Repli : `Q.fr.t[id] or Q.en.t[id]`.
 * `Q.en.u[id]`, `Q.fr.u[id]` : PNJ ; `Q.en.o[id]`, `Q.fr.o[id]` : objets du monde (coffres, plantes...) ; `Q.en.i[id]`, `Q.fr.i[id]` : objets cites par les quetes (depart, objectifs, recompenses).
   Un objet DEJA nomme dans `ShikiCodexData` (`D.en.i`) n'est PAS repete ici (945 ids) : pour un objet, chercher d'abord `Q.xx.i[id]`, puis `ShikiCodexData.xx.i[id]` (voir `R.entityName`).
   Une quete a un nom francais seulement si le francais correspond encore (meme regle) ; sinon repli sur l'anglais.
