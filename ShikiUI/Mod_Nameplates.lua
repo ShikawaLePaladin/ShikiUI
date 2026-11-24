@@ -302,6 +302,10 @@ local function newSlot(i)
 	s.f = f
 	s.bar = T.Bar(f)
 	s.nameFs = T.Text(f, 9, T.c.text, "CENTER", true)
+	s.qTex = f:CreateTexture(nil, "OVERLAY")
+	s.qTex:SetWidth(12)
+	s.qTex:SetHeight(12)
+	s.qTex:Hide()
 	s.hpFs = T.Text(s.bar, 8, T.c.text, "CENTER", true)
 	s.distFs = T.Text(f, 8, T.c.dim, "RIGHT", true)
 	s.thrFs = T.Text(f, 9, T.c.text, "LEFT", true)
@@ -909,6 +913,19 @@ function M.UpdateName(s, plate)
 	if not cfg.name then return end
 	local nm = plate.suiName and plate.suiName:GetText() or EMPTY
 	local lv = (cfg.level and plate.suiLevel) and plate.suiLevel:GetText() or nil
+	local Q = SUI.QuestTrack
+	local qk = (Q and Q.MarkWanted and Q.MarkWanted()) and (nm .. "|" .. Q.ver) or false
+	if qk ~= s.lastQ then
+		s.lastQ = qk
+		if qk and Q.UnitObjective(nm) then
+			s.qTex:SetTexture(Q.MARK_TEX)
+			s.qTex:ClearAllPoints()
+			s.qTex:SetPoint("RIGHT", s.nameFs, "LEFT", -1, 0)
+			s.qTex:Show()
+		else
+			s.qTex:Hide()
+		end
+	end
 	if nm ~= s.lastName or lv ~= s.lastLvl then
 		s.lastName, s.lastLvl = nm, lv
 		if lv and lv ~= EMPTY then s.nameFs:SetText(lv .. " " .. (nm or EMPTY)) else s.nameFs:SetText(nm or EMPTY) end

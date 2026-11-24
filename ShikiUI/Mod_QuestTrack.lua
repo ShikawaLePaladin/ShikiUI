@@ -677,8 +677,24 @@ end
 
 -- Objectif de tes quetes qui vise ce monstre (nom de l'unite survolee) : { title, text } ou nil. Lit seulement le journal deja charge (M.list) :
 -- un objectif "Vermine kobold tue : 2/10" vise "Vermine kobold" ; les objectifs deja remplis sont ignores.
+M.MARK_TEX = "Interface\\GossipFrame\\AvailableQuestIcon"
+M.uoCache, M.uoVer = {}, -1
 function M.UnitObjective(name)
 	if not M.on or type(name) ~= "string" or name == "" then return nil end
+	if M.uoVer ~= M.ver then M.uoCache, M.uoVer = {}, M.ver end
+	local c = M.uoCache[name]
+	if c ~= nil then return c or nil end
+	local r = M.UnitObjectiveScan(name)
+	M.uoCache[name] = r or false
+	return r
+end
+
+-- Repere de quete voulu (plaques et cadre de cible) : module actif et option
+function M.MarkWanted()
+	return M.on and C.Get("questtrack.mark") and true or false
+end
+
+function M.UnitObjectiveScan(name)
 	local low = foldName(name)
 	for i = 1, getn(M.list) do
 		local e = M.list[i]
@@ -1200,6 +1216,7 @@ function M.Scan()
 	if sig == M.sig then return end
 	M.sig = sig
 	M.ver = M.ver + 1
+	if SUI.Units and SUI.Units.MarkAll then SUI.Units.MarkAll() end
 	-- numeros deja resolus : repris par titre + niveau (la lecture repart de zero a chaque changement)
 	local old = M.list
 	M.list = list
@@ -1809,6 +1826,7 @@ SUI.RegisterModule("questtrack", {
 		opt("angle", "number", 21.5, 270, { min = 0, max = 355, step = 5 }),
 		opt("pinsize", "number", 24, 16, { min = 12, max = 32, step = 1 }),
 		opt("giverlow", "number", 26, 6, { min = 0, max = 20, step = 1 }),
+		opt("mark", "bool", 26.7, true, { simple = true }),
 		opt("legend", "bool", 26.8, true),
 		opt("legendmine", "bool", 26.9, true),
 		opt("giverhigh", "number", 26.5, 3, { min = 0, max = 10, step = 1 }),
