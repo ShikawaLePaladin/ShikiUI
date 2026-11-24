@@ -209,6 +209,25 @@ function P.Mobs()
 	return m
 end
 
+
+-- Sources de butin d'un objet (ShikiCodexData_Mobs.d) : "Monstre 18%, Monstre 12%" (jusqu'a max), nil si inconnu ou donnees absentes.
+function M.DropLine(itemId, max)
+	if not M.on or not itemId then return nil end
+	if not glob("ShikiCodexMobs") and SUI.InCombat() then return nil end   -- pas de chargement de donnees en plein combat
+	local md = P.Mobs()
+	if not md or type(md.d) ~= "table" then return nil end
+	local s = md.d[itemId]
+	if type(s) ~= "string" then return nil end
+	local out, n = nil, 0
+	for mid, pct in string.gfind(s, "(%d+):([%d%.]+)") do
+		n = n + 1
+		if n > (max or 3) then break end
+		local p = tonumber(pct) or 0
+		local txt = P.MobName(md, tonumber(mid)) .. (p > 0 and (" " .. (p >= 10 and floor(p + 0.5) or (floor(p * 10 + 0.5) / 10)) .. "%") or "")
+		out = out and (out .. ", " .. txt) or txt
+	end
+	return out
+end
 -- Nom d'un monstre (francais quand il existe et que le client est en francais)
 function P.MobName(m, id)
 	if lang() == "fr" and m.n.fr and m.n.fr[id] then return m.n.fr[id] end
@@ -1621,7 +1640,7 @@ function M.PaintIcon(p, d, vk)
 			p.tex:SetVertexColor(lv, lv, lv, 1)
 			if p.tex.SetDesaturated then p.tex:SetDesaturated(1) end
 		else
-			p.tex:SetVertexColor(1, 1, 1, 1)
+			p.tex:SetVertexColor(1, 1, 1, 1)   -- style:ok teinte neutre d'une icone peinte
 			if p.tex.SetDesaturated then p.tex:SetDesaturated(nil) end
 		end
 	end

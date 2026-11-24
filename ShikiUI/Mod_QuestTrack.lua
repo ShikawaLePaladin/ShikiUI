@@ -1045,7 +1045,7 @@ function M.MiniTick()
 				p.hl:SetHeight(sz2 * 1.7)
 				p:SetFrameLevel(mm:GetFrameLevel() + ((vk == "E") and ((e.d.grey and 7) or 9) or 6))
 				if vk == "E" and not e.d.grey then
-					p.hl:SetVertexColor(1, 0.85, 0.2)
+					p.hl:SetVertexColor(1, 0.85, 0.2)   -- style:ok dore du "?" de rendu (couleur de l'icone)
 				else
 					p.hl:Hide()
 				end
@@ -1519,7 +1519,7 @@ function M.ArrowUpdate()
 			f.tex:SetTexture(ic)
 			f.tex:SetTexCoord(0.07, 0.93, 0.07, 0.93)
 		end
-		f.tex:SetVertexColor(1, 1, 1, 1)
+		f.tex:SetVertexColor(1, 1, 1, 1)   -- style:ok teinte neutre d'une icone peinte
 	else
 		if f.mode then
 			f.mode = nil

@@ -74,6 +74,7 @@ function M.ReadConfig()
 	cfg.combathide = C.Get("tooltip.combathide")
 	cfg.vendor = C.Get("tooltip.vendor")
 	cfg.owned = C.Get("tooltip.owned")
+	cfg.drops = C.Get("tooltip.drops")
 end
 
 -- ---------------------------------------------------------------- outils
@@ -418,6 +419,10 @@ function M.DecorateItem(link)
 		local lv = M.ItemLevel(id, link)
 		if lv then GameTooltip:AddLine(L("msg.tooltip.ilvl", lv), T.c.text[1], T.c.text[2], T.c.text[3]) end
 	end
+	if cfg.drops and SUI.Codex and SUI.Codex.DropLine and not (cfg.combathide and SUI.InCombat()) then
+		local dl = SUI.Codex.DropLine(id, 2)
+		if dl then GameTooltip:AddLine(L("msg.tooltip.drops", dl), T.c.dim[1], T.c.dim[2], T.c.dim[3]) end
+	end
 	if cfg.itemid then GameTooltip:AddLine(L("msg.tooltip.itemid", id), T.c.dim[1], T.c.dim[2], T.c.dim[3]) end
 	if cfg.combathide and SUI.InCombat() then return end      -- "masquer en combat" : ni prix ni possession pendant un combat
 	if cfg.vendor then M.AddVendor(id, link) end
@@ -651,6 +656,7 @@ SUI.RegisterModule("tooltip", {
 		opt("itemid", "bool", 81, false),
 		opt("vendor", "bool", 82, true, { simple = true }),
 		opt("owned", "bool", 83, true, { simple = true }),
+		opt("drops", "bool", 84, true),
 		opt("combathide", "bool", 90, false),
 		opt("compareshift", "bool", 94, true, { simple = true }),
 		opt("compare", "bool", 95, true, { simple = true }),
