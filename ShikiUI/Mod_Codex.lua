@@ -1604,17 +1604,21 @@ end
 -- Icone d'une epingle : chemin et rognage (nil = image entiere). Un lieu porte sa propre icone (d.icon, d.tc).
 function M.PinIcon(d, vk)
 	if d.icon then return d.icon, d.tc end
+	if d.grey == "end" and vk == "E" then return M.ICONDIR .. "complete_w", nil end    -- ? blanc : rendu d'une quete en cours
 	return M.ICONDIR .. (M.PINICON[vk] or M.PINICON.O), nil
 end
 
 -- Pose l'icone d'un cadre (epingle de carte ou de minicarte) seulement si elle change
 function M.PaintIcon(p, d, vk)
 	-- quete trop haute pour toi : icone grisee
-	local g = d and d.grey and true or false
+	local g = d and d.grey or false
+	if g == "end" then g = false end        -- icone blanche deja dessinee : ni teinte ni desaturation
 	if p.greyOn ~= g then
 		p.greyOn = g
 		if g then
-			p.tex:SetVertexColor(0.6, 0.6, 0.6, 1)
+			-- "end" : ? de rendu d'une quete en cours, presque blanc (comme le ? gris clair du jeu)
+			local lv = (g == "end") and 1 or 0.6
+			p.tex:SetVertexColor(lv, lv, lv, 1)
 			if p.tex.SetDesaturated then p.tex:SetDesaturated(1) end
 		else
 			p.tex:SetVertexColor(1, 1, 1, 1)
