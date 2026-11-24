@@ -874,13 +874,13 @@ end
 -- Liste affichee (filtree) ; chaque element garde son rang dans la liste complete (fi) : les numeros de selection restent ceux de M.Instances()
 function M.InstView()
 	local all = M.Instances()
-	if M.view and M.viewFor == all and M.viewCat == M.cat then return M.view end
+	if M.view and M.viewFor == all and M.viewCat == M.cat and M.viewQ == M.q.inst then return M.view end
 	local out = {}
 	for k = 1, getn(all) do
 		all[k].fi = k
-		if M.CatOK(all[k]) then tinsert(out, all[k]) end
+		if M.CatOK(all[k]) and (M.Match(all[k].name, M.q.inst) or M.Match(all[k].acr, M.q.inst)) then tinsert(out, all[k]) end
 	end
-	M.view, M.viewFor, M.viewCat = out, all, M.cat
+	M.view, M.viewFor, M.viewCat, M.viewQ = out, all, M.cat, M.q.inst
 	return out
 end
 
@@ -2352,6 +2352,7 @@ end
 function M.GoTo(inst, boss, item)
 	M.tab = "inst"
 	M.cat = "all"
+	M.ClearQuery("inst")
 	M.view = nil
 	M.SelectInst(inst)
 	if boss then M.SelectBoss(boss) end
@@ -2542,6 +2543,78 @@ function M.Reps()
 	return M.repList
 end
 
+-- Recherche rapide (champs sous l'onglet) : texte en minuscules par liste, "" = pas de filtre
+M.q = { inst = "", rep = "" }
+
+function M.Match(text, q)
+	if not q or q == "" then return true end
+	return string.find(string.lower(text or ""), q, 1, true) ~= nil
+end
+
+-- Rangs (dans M.Reps()) des factions dont le nom contient le texte saisi
+function M.RepView()
+	local list = M.Reps()
+	if M.repView and M.repViewFor == list and M.repViewQ == M.q.rep then return M.repView end
+	local out = {}
+	for i = 1, getn(list) do
+		if M.Match(list[i].name, M.q.rep) then tinsert(out, i) end
+	end
+	M.repView, M.repViewFor, M.repViewQ = out, list, M.q.rep
+	return out
+end
+
+-- Change le filtre d'une liste (kind = "inst" ou "rep") : premiere ligne choisie, liste repeinte
+function M.SetQuery(kind, text)
+	text = string.lower(text or "")
+	if M.q[kind] == text then return end
+	M.q[kind] = text
+	if kind == "inst" then
+		M.view = nil
+		M.off.inst = 0
+		local v = M.InstView()
+		if v[1] then M.SelectInst(v[1].fi) else M.sel.inst, M.bosses, M.loots = nil, {}, {} end
+	else
+		M.repViewQ = nil
+		M.off.fac = 0
+		local rv = M.RepView()
+		if rv[1] then M.SelectRep(rv[1]) else M.sel.rep, M.repAll, M.repTiers, M.repItems = nil, {}, {}, {} end
+	end
+	if M.win and M.win.f:IsShown() then M.Paint() end
+end
+
+-- Efface le filtre (et le champ) sans repeindre : une navigation vers un resultat precis ne doit pas le trouver masque
+function M.ClearQuery(kind)
+	if M.q[kind] == "" then return end
+	M.q[kind] = ""
+	M.view, M.repViewQ = nil, nil
+	local e = M.win and (kind == "inst" and M.win.fInst or M.win.fRep)
+	if e then
+		M.quietQ = true
+		e:SetText("")
+		M.quietQ = false
+	end
+end
+
+function M.OnQueryText()
+	local e = this
+	if e.hint then
+		if e:GetText() == "" then e.hint:Show() else e.hint:Hide() end
+	end
+	if M.quietQ then return end
+	M.SetQuery(e.kind, e:GetText())
+end
+
+function M.MakeQuery(parent, kind, x, y, w)
+	local e = T.Edit(parent, w, 20)
+	e:SetPoint("TOPLEFT", M.win.f, "TOPLEFT", x, y)
+	e.kind = kind
+	e.hint = T.Text(e, 10, T.c.dim, "LEFT")
+	e.hint:SetPoint("LEFT", e, "LEFT", 6, 0)
+	e.hint:SetText(L("msg.codex.q." .. kind))
+	e:SetScript("OnTextChanged", M.OnQueryText)
+	return e
+end
+
 function M.SelectRep(i)
 	local rep = M.Reps()[i]
 	M.sel.rep = rep and i or nil
@@ -2590,6 +2663,7 @@ end
 function M.GoRepAt(i, item)
 	if not M.Reps()[i] then return end
 	M.tab = "rep"
+	M.ClearQuery("rep")
 	M.SelectRep(i)
 	M.off.fac = i - 1
 	clamp("fac", getn(M.Reps()))
@@ -2619,7 +2693,7 @@ function M.Wheel(col, delta)
 	elseif col == "sitem" then count = getn(M.setItems or {})
 	elseif col == "boss" then count = getn(M.bosses)
 	elseif col == "loot" then count = getn(M.loots)
-	elseif col == "fac" then count = getn(M.Reps())
+	elseif col == "fac" then count = getn(M.RepView())
 	elseif col == "tier" then count = getn(M.repTiers) + 1
 	elseif col == "ritem" then count = getn(M.repItems)
 	else count = getn(M.res) end
@@ -2701,7 +2775,8 @@ function M.RowClick(b)
 		end
 		M.SelectBoss(i)
 	elseif col == "fac" then
-		M.SelectRep(i)
+		local fi = M.RepView()[i]
+		if fi then M.SelectRep(fi) end
 	elseif col == "tier" then
 		M.SelectTier(i)
 	elseif col == "ritem" then
@@ -2850,21 +2925,26 @@ function M.PaintRep()
 	local w = M.win
 	w.cInst:Hide() w.cBoss:Hide() w.cLoot:Hide() w.edit:Hide() w.cRes:Hide() w.cRep:Show()
 	local list = M.Reps()
-	if not list[M.sel.rep or 0] then
-		if list[1] then
-			M.SelectRep(1)
+	local rv = M.RepView()
+	local inview = false
+	for i = 1, getn(rv) do
+		if rv[i] == M.sel.rep then inview = true end
+	end
+	if not inview then
+		if rv[1] then
+			M.SelectRep(rv[1])
 		else
 			M.sel.rep, M.repAll, M.repTiers, M.repItems = nil, {}, {}, {}
 		end
 	end
-	clamp("fac", getn(list))
+	clamp("fac", getn(rv))
 	clamp("tier", getn(M.repTiers) + 1)
 	clamp("ritem", getn(M.repItems))
 	local map = M.Standings()
 	local cur = M.RepStanding(list[M.sel.rep or 0], map)
 	for i = 1, M.NROWS do
-		local k = i + M.off.fac
-		local f = list[k]
+		local k = rv[i + M.off.fac]
+		local f = k and list[k]
 		if f then
 			local fst = M.RepStanding(f, map)
 			local name = f.name
@@ -3163,6 +3243,8 @@ function M.Build()
 	w.rTier = M.MakeRows(w.cRep, "tier", 218, top, 174, false, true)
 	w.rRepItem = M.MakeRows(w.cRep, "ritem", 398, top, 240, true, "wide")
 
+	w.fInst = M.MakeQuery(w.cInst, "inst", 470, -40, 168)
+	w.fRep = M.MakeQuery(w.cRep, "rep", 76, -40, 132)
 	w.edit = T.Edit(f, 300, 22)
 	w.edit:SetPoint("TOPLEFT", f, "TOPLEFT", 12, -38)
 	w.edit:SetScript("OnTextChanged", M.OnSearchText)
