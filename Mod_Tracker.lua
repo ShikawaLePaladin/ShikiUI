@@ -1086,6 +1086,7 @@ function M.Build()
 	w.exp:Hide()
 	M.win = w
 	SUI.Mover.Register("tracker.win", w, { label = "mod.tracker.mover.win", point = "CENTER", x = 0, y = 0, scale = true })
+	if SUI.Mover.QuickDrag then SUI.Mover.QuickDrag(w, "tracker.win") end      -- glisser la fenetre d'un clic de souris
 	M.ApplyOptions()
 	M.SetTab(M.tab)
 	M.Refresh()
