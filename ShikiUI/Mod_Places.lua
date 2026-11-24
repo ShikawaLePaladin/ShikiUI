@@ -211,6 +211,65 @@ function M.ZoneOf(Cx, pl, c, z)
 	return nil
 end
 
+-- ---------------------------------------------------------------- ressources : icone et choix par ressource
+SUI.Config.Register({ ["places.hide"] = "" })
+-- nom anglais (sans "Rich", "Small", "Ooze Covered", "Hakkari") -> objet ramasse (l'icone est celle de l'objet, lue par le Codex)
+M.RESITEM = {
+	["Peacebloom"] = 2447, ["Silverleaf"] = 765, ["Earthroot"] = 2449, ["Mageroyal"] = 785, ["Briarthorn"] = 2450, ["Stranglekelp"] = 3820,
+	["Bruiseweed"] = 2453, ["Wild Steelbloom"] = 3355, ["Kingsblood"] = 3356, ["Liferoot"] = 3357, ["Fadeleaf"] = 3818, ["Goldthorn"] = 3821,
+	["Khadgar's Whisker"] = 3358, ["Wintersbite"] = 3819, ["Firebloom"] = 4625, ["Purple Lotus"] = 8831, ["Arthas' Tears"] = 8836,
+	["Sungrass"] = 8838, ["Blindweed"] = 8839, ["Ghost Mushroom"] = 8845, ["Gromsblood"] = 8846, ["Grave Moss"] = 3369, ["Golden Sansam"] = 13464,
+	["Dreamfoil"] = 13463, ["Mountain Silversage"] = 13465, ["Plaguebloom"] = 13466, ["Icecap"] = 13467, ["Black Lotus"] = 13468,
+	["Copper Vein"] = 2770, ["Tin Vein"] = 2771, ["Iron Deposit"] = 2772, ["Silver Vein"] = 2775, ["Gold Vein"] = 2776, ["Mithril Deposit"] = 3858,
+	["Truesilver Deposit"] = 7911, ["Thorium Vein"] = 10620, ["Dark Iron Deposit"] = 11370, ["Incendicite Mineral Vein"] = 3340,
+	["Indurium Mineral Vein"] = 5833, ["Lesser Bloodstone Deposit"] = 4278,
+}
+M.RESPRE = { "Ooze Covered ", "Rich ", "Small ", "Hakkari " }
+
+function M.ResKey(en)
+	local s = en or ""
+	for i = 1, getn(M.RESPRE) do
+		local p = M.RESPRE[i]
+		if string.sub(s, 1, string.len(p)) == p then s = string.sub(s, string.len(p) + 1) end
+	end
+	return s
+end
+
+-- Ressources masquees (cles ResKey, separees par |) ; l'ensemble est relu seulement quand la chaine change
+function M.Hidden()
+	local s = C.Get("places.hide") or ""
+	if M.hidS ~= s then
+		M.hidS = s
+		local set = {}
+		for k in string.gfind(s, "[^|]+") do set[k] = true end
+		M.hidSet = set
+	end
+	return M.hidSet
+end
+
+function M.SetHidden(set)
+	local list = {}
+	for k in pairs(set) do tinsert(list, k) end
+	tsort(list)
+	local s = ""
+	for i = 1, getn(list) do s = s .. (i > 1 and "|" or "") .. list[i] end
+	C.Set("places.hide", s)
+end
+
+-- Icone de l'objet ramasse (chemin complet) ou nil (inconnue ou pas encore en memoire : on reessaie un peu plus tard)
+function M.ResIcon(rk)
+	local id = M.RESITEM[rk]
+	local Cx = SUI.Codex
+	if not id or not Cx or not Cx.ItemIcon then return nil end
+	local tex = Cx.ItemIcon(id)
+	if type(tex) ~= "string" or tex == "" then
+		M.iconWait = true
+		return nil
+	end
+	if not sfind(tex, string.char(92), 1, true) then tex = "Interface" .. string.char(92) .. "Icons" .. string.char(92) .. tex end
+	return tex
+end
+
 -- ---------------------------------------------------------------- filtres
 function M.KindOn(key, ctx)
 	return C.Get((ctx == "mini" and "places.m." or "places.") .. key) and true or false
@@ -241,7 +300,7 @@ local function optSig(ctx)
 	for i = 1, getn(M.KINDS) do
 		s = s .. (M.KindOn(M.KINDS[i][1], ctx) and "1" or "0")
 	end
-	return s .. (C.Get("places.faction") and "1" or "0") .. (C.Get("places.mine") and "1" or "0") .. (C.Get("places.mounts") and "1" or "0")
+	return s .. (C.Get("places.faction") and "1" or "0") .. (C.Get("places.mine") and "1" or "0") .. (C.Get("places.mounts") and "1" or "0") .. "|" .. (C.Get("places.hide") or "")
 end
 
 local function entryList(pins)
@@ -277,6 +336,8 @@ function M.BuildPins(pl, zid, me, ctx)
 	local zd = pl.z[zid]
 	local pins, cells = {}, {}
 	if not zd then return pins end
+	M.iconWait = false
+	local hid = M.Hidden()
 	for ki = 1, getn(M.KINDS) do
 		local key = M.KINDS[ki][1]
 		local arr = zd[key]
@@ -284,14 +345,20 @@ function M.BuildPins(pl, zid, me, ctx)
 			local vk = "P" .. key
 			for i = 1, getn(arr), 4 do
 				local packed, id, fac, tag = arr[i], arr[i + 1], arr[i + 2], arr[i + 3]
-				if M.Wanted(key, fac, tag, me) then
+				local rk
+				if key == "herbs" or key == "mines" then rk = M.ResKey(pl.en and pl.en[id]) end
+				if M.Wanted(key, fac, tag, me) and not (rk and hid[rk]) then
 					local xi = floor(packed / 1024)
 					local x, y = xi / 10, (packed - xi * 1024) / 10
-					local ck = key .. ":" .. (key == "trainer" and tag or 0) .. ":" .. floor(x / M.CELL) * 1000 + floor(y / M.CELL)
+					local ck = key .. ":" .. (key == "trainer" and tag or rk or 0) .. ":" .. floor(x / M.CELL) * 1000 + floor(y / M.CELL)
 					local pin = cells[ck]
 					if not pin then
 						pin = { k = "P", vk = vk, kind = key, x = x, y = y, sx = 0, sy = 0, n = 0, ents = {}, by = {} }
 						pin.icon, pin.tc = M.IconOf(key, tag)
+						if rk then
+							local ri = M.ResIcon(rk)
+							if ri then pin.icon, pin.tc = ri, nil end
+						end
 						cells[ck] = pin
 						tinsert(pins, pin)
 					end
@@ -318,6 +385,13 @@ function M.BuildPins(pl, zid, me, ctx)
 	return pins
 end
 
+-- Les icones d'objets ramasses arrivent quand le client les a vues : on repose les epingles quelques secondes plus tard
+function M.IconRetry()
+	M.iconTask = nil
+	M.zsig = nil
+	M.Refresh()
+end
+
 -- Fournisseur du Codex : enregistrements de la zone affichee (c, z) ; ctx "mini" : minicarte (option propre)
 function M.Recs(c, z, ctx)
 	local Cx = codex()
@@ -340,6 +414,10 @@ function M.Recs(c, z, ctx)
 		g.pins = M.BuildPins(pl, zid, me, cx)
 		g.n = getn(g.pins)
 		rec.n = g.n
+		if M.iconWait and not M.iconTask and (M.iconTries or 0) < 4 then
+			M.iconTries = (M.iconTries or 0) + 1
+			M.iconTask = SUI.After(3, M.IconRetry, "places.icons")
+		end
 	end
 	local out = {}
 	if rec.zones[1].n > 0 then tinsert(out, rec) end
@@ -460,6 +538,170 @@ local function mkMode(f, mode, x, y)
 	b:SetPoint("TOPLEFT", f, "TOPLEFT", x, y)
 end
 
+-- Liste des ressources de la zone affichee : une case par ressource (herbes ou minerais), icone de l'objet
+M.RESMAX = 36
+M.RESCOL = 18
+
+function M.ResRow(f, i)
+	local col = floor((i - 1) / M.RESCOL)
+	local line = (i - 1) - col * M.RESCOL
+	local row = CreateFrame("Frame", nil, f)
+	row:SetWidth(200)
+	row:SetHeight(M.FROW)
+	row:SetPoint("TOPLEFT", f, "TOPLEFT", 8 + col * 206, -34 - line * M.FROW)
+	row.ic = row:CreateTexture(nil, "ARTWORK")
+	row.ic:SetWidth(16)
+	row.ic:SetHeight(16)
+	row.ic:SetPoint("LEFT", row, "LEFT", 2, 0)
+	row.txt = T.Text(row, 11, T.c.text, "LEFT")
+	row.txt:SetPoint("LEFT", row, "LEFT", 24, 0)
+	row.txt:SetWidth(140)
+	row.cb = T.Check(row, function(on) M.ResSet(row.rk, on) end)
+	row.cb:SetPoint("RIGHT", row, "RIGHT", -2, 0)
+	row:Hide()
+	return row
+end
+
+function M.ResBuild()
+	if M.respanel then return M.respanel end
+	local parent = glob("WorldMapButton")
+	if not parent or SUI.InCombat() then return nil end
+	local f = CreateFrame("Frame", nil, parent)
+	f:SetFrameStrata("FULLSCREEN_DIALOG")
+	f:SetFrameLevel(parent:GetFrameLevel() + 22)
+	f:EnableMouse(true)
+	T.Backdrop(f, T.c.bg, T.c.border)
+	f.title = T.Text(f, 12, T.c.text, "LEFT")
+	f.title:SetPoint("TOPLEFT", f, "TOPLEFT", 10, -9)
+	local close = T.Button(f, "x", 18, 18, function() f:Hide() end)
+	close:SetPoint("TOPRIGHT", f, "TOPRIGHT", -5, -5)
+	f.none = T.Text(f, 11, T.c.dim, "LEFT")
+	f.none:SetPoint("TOPLEFT", f, "TOPLEFT", 12, -38)
+	f.none:SetText(L("msg.places.f.res.none"))
+	f.rows = {}
+	for i = 1, M.RESMAX do f.rows[i] = M.ResRow(f, i) end
+	f.bAll = T.Button(f, L("msg.places.f.all"), 70, 20, function() M.ResAll(true) end)
+	f.bNone = T.Button(f, L("msg.places.f.none"), 70, 20, function() M.ResAll(false) end)
+	f:Hide()
+	M.respanel = f
+	return f
+end
+
+-- Ressources du type kind dans la zone affichee : liste { rk, nom, icone, competence } triee par competence puis nom
+function M.ResList(kind)
+	local Cx = codex()
+	local pl = M.Load()
+	local out = {}
+	if not Cx or not pl then return out end
+	local c, z = Cx.MapCur()
+	local zid = c and z and z > 0 and M.ZoneOf(Cx, pl, c, z)
+	local arr = zid and pl.z[zid] and pl.z[zid][kind]
+	if not arr then return out end
+	local seen = {}
+	for i = 1, getn(arr), 4 do
+		local id = arr[i + 1]
+		local rk = M.ResKey(pl.en and pl.en[id])
+		if not seen[rk] then
+			seen[rk] = true
+			tinsert(out, { rk = rk, name = M.Name(pl, id), skill = arr[i + 3] or 0 })
+		end
+	end
+	tsort(out, function(a, b)
+		if a.skill ~= b.skill then return a.skill < b.skill end
+		return a.name < b.name
+	end)
+	return out
+end
+
+function M.ResRefresh()
+	local f = M.respanel
+	if not f or not f:IsShown() then return end
+	local hid = M.Hidden()
+	for i = 1, M.RESMAX do
+		local row = f.rows[i]
+		if row:IsShown() then T.SetCheck(row.cb, not hid[row.rk]) end
+	end
+end
+
+function M.ResOpen(kind)
+	local f = M.ResBuild()
+	if not f then return end
+	local list = M.ResList(kind)
+	M.reslist = list
+	local n = getn(list)
+	if n > M.RESMAX then n = M.RESMAX end
+	f.title:SetText(L("msg.places.f.res.title", L("msg.places.k." .. kind)))
+	M.reskind = kind
+	local miss = false
+	for i = 1, M.RESMAX do
+		local row = f.rows[i]
+		if i <= n then
+			local it = list[i]
+			row.rk = it.rk
+			row.txt:SetText(it.name)
+			local path = M.ResIcon(it.rk)
+			if not path then
+				path = M.IconOf(kind, nil)
+				if M.RESITEM[it.rk] then miss = true end
+			end
+			row.ic:SetTexture(path)
+			row:Show()
+		else
+			row:Hide()
+		end
+	end
+	local cols = n > M.RESCOL and 2 or 1
+	local lines = n > M.RESCOL and M.RESCOL or n
+	if lines < 1 then lines = 1 end
+	f.none:SetText(L("msg.places.f.res.none"))
+	if n == 0 then f.none:Show() else f.none:Hide() end
+	f:SetWidth(16 + cols * 206)
+	f:SetHeight(72 + lines * M.FROW)
+	f.bAll:ClearAllPoints()
+	f.bAll:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", 10, 8)
+	f.bNone:ClearAllPoints()
+	f.bNone:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", 86, 8)
+	f:ClearAllPoints()
+	f:SetPoint("TOPRIGHT", glob("WorldMapButton"), "TOPRIGHT", -(M.FW + 24), -38)
+	f:Show()
+	M.ResRefresh()
+	-- icones d'objets pas encore en memoire du client : on relit la liste dans deux secondes (trois essais au plus)
+	if miss and (M.resTries or 0) < 3 and not M.resTask then
+		M.resTries = (M.resTries or 0) + 1
+		M.resTask = SUI.After(2, M.ResReopen, "places.resicons")
+	elseif not miss then
+		M.resTries = 0
+	end
+end
+
+function M.ResReopen()
+	M.resTask = nil
+	if M.respanel and M.respanel:IsShown() and M.reskind then M.ResOpen(M.reskind) end
+end
+
+function M.ResSet(rk, on)
+	if not rk then return end
+	local set = {}
+	for k in pairs(M.Hidden()) do set[k] = true end
+	if on then set[rk] = nil else set[rk] = true end
+	M.SetHidden(set)
+end
+
+function M.ResAll(on)
+	local set = {}
+	for k in pairs(M.Hidden()) do set[k] = true end
+	local list = M.reslist or {}
+	for i = 1, getn(list) do
+		if on then set[list[i].rk] = nil else set[list[i].rk] = true end
+	end
+	M.SetHidden(set)
+end
+
+function M.ResBtn(f, kind, x, y)
+	local b = T.Button(f, L("msg.places.f.list"), 48, 18, function() M.ResOpen(kind) end)
+	b:SetPoint("TOPLEFT", f, "TOPLEFT", x, y + 1)
+end
+
 function M.FilterBuild(where)
 	local pn = M.panels[where]
 	if pn then return pn end
@@ -507,12 +749,14 @@ function M.FilterBuild(where)
 			local t = T.Text(f, 11, T.c.text, "LEFT")
 			t:SetPoint("TOPLEFT", f, "TOPLEFT", 36, y - 2)
 			t:SetText(L(r.label))
+			if where == "map" and (r.kind == "herbs" or r.kind == "mines") then M.ResBtn(f, r.kind, 132, y) end
 			tinsert(f.ent, { row = r, cm = mkCheck(f, r.map, x1, y), cn = mkCheck(f, r.mini, x2, y) })
 		end
 	end
 	local by = -(48 + getn(rows) * M.FROW + 6)
 	local modes = { "all", "none", "default" }
 	for i = 1, 3 do mkMode(f, modes[i], 10 + (i - 1) * 76, by) end
+	f:SetScript("OnHide", M.ResClose)
 	f:Hide()
 	M.panels[where] = f
 	return f
@@ -531,6 +775,11 @@ function M.FilterRefreshAll()
 	for _, f in pairs(M.panels) do
 		if f:IsShown() then M.FilterRefresh(f) end
 	end
+	M.ResRefresh()
+end
+
+function M.ResClose()
+	if M.respanel then M.respanel:Hide() end
 end
 
 -- Tout / rien / defaut pour les lieux (les deux colonnes)

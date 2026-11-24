@@ -2768,7 +2768,8 @@ local function ringUpdate()
 	if not cx or not s or s == 0 then return end
 	local deg = math.deg(math.atan2(my / s - cy, mx / s - cx))
 	if deg < 0 then deg = deg + 360 end
-	deg = math.mod(floor(deg + 0.5), 360)
+	deg = floor(deg + 0.5)
+	if deg >= 360 then deg = deg - 360 end
 	this.ringDeg = deg
 	R.PlaceAt(this, deg)
 end
