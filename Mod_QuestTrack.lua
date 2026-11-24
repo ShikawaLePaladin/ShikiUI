@@ -675,6 +675,29 @@ function M.LegendPaint()
 	for i = m + 1, 24 do f.ds[i]:SetText("") end
 end
 
+-- Objectif de tes quetes qui vise ce monstre (nom de l'unite survolee) : { title, text } ou nil. Lit seulement le journal deja charge (M.list) :
+-- un objectif "Vermine kobold tue : 2/10" vise "Vermine kobold" ; les objectifs deja remplis sont ignores.
+function M.UnitObjective(name)
+	if not M.on or type(name) ~= "string" or name == "" then return nil end
+	local low = foldName(name)
+	for i = 1, getn(M.list) do
+		local e = M.list[i]
+		if not e.complete then
+			for j = 1, getn(e.objs) do
+				local o = e.objs[j]
+				if not o.done then
+					local head = string.gsub(o.text, "%s*:%s*%d+%s*/%s*%d+%s*$", "")
+					head = foldName(head)
+					if head ~= "" and (string.find(head, "^" .. string.gsub(low, "(%p)", "%%%1") .. "%s") or head == low) then
+						return { title = e.title, text = o.text }
+					end
+				end
+			end
+		end
+	end
+	return nil
+end
+
 -- Enregistrement de carte d'une quete du journal (objectifs, ou rendu si terminee) ; nil si inconnue / sans epingle. Mis en cache.
 function M.EntryRec(Cx, e)
 	local id = M.Resolve(e)
