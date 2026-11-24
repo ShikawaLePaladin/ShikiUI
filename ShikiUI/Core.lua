@@ -2,7 +2,7 @@
 -- WoW 1.12 / Lua 5.0 : pas de '#', pas de '%', pas de '...', pas de string.match / select.
 ShikiUI = ShikiUI or {}
 local SUI = ShikiUI
-SUI.VERSION = "1.2.2"
+SUI.VERSION = "1.2.3"
 SUI.rateMul = 1            -- 1 normal, 2 en mode urgence (les minuteries 'scalable' ralentissent)
 SUI.emergency = false
 SUI.debug = false
