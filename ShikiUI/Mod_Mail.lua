@@ -861,7 +861,7 @@ end
 
 -- Dans la fenetre du courrier (aucune fenetre en plus) : une barre sous le titre de l'onglet Reception (etat, Tout prendre, Envoyer la liste) ;
 -- l'envoi multiple est un 3e onglet "Multiple" a cote de Reception / Envoi (voir M.BuildMulti et M.BuildTab).
-M.EW, M.EX, M.EY = 365, 12, -30
+M.EW, M.EX, M.EY = 330, 12, -30
 
 function M.Build()
 	if M.frame then return end
@@ -1756,7 +1756,7 @@ end
 
 function M.BuildMulti()
 	if M.mp then return M.mp end
-	local W0, H0, CS = 365, 292, 26
+	local W0, H0, CS = 330, 272, 24
 	local mf = getglobal("MailFrame")
 	local emb = live(mf)
 	local f = T.Panel(emb and mf or UIParent, W0, H0)
@@ -1787,13 +1787,13 @@ function M.BuildMulti()
 	end
 	f.empty = T.Text(f, 10, T.c.dim or T.c.text, "CENTER")
 	f.empty:SetPoint("TOP", f, "TOP", 0, -50)
-	f.empty:SetWidth(330)
+	f.empty:SetWidth(300)
 	-- destinataire : le champ du jeu reste la source ; ce bouton lui donne le focus, la fleche ouvre les derniers destinataires
-	f.to = T.Button(f, "", 317, 18, function()
+	f.to = T.Button(f, "", 282, 18, function()
 		local box = getglobal("SendMailNameEditBox")
 		if box and box.SetFocus then box:SetFocus() end
 	end)
-	f.to.label:SetWidth(310)
+	f.to.label:SetWidth(275)
 	f.to:SetPoint("TOPLEFT", f, "TOPLEFT", 8, -92)
 	f.dropb = T.Button(f, "v", 28, 18, function() M.MultiDrop() end)
 	f.dropb:SetPoint("TOPRIGHT", f, "TOPRIGHT", -8, -92)
@@ -1811,30 +1811,30 @@ function M.BuildMulti()
 	-- derniers destinataires : un clic pose le nom dans le champ du jeu
 	f.recent = {}
 	for i = 1, 8 do
-		local b = T.Button(f, "", 82, 16, function(btn)
+		local b = T.Button(f, "", 72, 16, function(btn)
 			local box = getglobal("SendMailNameEditBox")
 			if box and btn.name then box:SetText(btn.name) end
 			M.mdirty = true
 			local sj = getglobal("SendMailSubjectEditBox")
 			if not M.mmode and live(sj) and sj.SetFocus then sj:SetFocus() end      -- destinataire pose : on passe a l'objet
 		end)
-		b.label:SetWidth(78)
+		b.label:SetWidth(68)
 		local r = math.floor((i - 1) / 4)
-		b:SetPoint("TOPLEFT", f, "TOPLEFT", 8 + (i - 1 - r * 4) * 84, -116 - r * 18)
+		b:SetPoint("TOPLEFT", f, "TOPLEFT", 8 + (i - 1 - r * 4) * 74, -116 - r * 18)
 		f.recent[i] = b
 	end
-	f.gold = T.Button(f, "", 158, 20, function() M.MultiCycleGold() M.MultiRefresh() end)
+	f.gold = T.Button(f, "", 150, 20, function() M.MultiCycleGold() M.MultiRefresh() end)
 	f.gold:SetPoint("TOPLEFT", f, "TOPLEFT", 8, -158)
-	f.pick = T.Button(f, L("msg.mail.m.pick"), 158, 20, function() M.MultiPick() end)
+	f.pick = T.Button(f, L("msg.mail.m.pick"), 150, 20, function() M.MultiPick() end)
 	f.pick:SetPoint("TOPRIGHT", f, "TOPRIGHT", -8, -158)
 	f.clear = T.Button(f, L("msg.mail.m.clear"), 90, 20, function() M.MultiClear() M.MultiRefresh() M.MultiPickRefresh() end)
 	f.clear:SetPoint("TOPLEFT", f, "TOPLEFT", 8, -184)
 	f.cancel = T.Button(f, L("msg.mail.m.cancel"), 90, 20, function() M.MultiCancel() M.MultiRefresh() end)
 	f.cancel:SetPoint("TOPLEFT", f, "TOPLEFT", 8, -184)
-	f.all = T.Button(f, L("msg.mail.m.sendall"), 224, 20, function() M.MultiSendClick() end)
+	f.all = T.Button(f, L("msg.mail.m.sendall"), 189, 20, function() M.MultiSendClick() end)
 	f.all:SetPoint("TOPRIGHT", f, "TOPRIGHT", -8, -184)
 	f.bar = T.Bar(f)
-	f.bar:SetWidth(349)
+	f.bar:SetWidth(314)
 	f.bar:SetHeight(12)
 	f.bar:SetPoint("TOPLEFT", f, "TOPLEFT", 8, -212)
 	f.bar:SetMinMaxValues(0, 1)
@@ -1843,9 +1843,9 @@ function M.BuildMulti()
 	f.prog:SetPoint("CENTER", f.bar, "CENTER", 0, 0)
 	f.report = T.Text(f, 10, T.c.text, "LEFT")
 	f.report:SetPoint("TOPLEFT", f, "TOPLEFT", 8, -230)
-	f.report:SetWidth(349)
+	f.report:SetWidth(314)
 	-- Aide a la saisie : repare les champs du courrier (voir M.RepairInput) et place le curseur dans le destinataire.
-	f.fix = T.Button(f, L("msg.mail.btn.fix"), 349, 18, function() M.OnRepair() end)
+	f.fix = T.Button(f, L("msg.mail.btn.fix"), 314, 18, function() M.OnRepair() end)
 	f.fix:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", 8, 8)
 	M.Tip(f.fix, "tip.mail.btn.fix")
 	M.Tip(f.pick, "tip.mail.m.pick")

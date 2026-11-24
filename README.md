@@ -8,9 +8,35 @@ un routeur d'événements), 35+ modules activables, menu Simple/Expert, bilingue
 
 ## Installation
 
-1. Copier le dossier `ShikiUI/` dans `Interface/AddOns/`
-2. `/reload`
-3. Commande principale : **`/sui`** (menu) — assistant de premier lancement inclus
+Le zip de la release contient **4 dossiers** a copier ensemble dans `Interface\AddOns\` :
+
+| Dossier | Role | Obligatoire ? |
+|---|---|---|
+| `ShikiUI` | l'interface (menu, modules, Codex, suivi de quetes...) | **oui** |
+| `ShikiCodexData` | donnees du Codex : butin des donjons et raids, sets, reputations, attunements | pour le Codex (onglets Donjons, Sets, Reputations) |
+| `ShikiCodexData_Quests` | donnees de quetes : titres, niveaux, PNJ, epingles de carte et de minicarte, fleche | pour les quetes dans le Codex, les "!" sur les cartes, la fleche |
+| `ShikiCodexData_Places` | lieux utiles : marchands, boites aux lettres, maitres de vol, herbes, minerais... | pour les epingles de lieux sur les cartes |
+
+Les trois dossiers `ShikiCodexData*` sont des **donnees generees** (jamais modifiees a la main) ; ils sont charges *a la demande* :
+ils ne coutent ni memoire ni temps de chargement tant que tu n'ouvres pas le Codex ou une carte. Sans eux, ShikiUI fonctionne
+normalement mais le Codex et les epingles de quetes restent vides. Ils portent le meme numero de version que ShikiUI.
+
+**Manuel** : dezipper `ShikiUI-v1.2.0.zip` dans `Interface\AddOns\` (les 4 dossiers sont a la racine du zip), puis relancer le jeu
+(un nouvel addon demande un redemarrage complet la premiere fois ; ensuite `/reload` suffit).
+
+**OctoLauncher** : ajouter le lien `https://github.com/ShikawaLePaladin/ShikiUI` (installe `ShikiUI`), puis les donnees via leurs branches :
+`https://github.com/ShikawaLePaladin/ShikiUI/tree/codexdata`, `.../tree/codexdata-quests`, `.../tree/codexdata-places`.
+Si le lanceur ne gere pas les branches, prendre les dossiers dans le zip de la release.
+
+Commande principale : **`/sui`** (menu) — assistant de premier lancement inclus. Codex : bouton **Codex** de la minicarte ou `/sui codex`.
+
+### English
+
+The release zip contains **4 folders**; copy them together into `Interface\AddOns\`:
+`ShikiUI` (the addon, required) and three *generated, load-on-demand* data addons: `ShikiCodexData` (dungeon/raid loot, sets,
+reputations, attunements), `ShikiCodexData_Quests` (quest data for the Codex, "!" pins and the arrow) and `ShikiCodexData_Places`
+(vendors, mailboxes, flight masters, herbs, ore...). They cost nothing until the Codex or a map needs them; without them ShikiUI works
+but the Codex and quest pins stay empty. Restart the game fully the first time (new addons). Main command: `/sui`.
 
 ## Modules principaux
 

@@ -4,7 +4,7 @@
 ## Notes: Benedictions de raid pour paladin : grille d'attribution, cycle de pose, synchro entre paladins. Commande /sui pp (module de ShikiUI, version autonome).
 ## Notes-frFR: Benedictions de raid pour paladin : grille d'attribution, cycle de pose, synchro entre paladins. Commande /sui pp (module de ShikiUI, version autonome).
 ## Author: Shikiwa
-## Version: 1.1.0
+## Version: 1.2.0
 ## SavedVariables: ShikiUIDB
 ## OptionalDeps: ShikiUI
 
