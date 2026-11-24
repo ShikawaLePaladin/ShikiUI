@@ -1621,6 +1621,13 @@ end
 
 function M.MultiPick()
 	if not M.mp then return end
+	-- par defaut : ce sont TES sacs (Maj-clic / clic droit), pas une seconde grille ; la grille reste en option
+	if not C.Get("mail.multigrid") then
+		if M.pk and M.pk:IsShown() then M.pk:Hide() end
+		local ib, oa = getglobal("IsBagOpen"), getglobal("OpenAllBags")
+		if type(oa) == "function" and not (type(ib) == "function" and ib(0)) then pcall(oa, true) end
+		return
+	end
 	local f = M.BuildPicker()
 	if f:IsShown() then
 		f:Hide()
@@ -2060,6 +2067,7 @@ SUI.RegisterModule("mail", {
 		opt("maxrecent", "number", 100, 4, { min = 1, max = 8, step = 1 }),
 		opt("multi", "bool", 105, true, { simple = true }),
 		opt("multihook", "bool", 106, true),
+		opt("multigrid", "bool", 107, false),
 		opt("multigold", "number", 107, 0, { min = 0, max = 1000, step = 1 }),
 		opt("multidelay", "number", 108, 1, { min = 1, max = 5, step = 1 }),
 		opt("logsize", "number", 110, 30, { min = 10, max = 50, step = 10 }),

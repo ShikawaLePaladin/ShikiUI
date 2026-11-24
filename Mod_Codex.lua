@@ -1323,7 +1323,7 @@ function M.PinBuild(id, q)
 				local g = byz[p.zone]
 				if not g then
 					local en, fr = P.ZoneBoth(p.zone)
-					g = { en = en or ("#" .. tostring(p.zone)), fr = fr, map = P.ZoneMap(p.zone), n = 0, pins = {} }
+					g = { en = en or ("#" .. tostring(p.zone)), fr = fr, map = P.ZoneMap(p.zone), zid = p.zone, n = 0, pins = {} }
 					byz[p.zone] = g
 					tinsert(rec.zones, g)
 				end
@@ -1403,10 +1403,37 @@ end
 function M.PinColor(kind)
 	if kind == "S" then return T.c.warn end
 	if kind == "E" then return T.c.good end
+	if kind == "I" then return T.c.text end
+	if kind == "B" then return T.c.dim end
 	return T.c.bad
 end
 
-M.PINMARK = { S = "!", E = "?", O = "o" }
+M.PINMARK = { S = "!", E = "?", O = "x", I = "i", B = "o" }
+
+-- Aspect d'une epingle : S depart, E fin, O creature a tuer / voir, I objet a ramasser, B objet du monde
+function M.PinVisual(d)
+	if d.k == "O" then
+		if d.ek == "i" or d.ek == "r" then return "I" end
+		if d.ek == "o" then return "B" end
+	end
+	return d.k
+end
+
+-- Quetes d'une epingle : { { id, lvl, title } ... } (donneurs regroupes) ou la quete de l'enregistrement
+function M.PinEntries(rec, d)
+	if d.q then return d.q end
+	if rec.id and rec.id >= 0 then
+		if not rec.entry1 then rec.entry1 = { { id = rec.id, title = rec.t } } end
+		return rec.entry1
+	end
+	return nil
+end
+
+-- Texte de l'epingle : le nombre de quetes quand elles sont plusieurs, sinon la marque de son aspect
+function M.PinMark(vk, n)
+	if n and n > 1 then return n > 9 and "9+" or tostring(n) end
+	return M.PINMARK[vk] or "o"
+end
 
 -- i-eme epingle du pool ; creee a la demande, HORS combat seulement (nil sinon : l'appelant reessaie plus tard)
 function M.PinFrame(i)
@@ -1427,6 +1454,8 @@ function M.PinFrame(i)
 	p.mark:SetText(M.PINMARK.S)
 	p:SetScript("OnEnter", function() M.PinEnter(this) end)
 	p:SetScript("OnLeave", function() M.PinLeave(this) end)
+	p:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+	p:SetScript("OnClick", function() M.PinClick(this, arg1) end)
 	p:Hide()
 	M.pins[i] = p
 	return p
@@ -1459,6 +1488,149 @@ function M.PinLeave(p)
 	if tt then tt:Hide() end
 end
 
+-- ---- fenetre des quetes d'une epingle
+M.POP_ROWS = 8
+M.POP_W = 250
+
+-- Noms d'une liste de references { kind, id } : "A, B, C" (4 au plus)
+local function refNames(list)
+	local out, n = "", 0
+	for i = 1, list and getn(list) or 0 do
+		local e = list[i]
+		local nm = P.QName(e.kind, e.id) or ("#" .. tostring(e.id))
+		n = n + 1
+		if n > 4 then
+			out = out .. ", ..."
+			break
+		end
+		if out ~= "" then out = out .. ", " end
+		out = out .. nm
+	end
+	return out
+end
+
+-- Detail d'une quete : niveau, depart, fin, objectifs (par type : creature, objet du monde, objet a ramasser)
+function M.PopTip(b)
+	local e = b.entry
+	local tt = glob("WorldMapTooltip") or glob("GameTooltip")
+	if not e or not tt then return end
+	local d = T.c.dim
+	tt:SetOwner(b, "ANCHOR_RIGHT")
+	tt:SetText(e.title or ("#" .. tostring(e.id)))
+	local q = P.Quest(e.id)
+	if q then
+		local lvl, min = q.lvl, q.min
+		tt:AddLine(sformat(L("msg.codex.level"), tostring(lvl ~= 0 and lvl or "?")) .. " / " .. L("msg.codex.pop.min", tostring(min ~= 0 and min or "?")), d[1], d[2], d[3])
+		local s = refNames(q.start)
+		if s ~= "" then tt:AddLine(L("msg.codex.pop.start", s), T.c.warn[1], T.c.warn[2], T.c.warn[3]) end
+		local en = refNames(q.finish)
+		if en ~= "" then tt:AddLine(L("msg.codex.pop.finish", en), T.c.good[1], T.c.good[2], T.c.good[3]) end
+		for i = 1, getn(q.obj) do
+			if i > 6 then
+				tt:AddLine("...", d[1], d[2], d[3])
+				break
+			end
+			local o = q.obj[i]
+			local key = "msg.codex.pop.obj." .. (o.kind or "u")
+			local nm = P.QName(o.kind, o.id) or ("#" .. tostring(o.id))
+			tt:AddLine(L(key, nm), T.c.text[1], T.c.text[2], T.c.text[3])
+		end
+	end
+	tt:AddLine(L("msg.codex.pop.hint"), d[1], d[2], d[3])
+	tt:Show()
+end
+
+function M.PopBuild()
+	if M.pop then return M.pop end
+	local btn = glob("WorldMapButton")
+	if not btn or SUI.InCombat() then return nil end
+	local f = CreateFrame("Frame", nil, btn)
+	f:SetWidth(M.POP_W)
+	f:SetFrameLevel(btn:GetFrameLevel() + 12)
+	f:EnableMouse(true)
+	T.Backdrop(f, T.c.bg, T.c.border)
+	f.head = T.Text(f, 11, T.c.dim, "LEFT")
+	f.head:SetPoint("TOPLEFT", f, "TOPLEFT", 8, -7)
+	f.rows = {}
+	for i = 1, M.POP_ROWS do
+		local r = CreateFrame("Button", nil, f)
+		r:SetWidth(M.POP_W - 12)
+		r:SetHeight(16)
+		r:SetPoint("TOPLEFT", f, "TOPLEFT", 6, -22 - (i - 1) * 17)
+		r:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+		r.txt = T.Text(r, 11, T.c.text, "LEFT")
+		r.txt:SetPoint("LEFT", r, "LEFT", 2, 0)
+		r:SetScript("OnClick", function() M.PopPick(this, arg1) end)
+		r:SetScript("OnEnter", function() M.PopTip(this) end)
+		r:SetScript("OnLeave", function()
+			local tt = glob("WorldMapTooltip") or glob("GameTooltip")
+			if tt then tt:Hide() end
+		end)
+		r:Hide()
+		f.rows[i] = r
+	end
+	f:Hide()
+	M.pop = f
+	return f
+end
+
+function M.PopClose()
+	if M.pop then M.pop:Hide() end
+	M.popPin = nil
+end
+
+function M.PopPick(r, button)
+	if button == "RightButton" then
+		M.PopClose()
+		return
+	end
+	local e = r.entry
+	M.PopClose()
+	if e and e.id and e.id >= 0 then M.PinQuest(e.id) end
+end
+
+-- Clic gauche sur une epingle : la liste de ses quetes ; clic droit : ferme la liste
+function M.PinClick(p, button)
+	if button == "RightButton" or not p.entries then
+		M.PopClose()
+		return
+	end
+	if M.popPin == p and M.pop and M.pop:IsShown() then
+		M.PopClose()
+		return
+	end
+	local f = M.PopBuild()
+	if not f then return end
+	local list = p.entries
+	local n = getn(list)
+	local shownN = n > M.POP_ROWS and M.POP_ROWS or n
+	f.head:SetText(L("msg.codex.pop.head", n))
+	for i = 1, M.POP_ROWS do
+		local r = f.rows[i]
+		local e = list[i]
+		if i <= shownN and e then
+			r.entry = e
+			r.txt:SetText((e.lvl and e.lvl > 0 and ("[" .. e.lvl .. "] ") or "") .. (e.title or ("#" .. tostring(e.id))))
+			r:Show()
+		else
+			r:Hide()
+		end
+	end
+	f:SetHeight(30 + shownN * 17)
+	f:ClearAllPoints()
+	local btn = glob("WorldMapButton")
+	local x = p:GetCenter()
+	local left = btn:GetLeft()
+	local right = x and left and (x - left) > btn:GetWidth() * 0.6
+	if right then
+		f:SetPoint("TOPRIGHT", p, "BOTTOMLEFT", 4, -2)
+	else
+		f:SetPoint("TOPLEFT", p, "BOTTOMRIGHT", -4, -2)
+	end
+	f:Show()
+	M.popPin = p
+end
+
 -- Bandeau en haut de la carte : ce qui est epingle et ou le voir (clic : zone suivante). Cree hors combat.
 function M.PinBanner()
 	if M.banner then return M.banner end
@@ -1474,6 +1646,7 @@ function M.PinBanner()
 end
 
 function M.PinHideAll()
+	M.PopClose()
 	for i = 1, getn(M.pins) do M.pins[i]:Hide() end
 	if M.banner then M.banner:Hide() end
 end
@@ -1581,12 +1754,18 @@ function M.PinRefresh()
 					break
 				end
 				local d = here.pins[i]
+				local vk = M.PinVisual(d)
 				p.data = d
 				p.rec = rec
-				if p.kind ~= d.k then
-					p.kind = d.k
-					T.Backdrop(p, M.PinColor(d.k), T.c.bg)
-					p.mark:SetText(M.PINMARK[d.k] or M.PINMARK.O)
+				p.entries = M.PinEntries(rec, d)
+				if p.kind ~= vk then
+					p.kind = vk
+					T.Backdrop(p, M.PinColor(vk), T.c.bg)
+				end
+				local mk = M.PinMark(vk, p.entries and getn(p.entries) or 0)
+				if p.markText ~= mk then
+					p.markText = mk
+					p.mark:SetText(mk)
 				end
 				p:ClearAllPoints()
 				p:SetPoint("CENTER", btn, "TOPLEFT", d.x / 100 * w, -d.y / 100 * h)
@@ -1623,6 +1802,7 @@ function M.PinOnMapEvent()
 	if not M.PinActive() then return end
 	local wm = glob("WorldMapFrame")
 	if not wm or not wm:IsShown() then return end
+	M.PopClose()
 	M.pinStamp = GetTime()
 	if not M.pinTask then M.pinTask = SUI.After(M.PIN_DELAY, M.PinSettle, "codex.pins") end
 end
