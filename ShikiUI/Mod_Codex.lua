@@ -2395,7 +2395,53 @@ function M.SelectSetCls(i)
 	M.sel.scls = c and i or nil
 	M.sel.sitem = nil
 	M.off.sitem = 0
-	M.setItems = c and P.RepRows(c.pg) or {}
+	M.setItems = c and M.SetGroups(P.RepRows(c.pg)) or {}
+end
+
+-- Une page de set peut melanger plusieurs versions du meme set (T2 : vanilla + variantes Turtle). Les pieces sont coupees en groupes
+-- (ids qui se suivent, 8 pieces au plus) et chaque groupe recoit une ligne d'en-tete ; une seule version : liste inchangee.
+function M.SetGroups(rows)
+	local n = getn(rows)
+	if n < 2 then return rows end
+	local sorted = {}
+	for i = 1, n do sorted[i] = rows[i] end
+	table.sort(sorted, function(a, b) return a.id < b.id end)
+	local cnt, last, groups = 0, nil, 0
+	local grp = {}
+	for i = 1, n do
+		local r = sorted[i]
+		if not last or r.id - last > 1 or cnt >= 8 then
+			groups = groups + 1
+			cnt = 0
+		end
+		cnt = cnt + 1
+		last = r.id
+		grp[r.id] = groups
+	end
+	if groups < 2 then return rows end
+	-- nom de chaque groupe : premier mot du nom de sa premiere piece (Lightforge, Soulforge...) quand tous les groupes ont un nom different
+	local names, first, same = {}, {}, false
+	for i = 1, n do
+		local g = grp[rows[i].id]
+		if not first[g] then first[g] = rows[i].id end
+	end
+	for g = 1, groups do
+		local nm = M.ItemName(first[g])
+		local sp = nm and string.find(nm, " ", 1, true)
+		names[g] = sp and string.sub(nm, 1, sp - 1) or nil
+		if not names[g] then same = true end
+		for h = 1, g - 1 do
+			if names[h] == names[g] then same = true end
+		end
+	end
+	local out = {}
+	for g = 1, groups do
+		tinsert(out, { hdr = (not same and names[g]) and ("-- " .. names[g] .. " --") or L("msg.codex.set.part", g) })
+		for i = 1, n do
+			if grp[rows[i].id] == g then tinsert(out, rows[i]) end
+		end
+	end
+	return out
 end
 
 function M.HomeGo(act, arg)
@@ -2581,7 +2627,7 @@ function M.RowClick(b)
 		M.SelectSetCls(i)
 	elseif col == "sitem" then
 		local r = M.setItems and M.setItems[i]
-		if r then
+		if r and r.id then
 			M.sel.sitem = r.id
 			M.LinkItem(r.id)
 		end
@@ -2838,7 +2884,10 @@ function M.PaintSets()
 		local c = cls[i + M.off.scls]
 		setRow(w.rSetCls[i], c and c.name or nil, c and (i + M.off.scls) == M.sel.scls)
 		local it = items[i + M.off.sitem]
-		if it then
+		if it and it.hdr then
+			setRow(w.rSetItem[i], it.hdr, false)
+			w.rSetItem[i].label:SetTextColor(T.c.dim[1], T.c.dim[2], T.c.dim[3], 1)
+		elseif it then
 			setRow(w.rSetItem[i], M.ItemName(it.id), it.id == M.sel.sitem, it.id, nil, it.shared, it.note, "")
 			M.QualityColor(w.rSetItem[i], it.id)
 		else
