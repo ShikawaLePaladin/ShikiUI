@@ -1340,6 +1340,8 @@ M.moved = false               -- vrai quand NOUS avons change la zone de la cart
 local function normName(s)
 	if type(s) ~= "string" then return "" end
 	s = slower(s)
+	-- le client francais ecrit l'apostrophe en typographique (U+2019 / U+2018), les donnees en ASCII
+	s = string.gsub(s, "\226\128[\152\153]", "'")
 	local _, _, t = sfind(s, "^%s*(.-)%s*$")
 	return t or s
 end
