@@ -241,6 +241,39 @@ function M.Move(rec, nl, nb)
 	f:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", nl / sc, nb / sc)
 end
 
+-- Deplacement rapide, SANS entrer dans le mode deplacement : cliquer-glisser sur le cadre (ou sur ses boutons) le deplace, la position est
+-- enregistree comme celle du mode deplacement (annulable, liens et echelle respectes). Utilise par les cadres que l'on bouge souvent
+-- (suivi des quetes...). Refuse en combat. enabled : fonction optionnelle (faux = pas de glisser).
+function M.QuickDrag(frame, id, enabled, extra)
+	if not frame or not id then return end
+	local function start()
+		if SUI.InCombat() or (enabled and not enabled()) then return end
+		frame:StartMoving()
+		frame.quickMoving = true
+	end
+	local function stop()
+		if not frame.quickMoving then return end
+		frame.quickMoving = false
+		frame:StopMovingOrSizing()
+		local rec = M.items[id]
+		if not rec then return end
+		local l, b = M.FrameLB(rec)
+		if l and b then M.Commit(rec, l, b) end
+	end
+	frame:EnableMouse(true)
+	frame:SetMovable(true)
+	frame:RegisterForDrag("LeftButton")
+	frame:SetScript("OnDragStart", start)
+	frame:SetScript("OnDragStop", stop)
+	frame.quickDragStart, frame.quickDragStop = start, stop
+	for i = 1, extra and getn(extra) or 0 do
+		local b = extra[i]
+		b:RegisterForDrag("LeftButton")
+		b:SetScript("OnDragStart", start)
+		b:SetScript("OnDragStop", stop)
+	end
+end
+
 -- Previent le module que sa poignee vient d'etre posee (il deplace alors l'element reel qu'elle represente).
 local function notifyApply(rec)
 	if rec.apply then
