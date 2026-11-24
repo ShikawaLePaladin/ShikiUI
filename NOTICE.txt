@@ -1,0 +1,6 @@
+ShikiCodexData_Mobs - NOTICE
+=============================
+
+Jeu de DONNEES genere par tools/build_mobs.js (depot ShikiUI). Date de construction : 2026-11-24.
+Licence : MIT. Sources : pfQuest 8.0.0 (MIT, Eric Mauser "Shagu") et pfQuest-octo-plus 1.0.0 (MIT, contributeurs de pfQuest-octo).
+Contenu : 8649 monstres (nom anglais, nom francais quand il est sur, niveaux, au plus 14 points par zone sur 3 zones) et les 6 monstres qui lachent le plus souvent chacun de 3123 objets.
