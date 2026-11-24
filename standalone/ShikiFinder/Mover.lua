@@ -2741,5 +2741,60 @@ function M.Command(rest)
 	end
 end
 
+-- ---------------------------------------------------------------- boutons autour de la minicarte (deplacables a la souris)
+-- SUI.MiniRing.Place(b, cle, defaut) pose le bouton sur le cadran selon l'angle de la cle de reglage (0 droite, 90 haut, 180 gauche, 270 bas) ;
+-- SUI.MiniRing.Drag(b, cle, defaut) permet de le glisser autour de la minicarte : l'angle est memorise au lacher.
+SUI.MiniRing = {}
+local R = SUI.MiniRing
+
+function R.PlaceAt(b, deg)
+	local mm = getglobal("Minimap")
+	if not mm or not b then return end
+	local ang = deg * 3.14159265 / 180
+	local rad = (mm:GetWidth() or 140) / 2 + 4
+	b:ClearAllPoints()
+	b:SetPoint("CENTER", mm, "CENTER", math.cos(ang) * rad, math.sin(ang) * rad)
+end
+
+function R.Place(b, key, def)
+	R.PlaceAt(b, C.Get(key) or def or 200)
+end
+
+local function ringUpdate()
+	local mm = getglobal("Minimap")
+	local cx, cy = mm:GetCenter()
+	local mx, my = GetCursorPosition()
+	local s = mm:GetEffectiveScale()
+	if not cx or not s or s == 0 then return end
+	local deg = math.deg(math.atan2(my / s - cy, mx / s - cx))
+	if deg < 0 then deg = deg + 360 end
+	deg = math.mod(floor(deg + 0.5), 360)
+	this.ringDeg = deg
+	R.PlaceAt(this, deg)
+end
+
+local function ringStart()
+	this.ringDrag = true
+	this:SetScript("OnUpdate", ringUpdate)
+end
+
+local function ringStop()
+	this:SetScript("OnUpdate", nil)
+	this.ringDrag = nil
+	if this.ringDeg and this.ringKey then
+		local d = this.ringDeg
+		this.ringDeg = nil
+		C.Set(this.ringKey, d)
+	end
+end
+
+function R.Drag(b, key, def)
+	b.ringKey, b.ringDef = key, def
+	b:RegisterForDrag("LeftButton")
+	b:SetMovable(false)
+	b:SetScript("OnDragStart", ringStart)
+	b:SetScript("OnDragStop", ringStop)
+end
+
 SUI.RegisterCommand("move", M.Command, "help.mover")
 SUI.RegisterCommand("deplacer", M.Command, "help.mover.alias")

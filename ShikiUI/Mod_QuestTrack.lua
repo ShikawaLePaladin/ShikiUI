@@ -333,11 +333,15 @@ function M.GiverRec(Cx, c, z)
 end
 
 -- Fournisseur appele par le Codex (carte ouverte seulement) : une liste d'enregistrements resolus pour les quetes du journal
-function M.Recs()
+function M.Recs(c, z, ctx)
 	local Cx = codex()
-	if not Cx or not M.on or not C.Get("questtrack.pins") then return {} end
+	if not Cx or not M.on then return {} end
+	local mini = ctx == "mini"
+	local wantObj = C.Get(mini and "questtrack.mini" or "questtrack.pins") and true or false
+	local wantGiv = C.Get(mini and "questtrack.minigivers" or "questtrack.givers") and true or false
+	if not wantObj and not wantGiv then return {} end
 	local out = {}
-	for i = 1, getn(M.list) do
+	for i = 1, wantObj and getn(M.list) or 0 do
 		local e = M.list[i]
 		local id = M.Resolve(e)
 		if id then
@@ -352,9 +356,9 @@ function M.Recs()
 			if rec then tinsert(out, rec) end
 		end
 	end
-	if C.Get("questtrack.givers") then
+	if wantGiv then
 		if M.gready then
-			local c, z = Cx.MapCur()
+			if not c then c, z = Cx.MapCur() end
 			local g = M.GiverRec(Cx, c, z)
 			for i = 1, g and getn(g) or 0 do tinsert(out, g[i]) end
 		else
@@ -370,9 +374,9 @@ end
 -- minicarte (rayon en yards selon le zoom, dehors / dedans). Les tailles de zones et les rayons viennent de pfQuest (MIT, db\minimap.lua et map.lua),
 -- jamais lus a l'execution : la table est recopiee ici. Une epingle de quete suivie hors de portee reste au bord (repere de direction, plus pale).
 -- Une minuterie (M.MINI_EVERY s) n'existe que tant que l'option est active, le Codex est actif ET une epingle peut etre posee.
-M.MINI_EVERY = 0.03          -- ~30 images/s : les epingles suivent le joueur sans saccade (le calcul s'arrete si rien ne bouge)
+M.MINI_EVERY = 0.25          -- tour lent (choix des epingles) ; la position est posee a chaque image par M.MiniMove
 M.MINI_MAX = 40
-M.MINI_SIZE = 11
+M.MINI_SIZE = 18
 M.MINI_REFRESH = 3           -- secondes entre deux recompositions de la liste d'epingles (la position, elle, est calculee a chaque tour)
 M.mpins = {}
 
@@ -419,21 +423,25 @@ function M.MiniFrame(i)
 	p:SetWidth(M.MINI_SIZE)
 	p:SetHeight(M.MINI_SIZE)
 	p:SetFrameLevel(mm:GetFrameLevel() + 6)
-	T.Backdrop(p, T.c.warn, T.c.bg)
-	p.mark = T.Text(p, 9, T.c.bg, "CENTER")
-	p.mark:SetPoint("CENTER", p, "CENTER", 0, 0)
+	p.tex = p:CreateTexture(nil, "ARTWORK")
+	p.tex:SetAllPoints(p)
+	p.mark = T.Text(p, 9, T.c.text, "RIGHT", true)
+	p.mark:SetPoint("BOTTOMRIGHT", p, "BOTTOMRIGHT", 3, -2)
 	p.kind = "S"
 	p:Hide()
 	M.mpins[i] = p
 	return p
 end
 
+M.mact, M.mn = {}, 0
+
 function M.MiniHideAll()
-	M.lshown, M.lpx = false, nil
+	M.lpx, M.llist, M.mact, M.mn = nil, nil, {}, 0
 	for i = 1, getn(M.mpins) do M.mpins[i]:Hide() end
+	if M.mover then M.mover:Hide() end
 end
 
--- Liste plate des epingles a poser pres du joueur : { d, zid, tracked }, recomposee toutes les M.MINI_REFRESH secondes ou si la zone change
+-- Liste plate des epingles a poser pres du joueur : { d, zid, rec, tracked }, recomposee toutes les M.MINI_REFRESH secondes ou si la zone change
 function M.MiniList(Cx, c, z, px, py)
 	if M.miniList and M.miniC == c and M.miniZ == z and GetTime() < (M.miniNext or 0) then return M.miniList end
 	M.miniC, M.miniZ = c, z
@@ -444,7 +452,7 @@ function M.MiniList(Cx, c, z, px, py)
 	if M.miniKey == key and M.miniList and now < (M.miniNext or 0) then return M.miniList end
 	M.miniKey, M.miniNext = key, now + M.MINI_REFRESH
 	local out = {}
-	local srcs = (M.on and C.Get("questtrack.mini")) and M.Recs() or {}
+	local srcs = M.on and M.Recs(c, z, "mini") or {}
 	for s = 1, getn(srcs) do
 		local rec = srcs[s]
 		local g = Cx.PinHere(rec, c, z)
@@ -482,6 +490,73 @@ function M.MiniList(Cx, c, z, px, py)
 	return out
 end
 
+-- Pose par image (OnUpdate de la minicarte) : seulement la position, calculee d'apres celle du joueur ; rien ne bouge quand le joueur est immobile.
+function M.MiniMove()
+	local n = M.mn
+	if n == 0 then return end
+	local mm, gp = glob("Minimap"), glob("GetPlayerMapPosition")
+	if not mm or not gp then return end
+	local px, py = gp("player")
+	if not px or (px == 0 and py == 0) then return end
+	local zoom = mm:GetZoom() or 0
+	if px == M.lpx and py == M.lpy and zoom == M.lzoom then return end
+	M.lpx, M.lpy, M.lzoom = px, py, zoom
+	local diam = M.MINIZ[M.mindoor or 1][zoom] or 400
+	local size = mm:GetWidth()
+	local ppy = size / diam
+	local half = size / 2 - 5
+	local square, edge = M.msquare, M.medge
+	local act = M.mact
+	for i = 1, n do
+		local e = act[i]
+		local p = e.p
+		local sx = (e.x - px * e.w) * ppy
+		local sy = -(e.y - py * e.h) * ppy
+		local far
+		if square then
+			far = (sx > half) or (sx < -half) or (sy > half) or (sy < -half)
+		else
+			far = (sx * sx + sy * sy) > half * half
+		end
+		local show = true
+		if far then
+			if e.tracked and edge then
+				local k
+				if square then
+					local ax, ay = sx < 0 and -sx or sx, sy < 0 and -sy or sy
+					k = half / (ax > ay and ax or ay)
+				else
+					k = half / math.sqrt(sx * sx + sy * sy)
+				end
+				sx, sy = sx * k, sy * k
+				p:SetAlpha(0.55)
+			else
+				show = false
+			end
+		else
+			p:SetAlpha(1)
+		end
+		if show then
+			p:ClearAllPoints()
+			p:SetPoint("CENTER", mm, "CENTER", sx, sy)
+			p:Show()
+		else
+			p:Hide()
+		end
+	end
+end
+
+function M.EnsureMover()
+	if M.mover then return M.mover end
+	local mm = glob("Minimap")
+	if not mm then return nil end
+	local f = CreateFrame("Frame", nil, mm)
+	f:SetScript("OnUpdate", function() M.MiniMove() end)
+	M.mover = f
+	return f
+end
+
+-- Tour lent (M.MINI_EVERY) : choisit les epingles et leur icone ; la position, elle, est posee a chaque image par M.MiniMove
 function M.MiniTick()
 	local Cx = codex()
 	local mm = glob("Minimap")
@@ -498,75 +573,43 @@ function M.MiniTick()
 		return
 	end
 	local list = M.MiniList(Cx, c, z, px * 100, py * 100)
-	local zoom = mm:GetZoom() or 0
-	if px == M.lpx and py == M.lpy and zoom == M.lzoom and list == M.llist and M.lshown then return end
-	M.lpx, M.lpy, M.lzoom, M.llist = px, py, zoom, list
-	local diam = M.MINIZ[M.Indoor(zoom)][zoom] or 400
-	local size = mm:GetWidth()
-	local ppy = size / diam
-	local half = size / 2 - 5
-	local square = C.Get("minimap.shape") == "square"
-	local edge = C.Get("questtrack.miniedge")
-	px, py = px * 100, py * 100
-	local n = 0
-	for i = 1, getn(list) do
-		local e = list[i]
-		local sz = e.zid and M.YARDS[e.zid]
-		if sz then
-			local sx = (e.d.x - px) / 100 * sz[1] * ppy
-			local sy = -(e.d.y - py) / 100 * sz[2] * ppy
-			local far
-			if square then
-				far = (math.abs(sx) > half) or (math.abs(sy) > half)
-			else
-				far = (sx * sx + sy * sy) > half * half
-			end
-			local alpha = 1
-			if far then
-				if e.tracked and edge then
-					local k
-					if square then
-						local m = math.max(math.abs(sx), math.abs(sy))
-						k = half / m
-					else
-						k = half / math.sqrt(sx * sx + sy * sy)
-					end
-					sx, sy = sx * k, sy * k
-					alpha = 0.55
-				else
-					sz = nil
-				end
-			end
+	M.mindoor = M.Indoor(mm:GetZoom() or 0)
+	M.msquare = C.Get("minimap.shape") == "square"
+	M.medge = C.Get("questtrack.miniedge") and true or false
+	if list ~= M.llist then
+		M.llist = list
+		local act, n = {}, 0
+		for i = 1, getn(list) do
+			local e = list[i]
+			local sz = e.zid and M.YARDS[e.zid]
 			if sz then
 				local p = M.MiniFrame(n + 1)
 				if not p then break end
 				local vk = Cx.PinVisual(e.d)
+				p.kind = vk
+				Cx.PaintIcon(p, e.d, vk)
 				local ent = Cx.PinEntries(e.rec, e.d)
 				local mk = Cx.PinMark(vk, ent and getn(ent) or 0)
-				if p.kind ~= vk then
-					p.kind = vk
-					T.Backdrop(p, Cx.PinColor(vk), T.c.bg)
-				end
 				if p.markText ~= mk then
 					p.markText = mk
 					p.mark:SetText(mk)
 				end
-				p:SetAlpha(alpha)
-				p:ClearAllPoints()
-				p:SetPoint("CENTER", mm, "CENTER", sx, sy)
-				p:Show()
 				n = n + 1
+				act[n] = { p = p, x = e.d.x / 100 * sz[1], y = e.d.y / 100 * sz[2], w = sz[1], h = sz[2], tracked = e.tracked }
 			end
 		end
+		M.mact, M.mn = act, n
+		for i = n + 1, getn(M.mpins) do M.mpins[i]:Hide() end
+		M.lpx = nil
 	end
-	for i = n + 1, getn(M.mpins) do M.mpins[i]:Hide() end
-	M.lshown = true
+	local mv = M.EnsureMover()
+	if mv and not mv:IsShown() then mv:Show() end
 end
 
 -- Minuterie de la minicarte : seulement si l'option est active, le Codex aussi, et le module actif
 function M.MiniSync()
 	local Pl = SUI.Places
-	local want = codex() ~= nil and ((M.on and C.Get("questtrack.mini")) or (Pl and Pl.MiniWanted and Pl.MiniWanted())) and true or false
+	local want = codex() ~= nil and ((M.on and (C.Get("questtrack.mini") or C.Get("questtrack.minigivers"))) or (Pl and Pl.MiniWanted and Pl.MiniWanted())) and true or false
 	if want and not M.miniTask then
 		M.miniTask = SUI.Every(M.MINI_EVERY, M.MiniTick, "questtrack.mini")
 	elseif not want and M.miniTask then
@@ -581,7 +624,7 @@ end
 function M.Sync()
 	local Cx = SUI.Codex
 	if not Cx or not Cx.PinTrack then return end
-	local want = M.on and Cx.on and C.Get("questtrack.pins") and true or false
+	local want = M.on and Cx.on and (C.Get("questtrack.pins") or C.Get("questtrack.givers")) and true or false
 	if want and Cx.trackFn ~= M.Recs then
 		Cx.PinTrack(M.Recs)
 	elseif not want and Cx.trackFn == M.Recs then
@@ -599,6 +642,10 @@ function M.ApplySize(Cx)
 	for i = 1, getn(Cx.pins) do
 		Cx.pins[i]:SetWidth(s)
 		Cx.pins[i]:SetHeight(s)
+		if Cx.pins[i].hl then
+			Cx.pins[i].hl:SetWidth(s * 1.6)
+			Cx.pins[i].hl:SetHeight(s * 1.6)
+		end
 	end
 end
 
@@ -804,7 +851,48 @@ function M.OnTip(b)
 end
 
 -- ---------------------------------------------------------------- cycle de vie, commande
+-- Bouton "Quetes" autour de la minicarte (glissable) : affiche / masque le suivi de quetes
+function M.RingButton()
+	local want = M.on and C.Get("questtrack.btn") and true or false
+	local b = M.rbtn
+	if not b and want then
+		local mm = getglobal("Minimap")
+		if not mm or SUI.InCombat() then return end
+		b = T.Button(mm, L("msg.questtrack.btn"), 50, 22, function() C.Set("questtrack.show", not C.Get("questtrack.show")) end)
+		b.suiOwn = true
+		b:SetFrameStrata("HIGH")
+		b:SetFrameLevel((mm:GetFrameLevel() or 0) + 12)
+		b:SetScript("OnEnter", M.RingEnter)
+		b:SetScript("OnLeave", M.RingLeave)
+		SUI.MiniRing.Drag(b, "questtrack.angle", 270)
+		M.rbtn = b
+	end
+	if b then
+		if want then
+			if not b.ringDrag then SUI.MiniRing.Place(b, "questtrack.angle", 270) end
+			b:Show()
+		else
+			b:Hide()
+		end
+	end
+end
+
+function M.RingEnter()
+	local r, g, bl = T.Accent()
+	this:SetBackdropBorderColor(r, g, bl, 1)
+	GameTooltip:SetOwner(this, "ANCHOR_LEFT")
+	GameTooltip:AddLine(L("cat.questtrack"))
+	GameTooltip:AddLine(L("msg.questtrack.btn.tip"), T.c.dim[1], T.c.dim[2], T.c.dim[3])
+	GameTooltip:Show()
+end
+
+function M.RingLeave()
+	this:SetBackdropBorderColor(T.c.border[1], T.c.border[2], T.c.border[3], 1)
+	GameTooltip:Hide()
+end
+
 function M.OnKey(key, value)
+	if key == "questtrack.btn" or key == "questtrack.angle" then M.RingButton() end
 	if not M.on then return end
 	M.Sync()
 	if M.frame then M.Paint() end
@@ -824,10 +912,12 @@ function M.Enable()
 	end
 	M.Sync()
 	M.Queue()
+	M.RingButton()
 end
 
 function M.Disable()
 	M.on = false
+	M.RingButton()
 	SUI.Off("QUEST_LOG_UPDATE", M.Queue)
 	SUI.Off("PLAYER_ENTERING_WORLD", M.Queue)
 	if M.task then
@@ -874,8 +964,11 @@ SUI.RegisterModule("questtrack", {
 		opt("pins", "bool", 20, true, { simple = true }),
 		opt("givers", "bool", 25, true, { simple = true }),
 		opt("mini", "bool", 22, true, { simple = true }),
+		opt("minigivers", "bool", 22.5, true, { simple = true }),
 		opt("miniedge", "bool", 23, true),
-		opt("pinsize", "number", 24, 14, { min = 10, max = 24, step = 1 }),
+		opt("btn", "bool", 21, true),
+		opt("angle", "number", 21.5, 270, { min = 0, max = 355, step = 5 }),
+		opt("pinsize", "number", 24, 20, { min = 12, max = 32, step = 1 }),
 		opt("giverlow", "number", 26, 6, { min = 0, max = 20, step = 1 }),
 		opt("max", "number", 30, 8, { min = 3, max = 15, step = 1 }),
 		opt("width", "number", 40, 230, { min = 160, max = 400, step = 10 }),

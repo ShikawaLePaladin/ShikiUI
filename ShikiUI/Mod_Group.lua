@@ -84,9 +84,9 @@ E.PRIO_KEY = { magic = "Magic", curse = "Curse", poison = "Poison", disease = "D
 -- Power Word: Shield 30, Abolish 8 ; seul le texte de duree en depend, l'icone vient de l'aura reelle).
 E.HOTS = { ["Rejuvenation"] = 12, ["Regrowth"] = 21, ["Renew"] = 15, ["Power Word: Shield"] = 30, ["Abolish Poison"] = 8,
 	["Abolish Disease"] = 8,
-	-- cooldowns defensifs / utilitaires poses sur un allie (surtout le tank), meme suivi que les HoT [memoire] : Blessing of Protection 10,
-	-- Blessing of Freedom 16, Blessing of Sacrifice 30, Power Infusion 15, Innervate 20 (Lay on Hands ne laisse pas de buff : non suivi)
-	["Blessing of Protection"] = 10, ["Blessing of Freedom"] = 16, ["Blessing of Sacrifice"] = 30, ["Power Infusion"] = 15,
+	-- cooldowns defensifs / utilitaires poses sur un allie (surtout le tank), meme suivi que les HoT [memoire] : Hand of Protection 10,
+	-- Hand of Freedom 16, Hand of Sacrifice 30, Power Infusion 15, Innervate 20 (Lay on Hands ne laisse pas de buff : non suivi)
+	["Hand of Protection"] = 10, ["Hand of Freedom"] = 16, ["Hand of Sacrifice"] = 30, ["Power Infusion"] = 15,
 	["Innervate"] = 20 }
 -- Resurrections par nom de sort (releve dans HealPredict.lua de Puppeteer).
 E.RES = { ["Resurrection"] = true, ["Redemption"] = true, ["Ancestral Spirit"] = true, ["Rebirth"] = true, ["Revive Champion"] = true }

@@ -2931,6 +2931,7 @@ function M.BuildAccess()
 		M.mbtn:SetFrameStrata("HIGH")
 		M.mbtn:SetFrameLevel((mm:GetFrameLevel() or 0) + 12)   -- au-dessus des cadres de Mod_Minimap (+5..+7) et du tiroir
 		if M.mbtn.SetHitRectInsets then M.mbtn:SetHitRectInsets(-6, -6, -6, -6) end   -- zone de clic plus large que le dessin
+		SUI.MiniRing.Drag(M.mbtn, "finder.angle", 200)                                -- glisser autour de la minicarte
 	end
 	local ff = getglobal("FriendsFrame")
 	if ff and not M.sbtn then
@@ -2953,10 +2954,7 @@ function M.UpdateAccess()
 				b.curtxt = txt
 				T.SetButtonText(b, txt)
 			end
-			local ang = (C.Get("finder.angle") or 200) * 3.14159265 / 180
-			local rad = ((mm and mm:GetWidth()) or 140) / 2 + 4
-			b:ClearAllPoints()
-			b:SetPoint("CENTER", mm, "CENTER", math.cos(ang) * rad, math.sin(ang) * rad)
+			if not b.ringDrag then SUI.MiniRing.Place(b, "finder.angle", 200) end
 			b:Show()
 		else
 			b:Hide()

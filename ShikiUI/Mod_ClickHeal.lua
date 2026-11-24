@@ -58,9 +58,9 @@ local FRNAMES = {
 		["Lumiere sacree"] = "Holy Light", ["Purification"] = "Cleanse",
 		["Purifier"] = "Purify", ["Benediction de Puissance"] = "Blessing of Might", ["Benediction de Sagesse"] = "Blessing of Wisdom",
 		["Benediction de Salut"] = "Blessing of Salvation", ["Benediction des Rois"] = "Blessing of Kings",
-		["Benediction de Sacrifice"] = "Blessing of Sacrifice", ["Benediction de Protection"] = "Blessing of Protection",
-		["Benediction de Liberte"] = "Blessing of Freedom",
-		["Main de sacrifice"] = "Blessing of Sacrifice", ["Main de protection"] = "Blessing of Protection", ["Main de liberte"] = "Blessing of Freedom", ["Imposition des mains"] = "Lay on Hands",
+		["Benediction de Sacrifice"] = "Hand of Sacrifice", ["Benediction de Protection"] = "Hand of Protection",
+		["Benediction de Liberte"] = "Hand of Freedom",
+		["Main de sacrifice"] = "Hand of Sacrifice", ["Main de protection"] = "Hand of Protection", ["Main de liberte"] = "Hand of Freedom", ["Imposition des mains"] = "Lay on Hands",
 		["Redemption"] = "Redemption" },
 	SHAMAN = { ["Vague de soins"] = "Healing Wave", ["Vague de soins inferieurs"] = "Lesser Healing Wave",
 		["Salve de guerison"] = "Chain Heal", ["Guerison des maladies"] = "Cure Disease", ["Guerison du poison"] = "Cure Poison" },
@@ -89,9 +89,10 @@ for _, cls in pairs(FRNAMES) do
 	for fr, en in pairs(cls) do M.FRKEY[fold(fr)] = en end
 end
 
--- Serveurs recents (Turtle / octowow) : les Benedictions de Sacrifice / Protection / Liberte s'appellent "Hand of ..." : meme sort, autre nom.
-local ALIAS = { ["Hand of Sacrifice"] = "Blessing of Sacrifice", ["Hand of Protection"] = "Blessing of Protection",
-	["Hand of Freedom"] = "Blessing of Freedom" }
+-- Turtle / octowow (base du serveur verifiee) : les sorts s'appellent "Hand of Protection / Sacrifice / Freedom" (les "Blessing of ..."
+-- n'existent pas) ; c'est donc le nom canonique. L'ancien nom (client vanilla, anciennes liaisons enregistrees) y est rattache.
+local ALIAS = { ["Blessing of Sacrifice"] = "Hand of Sacrifice", ["Blessing of Protection"] = "Hand of Protection",
+	["Blessing of Freedom"] = "Hand of Freedom" }
 M.on = false
 M.hasWheel = false
 M.known = {}              -- nom de sort -> { max = rang max, txt = { [rang] = "Rank n" }, gen = generation }
@@ -116,7 +117,7 @@ local SPELLS = {
 	DRUID = { "Rejuvenation", "Regrowth", "Healing Touch", "Remove Curse", "Cure Poison", "Abolish Poison", "Mark of the Wild",
 		"Thorns", "Innervate" },                                                                            -- Regrowth, Innervate : [memoire]
 	PALADIN = { "Flash of Light", "Holy Shock", "Holy Light", "Cleanse", "Purify", "Blessing of Might", "Blessing of Wisdom",
-		"Blessing of Salvation", "Blessing of Kings", "Blessing of Sacrifice", "Blessing of Protection", "Blessing of Freedom",
+		"Blessing of Salvation", "Blessing of Kings", "Hand of Sacrifice", "Hand of Protection", "Hand of Freedom",
 		"Lay on Hands" },                                                       -- Lay on Hands, Sacrifice, Protection, Liberte : [memoire]
 	SHAMAN = { "Healing Wave", "Lesser Healing Wave", "Chain Heal", "Cure Disease", "Cure Poison" },
 	MAGE = { "Remove Lesser Curse", "Arcane Intellect", "Dampen Magic", "Amplify Magic" },                  -- les 3 derniers : [memoire]
@@ -125,7 +126,7 @@ local CLASS_ORDER = { "PRIEST", "DRUID", "PALADIN", "SHAMAN", "MAGE" }
 -- Sorts qui ont des rangs reglables (une option "clickheal.rank.<slug>" chacun).
 local RANKED = { "Flash of Light", "Holy Shock", "Holy Light", "Lesser Heal", "Heal", "Greater Heal", "Flash Heal", "Renew", "Power Word: Shield",
 	"Rejuvenation", "Regrowth", "Healing Touch", "Healing Wave", "Lesser Healing Wave", "Chain Heal", "Prayer of Healing", "Holy Nova",
-	"Blessing of Sacrifice", "Blessing of Protection" }
+	"Hand of Sacrifice", "Hand of Protection" }
 M.RANKED = RANKED
 -- Resurrections par classe [Puppeteer Util.lua]
 local RES = { PRIEST = "Resurrection", PALADIN = "Redemption", SHAMAN = "Ancestral Spirit", DRUID = "Rebirth" }
@@ -930,8 +931,21 @@ function M.OnRegen()
 	end
 end
 
+-- Anciennes liaisons enregistrees avec "Blessing of ..." -> noms reels du serveur
+function M.MigrateNames()
+	local mi, bi
+	for mi = 1, getn(MODS) do
+		for bi = 1, getn(BTNS) do
+			local key = "clickheal." .. MODS[mi] .. "." .. BTNS[bi]
+			local v = C.Get(key)
+			if v and ALIAS[v] then C.Set(key, ALIAS[v]) end
+		end
+	end
+end
+
 function M.Enable()
 	M.on = true
+	M.MigrateNames()
 	M.NameBindings()
 	local _, class = UnitClass("player")
 	M.class = class
