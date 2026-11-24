@@ -385,8 +385,11 @@ end
 -- Libelle d'un palier de reputation (standingId 1 a 8 ; les donnees n'utilisent que 4 a 8) : texte du client (FACTION_STANDING_LABELn), sinon nos textes
 function P.TierText(n)
 	if type(n) ~= "number" or n < 1 or n > 8 or n ~= floor(n) then return nil end
+	-- le texte du client n'est repris que s'il est dans la langue de ShikiUI (client anglais + interface francaise : nos textes)
+	local gl = glob("GetLocale")
+	local clientFr = gl and gl() == "frFR"
 	local g = glob("FACTION_STANDING_LABEL" .. n)
-	if type(g) == "string" and g ~= "" then return g end
+	if type(g) == "string" and g ~= "" and (clientFr == (lang() == "fr")) then return g end
 	return L("msg.codex.standing." .. n)
 end
 
