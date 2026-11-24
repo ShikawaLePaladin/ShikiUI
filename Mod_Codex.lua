@@ -194,6 +194,46 @@ function P.LoadQuests()
 	return why == "ok", why
 end
 
+-- Donnees des monstres (ShikiCodexData_Mobs, facultatif : sans lui la recherche ne propose simplement pas de monstres)
+P.MADDON = "ShikiCodexData_Mobs"
+function P.Mobs()
+	local m = glob("ShikiCodexMobs")
+	if type(m) ~= "table" then
+		local la = glob("LoadAddOn")
+		if not la or P.mobTried then return nil end
+		P.mobTried = true
+		pcall(la, P.MADDON)
+		m = glob("ShikiCodexMobs")
+	end
+	if type(m) ~= "table" or m.schema ~= 1 or type(m.m) ~= "table" or type(m.n) ~= "table" then return nil end
+	return m
+end
+
+-- Nom d'un monstre (francais quand il existe et que le client est en francais)
+function P.MobName(m, id)
+	if lang() == "fr" and m.n.fr and m.n.fr[id] then return m.n.fr[id] end
+	return m.n.en and m.n.en[id] or ("#" .. tostring(id))
+end
+
+-- "min;max;zone:tok,tok/zone:tok" -> niveau min, niveau max, { { zone, { {x, y} ... } } ... }
+function P.MobRec(m, id)
+	local s = m.m[id]
+	if type(s) ~= "string" then return nil end
+	local _, _, lo, hi, rest = sfind(s, "^(%d+);(%d+);(.*)$")
+	if not lo then return nil end
+	local groups = {}
+	for zs, toks in string.gfind(rest, "(%d+):([%d,]+)") do
+		local pts = {}
+		for t in string.gfind(toks, "%d+") do
+			local v = tonumber(t)
+			local xi = floor(v / 1024)
+			tinsert(pts, { x = xi / 10, y = (v - xi * 1024) / 10 })
+		end
+		tinsert(groups, { zone = tonumber(zs), pts = pts })
+	end
+	return tonumber(lo), tonumber(hi), groups
+end
+
 function P.HasQuests()
 	return P.Q() ~= nil
 end
@@ -1216,6 +1256,37 @@ function M.DoSearch(text)
 			local lvl, min = P.QuestLevels(id)
 			tinsert(res, { kind = "quest", id = id, title = (fr and fr[id]) or qd.en.t[id], lvl = lvl, min = min })
 		end
+		-- monstres (donnees facultatives) : nom contenant le texte, 3 lettres au moins
+		local md = slen(text) >= 3 and P.Mobs() or nil
+		if md then
+			local hits, low, seen = {}, {}, {}
+			local sets = { md.n.en or {} }
+			if lang() == "fr" and md.n.fr then tinsert(sets, md.n.fr) end
+			for s = 1, getn(sets) do
+				for id, nm in pairs(sets[s]) do
+					if not seen[id] then
+						local lt = slower(nm)
+						if sfind(lt, text, 1, true) then
+							seen[id] = true
+							low[id] = lt
+							tinsert(hits, id)
+						end
+					end
+				end
+			end
+			tsort(hits, function(x, y)
+				local tx, ty = low[x], low[y]
+				if tx ~= ty then return tx < ty end
+				return x < y
+			end)
+			if getn(hits) > cap then M.more = true end
+			for k = 1, getn(hits) do
+				if k > cap then break end
+				local id = hits[k]
+				local lo, hi = P.MobRec(md, id)
+				tinsert(res, { kind = "mob", id = id, title = P.MobName(md, id), lo = lo, hi = hi })
+			end
+		end
 	end
 	M.off.res = 0
 	if M.win then M.Paint() end
@@ -2170,6 +2241,49 @@ function M.PinQuest(id)
 	return true
 end
 
+-- Epingle un monstre : ses points (jusqu'a 3 zones) sur la carte du monde et la minicarte. Enregistrement id < 0 (pas une quete).
+function M.PinMob(id)
+	if not M.on then
+		SUI.Print(L("msg.codex.off"))
+		return false
+	end
+	if not M.PinQuestsReady() then return false end
+	local md = P.Mobs()
+	if not md then
+		SUI.Print(L("msg.codex.mob.nodata"))
+		return false
+	end
+	local lo, hi, groups = P.MobRec(md, id)
+	if not groups then
+		SUI.Print(L("msg.codex.pin.unknown", tostring(id)))
+		return false
+	end
+	local name = P.MobName(md, id)
+	local rec = { id = -id, t = name, n = 0, zones = {} }
+	for i = 1, getn(groups) do
+		local gr = groups[i]
+		local en, fr = P.ZoneBoth(gr.zone)
+		local g = { en = en or ("#" .. tostring(gr.zone)), fr = fr, map = P.ZoneMap(gr.zone), zid = gr.zone, n = getn(gr.pts), pins = {} }
+		for k = 1, getn(gr.pts) do
+			tinsert(g.pins, { k = "O", x = gr.pts[k].x, y = gr.pts[k].y, nm = name, ek = "u" })
+		end
+		rec.n = rec.n + g.n
+		tinsert(rec.zones, g)
+	end
+	local first = nil
+	for i = 1, getn(rec.zones) do
+		if not first and M.PinUsable(rec.zones[i]) then first = rec.zones[i] end
+	end
+	if not first then
+		SUI.Print(L("msg.codex.pin.nomapall", rec.t, M.PinZoneList(rec)))
+		return false
+	end
+	M.PinSet(rec)
+	SUI.Print(L("msg.codex.pin.done", rec.t, M.PinZoneList(rec)))
+	if not SUI.InCombat() then M.PinShow(first) end
+	return true
+end
+
 -- Quete d'apres un numero ou un texte : numero connu, sinon titre exact, sinon titre contenant le texte ; plusieurs : liste (rien n'est devine).
 function M.PinFindQuest(text)
 	if not M.PinQuestsReady() then return nil end
@@ -2817,6 +2931,9 @@ function M.RowClick(b)
 			return
 		elseif r.kind == "item" then
 			M.GoTo(r.inst, r.boss, r.id)
+		elseif r.kind == "mob" then
+			M.PinMob(r.id)
+			return
 		else
 			M.selQuest = r.id
 			M.QuestInfo(r)
@@ -3133,6 +3250,9 @@ function M.Paint()
 						local rp = M.Reps()[r.boss]
 						txt = M.ItemName(r.id) .. "   -   " .. L("msg.codex.rep.entry", rp and rp.name or "?")
 					end
+				elseif r.kind == "mob" then
+					local lv = (r.lo and r.lo > 0) and ((r.hi and r.hi > r.lo) and (r.lo .. "-" .. r.hi) or tostring(r.lo)) or "?"
+					txt = "[" .. L("msg.codex.mob") .. "] " .. r.title .. "  (" .. sformat(L("msg.codex.level"), lv) .. ")"
 				else
 					txt = "[" .. L("msg.codex.quest") .. "] " .. r.title .. "  (" .. sformat(L("msg.codex.level"), tostring(r.lvl or "?")) .. ")"
 				end
