@@ -1232,7 +1232,11 @@ end
 -- seulement pour la zone AFFICHEE (WORLD_MAP_UPDATE, regroupe par M.PinSettle) ; la minuterie de surveillance n'existe que tant qu'une quete est epinglee.
 -- NON VERIFIE en jeu : ToggleWorldMap puis SetMapZoom (ordre), WORLD_MAP_UPDATE a l'ouverture, niveau des cadres, noms de zones Turtle dans GetMapZones.
 M.PIN_MAX = 14                -- epingles gardees par zone et par quete (les donnees en donnent 12 au plus par quete)
-M.PIN_POOL = 60               -- epingles posees a la fois (quete epinglee + suivi) = taille du pool
+M.PIN_POOL = 160              -- epingles posees a la fois (quete epinglee + suivi + lieux utiles) = taille du pool (cadres crees a la demande)
+M.providers = {}              -- fournisseurs d'epingles par cle : "track" (suivi des quetes), "places" (lieux utiles) : function(c, z, ctx) -> liste d'enregistrements
+M.PROVORDER = { "track", "places" }
+M.PINCOL = {}                 -- couleur (fonction -> jeton de theme) des aspects "P<famille>" enregistres par le module des lieux
+M.PINTAG = {}                 -- marque d'un aspect de lieu
 M.trackFn = nil               -- fournisseur des quetes du suivi (module questtrack) : function() -> liste d'enregistrements resolus
 M.PIN_SIZE = 14
 M.PIN_DELAY = 0.2             -- silence attendu apres le dernier WORLD_MAP_UPDATE (la carte en envoie une centaine a l'ouverture)
@@ -1401,6 +1405,8 @@ end
 -- ---- cadres
 -- Couleur (jeton du theme) et marque d'un type d'epingle : depart !, fin ?, objectif o
 function M.PinColor(kind)
+	local pc = M.PINCOL[kind]
+	if pc then return pc() end
 	if kind == "S" then return T.c.warn end
 	if kind == "E" then return T.c.good end
 	if kind == "I" then return T.c.text end
@@ -1412,6 +1418,7 @@ M.PINMARK = { S = "!", E = "?", O = "x", I = "i", B = "o" }
 
 -- Aspect d'une epingle : S depart, E fin, O creature a tuer / voir, I objet a ramasser, B objet du monde
 function M.PinVisual(d)
+	if d.k == "P" and d.vk then return d.vk end
 	if d.k == "O" then
 		if d.ek == "i" or d.ek == "r" then return "I" end
 		if d.ek == "o" then return "B" end
@@ -1431,6 +1438,7 @@ end
 
 -- Texte de l'epingle : le nombre de quetes quand elles sont plusieurs, sinon la marque de son aspect
 function M.PinMark(vk, n)
+	if M.PINTAG[vk] then return M.PINTAG[vk] end
 	if n and n > 1 then return n > 9 and "9+" or tostring(n) end
 	return M.PINMARK[vk] or "o"
 end
@@ -1469,6 +1477,14 @@ function M.PinEnter(p)
 	local r, g, bl = T.Accent()
 	p:SetBackdropBorderColor(r, g, bl, 1)
 	tt:SetOwner(p, "ANCHOR_LEFT")
+	if d.k == "P" then
+		tt:SetText(d.title or "")
+		if d.lines then
+			for i = 1, getn(d.lines) do tt:AddLine(d.lines[i], T.c.text[1], T.c.text[2], T.c.text[3]) end
+		end
+		tt:Show()
+		return
+	end
 	tt:SetText(rec.t)
 	local line = L(M.PINLABEL[d.k] or M.PINLABEL.O)
 	if d.nm then
@@ -1516,6 +1532,12 @@ function M.PopTip(b)
 	if not e or not tt then return end
 	local d = T.c.dim
 	tt:SetOwner(b, "ANCHOR_RIGHT")
+	if e.place then
+		tt:SetText(e.title or "")
+		if e.sub then tt:AddLine(e.sub, d[1], d[2], d[3]) end
+		tt:Show()
+		return
+	end
 	tt:SetText(e.title or ("#" .. tostring(e.id)))
 	local q = P.Quest(e.id)
 	if q then
@@ -1604,13 +1626,14 @@ function M.PinClick(p, button)
 	local list = p.entries
 	local n = getn(list)
 	local shownN = n > M.POP_ROWS and M.POP_ROWS or n
-	f.head:SetText(L("msg.codex.pop.head", n))
+	f.head:SetText(p.data and p.data.head or L("msg.codex.pop.head", n))
 	for i = 1, M.POP_ROWS do
 		local r = f.rows[i]
 		local e = list[i]
 		if i <= shownN and e then
 			r.entry = e
 			r.txt:SetText((e.lvl and e.lvl > 0 and ("[" .. e.lvl .. "] ") or "") .. (e.title or ("#" .. tostring(e.id))))
+			r.entry = e
 			r:Show()
 		else
 			r:Hide()
@@ -1676,35 +1699,47 @@ end
 
 -- Sources d'epingles : la quete epinglee (M.pin), puis les quetes du suivi (M.trackFn, fournie par le module questtrack ; appelee seulement
 -- carte ouverte, jamais au login). Une liste d'enregistrements resolus, sans doublon d'identifiant.
-function M.PinSources()
+function M.PinSources(c, z, ctx)
 	local out = {}
 	if M.pin then tinsert(out, M.pin) end
-	local fn = M.trackFn
-	if fn then
-		local ok, list = pcall(fn)
-		if ok and type(list) == "table" then
-			for i = 1, getn(list) do
-				local r = list[i]
-				if type(r) == "table" and type(r.zones) == "table" and not (M.pin and M.pin.id == r.id) then tinsert(out, r) end
+	for k = 1, getn(M.PROVORDER) do
+		local fn = M.providers[M.PROVORDER[k]]
+		if fn then
+			local ok, list = pcall(fn, c, z, ctx)
+			if ok and type(list) == "table" then
+				for i = 1, getn(list) do
+					local r = list[i]
+					if type(r) == "table" and type(r.zones) == "table" and not (M.pin and r.id and r.id >= 0 and M.pin.id == r.id) then tinsert(out, r) end
+				end
 			end
 		end
 	end
 	return out
 end
 
+local function provCount()
+	local n = 0
+	for k = 1, getn(M.PROVORDER) do
+		if M.providers[M.PROVORDER[k]] then n = n + 1 end
+	end
+	return n
+end
+
 -- Vrai tant qu'il y a quelque chose a poser (quete epinglee ou suivi actif)
 function M.PinActive()
-	return M.pin ~= nil or M.trackFn ~= nil
+	return M.pin ~= nil or provCount() > 0
 end
 
 -- Branche (fn) ou debranche (nil) le suivi de quetes ; la carte est repeinte
-function M.PinTrack(fn)
-	M.trackFn = fn
+function M.PinTrack(fn, key)
+	key = key or "track"
+	M.providers[key] = fn or nil
+	M.trackFn = M.providers.track
 	if fn then
 		M.PinStart()
 	else
 		M.PinHideAll()
-		if not M.pin and not M.moved then M.PinStop(true) else M.PinOnMapEvent() end
+		if not M.pin and not M.moved and provCount() == 0 then M.PinStop(true) else M.PinOnMapEvent() end
 	end
 end
 
@@ -1726,13 +1761,13 @@ function M.PinRefresh()
 		M.PinHideAll()
 		return
 	end
-	local srcs = M.PinSources()
+	local c, z = M.MapCur()
+	local srcs = M.PinSources(c, z, "map")
 	if not srcs[1] then
 		M.PinHideAll()
 		return
 	end
 	M.pinRefreshes = M.pinRefreshes + 1
-	local c, z = M.MapCur()
 	local n, full = 0, false
 	local w, h = btn:GetWidth(), btn:GetHeight()
 	local firstHere = nil
@@ -1785,7 +1820,11 @@ function M.PinRefresh()
 			for s = 1, getn(srcs) do
 				if (srcs[s].id or 0) >= 0 then nq = nq + 1 end
 			end
-			text = L("msg.codex.pin.banner.track", nq, n)
+			if nq == 0 then
+				text = L("msg.codex.pin.banner.places", n)
+			else
+				text = L("msg.codex.pin.banner.track", nq, n)
+			end
 		end
 		if b.shownText ~= text then
 			b.shownText = text
@@ -1914,7 +1953,7 @@ function M.PinOff(silent)
 	M.PinHideAll()
 	local wm = glob("WorldMapFrame")
 	if M.moved and not (wm and wm:IsShown()) then M.PinMapClosed() end
-	if M.trackFn then M.PinOnMapEvent() else M.PinStop(false) end
+	if provCount() > 0 then M.PinOnMapEvent() else M.PinStop(false) end
 	if not silent then SUI.Print(L(had and "msg.codex.pin.off" or "msg.codex.pin.nothing")) end
 	return had
 end
@@ -2774,6 +2813,7 @@ function M.Enable()
 	end
 	M.PinRestore()
 	if SUI.QuestTrack then SUI.QuestTrack.Sync() end
+	if SUI.Places then SUI.Places.Sync() end
 end
 
 function M.Disable()
@@ -2784,6 +2824,7 @@ function M.Disable()
 	M.ReleaseIndex()
 	M.Close()
 	M.trackFn = nil
+	M.providers = {}
 	M.PinOff(true)
 	M.PinStop(true)
 	M.moved = false

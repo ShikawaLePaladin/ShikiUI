@@ -370,7 +370,7 @@ end
 -- minicarte (rayon en yards selon le zoom, dehors / dedans). Les tailles de zones et les rayons viennent de pfQuest (MIT, db\minimap.lua et map.lua),
 -- jamais lus a l'execution : la table est recopiee ici. Une epingle de quete suivie hors de portee reste au bord (repere de direction, plus pale).
 -- Une minuterie (M.MINI_EVERY s) n'existe que tant que l'option est active, le Codex est actif ET une epingle peut etre posee.
-M.MINI_EVERY = 0.2
+M.MINI_EVERY = 0.03          -- ~30 images/s : les epingles suivent le joueur sans saccade (le calcul s'arrete si rien ne bouge)
 M.MINI_MAX = 40
 M.MINI_SIZE = 11
 M.MINI_REFRESH = 3           -- secondes entre deux recompositions de la liste d'epingles (la position, elle, est calculee a chaque tour)
@@ -429,11 +429,14 @@ function M.MiniFrame(i)
 end
 
 function M.MiniHideAll()
+	M.lshown, M.lpx = false, nil
 	for i = 1, getn(M.mpins) do M.mpins[i]:Hide() end
 end
 
 -- Liste plate des epingles a poser pres du joueur : { d, zid, tracked }, recomposee toutes les M.MINI_REFRESH secondes ou si la zone change
-function M.MiniList(Cx, c, z)
+function M.MiniList(Cx, c, z, px, py)
+	if M.miniList and M.miniC == c and M.miniZ == z and GetTime() < (M.miniNext or 0) then return M.miniList end
+	M.miniC, M.miniZ = c, z
 	local rz = glob("GetRealZoneText")
 	local ul = glob("UnitLevel")
 	local key = tostring(rz and rz() or "") .. "|" .. c .. "," .. z .. "|" .. tostring(ul and ul("player") or 0) .. "|" .. getn(M.list)
@@ -441,13 +444,38 @@ function M.MiniList(Cx, c, z)
 	if M.miniKey == key and M.miniList and now < (M.miniNext or 0) then return M.miniList end
 	M.miniKey, M.miniNext = key, now + M.MINI_REFRESH
 	local out = {}
-	local srcs = M.Recs()
+	local srcs = (M.on and C.Get("questtrack.mini")) and M.Recs() or {}
 	for s = 1, getn(srcs) do
 		local rec = srcs[s]
 		local g = Cx.PinHere(rec, c, z)
 		for k = 1, g and getn(g.pins) or 0 do
 			if getn(out) >= M.MINI_MAX then break end
 			tinsert(out, { d = g.pins[k], zid = g.zid, rec = rec, tracked = (rec.id or 0) >= 0 })
+		end
+	end
+	-- lieux utiles : les plus proches du joueur d'abord (la minicarte n'en pose que M.MINI_MAX au total)
+	local Pl = SUI.Places
+	if Pl and Pl.MiniWanted and Pl.MiniWanted() then
+		local ps = Pl.Recs(c, z, "mini")
+		local near = {}
+		for s = 1, getn(ps) do
+			local rec = ps[s]
+			local g = Cx.PinHere(rec, c, z)
+			local sz = g and M.YARDS[g.zid]
+			for k = 1, g and getn(g.pins) or 0 do
+				local d = g.pins[k]
+				local dist = 0
+				if sz and px and py then
+					local dx, dy = (d.x - px) / 100 * sz[1], (d.y - py) / 100 * sz[2]
+					dist = dx * dx + dy * dy
+				end
+				tinsert(near, { d = d, zid = g.zid, rec = rec, tracked = false, dist = dist })
+			end
+		end
+		tsort(near, function(a, b) return a.dist < b.dist end)
+		for k = 1, getn(near) do
+			if getn(out) >= M.MINI_MAX then break end
+			tinsert(out, near[k])
 		end
 	end
 	M.miniList = out
@@ -469,8 +497,10 @@ function M.MiniTick()
 		M.MiniHideAll()
 		return
 	end
-	local list = M.MiniList(Cx, c, z)
+	local list = M.MiniList(Cx, c, z, px * 100, py * 100)
 	local zoom = mm:GetZoom() or 0
+	if px == M.lpx and py == M.lpy and zoom == M.lzoom and list == M.llist and M.lshown then return end
+	M.lpx, M.lpy, M.lzoom, M.llist = px, py, zoom, list
 	local diam = M.MINIZ[M.Indoor(zoom)][zoom] or 400
 	local size = mm:GetWidth()
 	local ppy = size / diam
@@ -530,11 +560,13 @@ function M.MiniTick()
 		end
 	end
 	for i = n + 1, getn(M.mpins) do M.mpins[i]:Hide() end
+	M.lshown = true
 end
 
 -- Minuterie de la minicarte : seulement si l'option est active, le Codex aussi, et le module actif
 function M.MiniSync()
-	local want = M.on and codex() ~= nil and C.Get("questtrack.mini") and true or false
+	local Pl = SUI.Places
+	local want = codex() ~= nil and ((M.on and C.Get("questtrack.mini")) or (Pl and Pl.MiniWanted and Pl.MiniWanted())) and true or false
 	if want and not M.miniTask then
 		M.miniTask = SUI.Every(M.MINI_EVERY, M.MiniTick, "questtrack.mini")
 	elseif not want and M.miniTask then
