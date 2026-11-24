@@ -1703,7 +1703,7 @@ end
 SUI.RegisterCategory("questtrack", 80)
 
 SUI.RegisterModule("questtrack", {
-	default = false,
+	default = true,
 	cost = "light",
 	options = {
 		opt("show", "bool", 10, true, { simple = true }),

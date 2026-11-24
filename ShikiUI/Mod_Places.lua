@@ -961,7 +961,7 @@ end
 SUI.RegisterCategory("places", 81)
 
 SUI.RegisterModule("places", {
-	default = false,
+	default = true,
 	cost = "light",
 	options = OPTS,
 	enable = function() M.Enable() end,

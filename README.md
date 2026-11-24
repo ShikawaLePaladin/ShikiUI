@@ -21,7 +21,7 @@ Les trois dossiers `ShikiCodexData*` sont des **donnees generees** (jamais modif
 ils ne coutent ni memoire ni temps de chargement tant que tu n'ouvres pas le Codex ou une carte. Sans eux, ShikiUI fonctionne
 normalement mais le Codex et les epingles de quetes restent vides. Ils portent le meme numero de version que ShikiUI.
 
-**Manuel** : dezipper `ShikiUI-v1.2.0.zip` dans `Interface\AddOns\` (les 4 dossiers sont a la racine du zip), puis relancer le jeu
+**Manuel** : dezipper `ShikiUI-v1.2.1.zip` dans `Interface\AddOns\` (les 4 dossiers sont a la racine du zip), puis relancer le jeu
 (un nouvel addon demande un redemarrage complet la premiere fois ; ensuite `/reload` suffit).
 
 **OctoLauncher** : ajouter le lien `https://github.com/ShikawaLePaladin/ShikiUI` (installe `ShikiUI`), puis les donnees via leurs branches :
