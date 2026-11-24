@@ -469,6 +469,24 @@ end
 -- Familles de sets (menus de sets par classe : D.sets) visibles pour le profil, dans l'ordre d'affichage
 P.SETFAM = { "T0Set", "T1Set", "T1VPSet", "T2Set", "T35Set", "T3Set", "ZGSet", "AQ20Set", "AQ40Set" }
 
+-- Une famille de sets citee par des menus de boss (sm) n'est montree que si l'un de ces menus est visible sur le profil
+-- (ex. les sets "Tier 1 (V+)" ne concernent que Vanilla Plus). Une famille que aucun boss ne cite reste visible.
+local function setUsed(d, key, bit)
+	local cited = false
+	for ik, it in pairs(d.inst) do
+		if type(it) == "table" and type(it.boss) == "table" then
+			for j = 1, getn(it.boss) do
+				local b = it.boss[j]
+				if type(b) == "table" and b.sm == key then
+					cited = true
+					if vis(it.m, bit) and vis(b.m, bit) then return true end
+				end
+			end
+		end
+	end
+	return not cited
+end
+
 function P.SetFamilies()
 	local out = {}
 	local d = P.Data()
@@ -484,7 +502,7 @@ function P.SetFamilies()
 				if vis(s[j].m, bit) then any = true end
 				j = j + 1
 			end
-			if any then tinsert(out, { key = key }) end
+			if any and setUsed(d, key, bit) then tinsert(out, { key = key }) end
 		end
 	end
 	return out
