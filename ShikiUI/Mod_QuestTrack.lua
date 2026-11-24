@@ -337,8 +337,8 @@ function M.Recs(c, z, ctx)
 	local Cx = codex()
 	if not Cx or not M.on then return {} end
 	local mini = ctx == "mini"
-	local wantObj = C.Get(mini and "questtrack.mini" or "questtrack.pins") and true or false
-	local wantGiv = C.Get(mini and "questtrack.minigivers" or "questtrack.givers") and true or false
+	local wantObj = (ctx == "arrow") or C.Get(mini and "questtrack.mini" or "questtrack.pins") and true or false
+	local wantGiv = (ctx ~= "arrow") and C.Get(mini and "questtrack.minigivers" or "questtrack.givers") and true or false
 	if not wantObj and not wantGiv then return {} end
 	local out = {}
 	for i = 1, wantObj and getn(M.list) or 0 do
@@ -850,6 +850,146 @@ function M.OnTip(b)
 	GameTooltip:Show()
 end
 
+-- ---------------------------------------------------------------- fleche de direction
+-- Une petite fleche deplacable pointe vers l'objectif de quete le plus proche dans la zone ou tu te trouves (ou vers la quete epinglee, si elle a
+-- un point ici) et indique la distance en yards. Angle = relevement de la cible sur la carte (nord en haut) + orientation du joueur
+-- (GetPlayerFacing : radians, sens inverse des aiguilles depuis le nord). Zone sans objectif, carte du monde ouverte sur une autre zone, ou
+-- instance (position 0, 0) : la fleche se cache. Une image sur deux : seulement l'angle ; la cible est rechoisie chaque seconde.
+M.ARROW_TEX = "Interface\\AddOns\\ShikiUI\\Media\\arrow.tga"
+M.ARROW_PICK = 1             -- secondes entre deux choix de cible
+M.ARROW_EVERY = 0.05         -- secondes entre deux mises a jour de l'angle
+M.ARROW_NEAR = 20            -- yards : "arrive"
+M.ARROW_SIZE = 44
+
+-- atan2 (math.atan2 en Lua 5.0 du client ; math.atan a deux arguments ailleurs)
+function M.Atan2(y, x)
+	if math.atan2 then return math.atan2(y, x) end
+	return math.atan(y, x)
+end
+
+-- Coordonnees de texture du coin (x, y) (droite, haut ; centre = 0) apres une rotation de a radians dans le sens inverse des aiguilles
+local function arrowUV(x, y, c, s)
+	return 0.5 + (x * c + y * s), 0.5 - (y * c - x * s)
+end
+
+function M.ArrowSetAngle(tex, a)
+	local c, s = math.cos(a), math.sin(a)
+	local ulx, uly = arrowUV(-0.5, 0.5, c, s)
+	local llx, lly = arrowUV(-0.5, -0.5, c, s)
+	local urx, ury = arrowUV(0.5, 0.5, c, s)
+	local lrx, lry = arrowUV(0.5, -0.5, c, s)
+	tex:SetTexCoord(ulx, uly, llx, lly, urx, ury, lrx, lry)
+end
+
+-- Cible : { x, y (0..1 sur la carte de la zone), w, h (yards), title } ou nil
+function M.ArrowPick()
+	local Cx = codex()
+	local gp = glob("GetPlayerMapPosition")
+	if not Cx or not gp then return nil end
+	local px, py = gp("player")
+	local c, z = Cx.MapCur()
+	if not px or (px == 0 and py == 0) or not c or not z or z <= 0 then return nil end
+	if M.atest and GetTime() < M.atest.till then return M.atest end
+	local srcs = M.Recs(c, z, "arrow")
+	local pinned = Cx.pin
+	if pinned and type(pinned.zones) == "table" and Cx.PinHere(pinned, c, z) then
+		srcs = { pinned }
+	end
+	local best, bd = nil, nil
+	for s = 1, getn(srcs) do
+		local rec = srcs[s]
+		local g = Cx.PinHere(rec, c, z)
+		local sz = g and (M.YARDS[g.zid] or { 4000, 2667 })
+		for k = 1, g and getn(g.pins) or 0 do
+			local d = g.pins[k]
+			local dx, dy = (d.x / 100 - px) * sz[1], (d.y / 100 - py) * sz[2]
+			local d2 = dx * dx + dy * dy
+			if not bd or d2 < bd then
+				bd = d2
+				best = { x = d.x / 100, y = d.y / 100, w = sz[1], h = sz[2], title = rec.t }
+			end
+		end
+	end
+	return best
+end
+
+-- Image : angle et distance
+function M.ArrowUpdate()
+	local f = M.arrow
+	if not f then return end
+	local now = GetTime()
+	if now >= (M.apick or 0) then
+		M.apick = now + M.ARROW_PICK
+		M.atgt = M.ArrowPick()
+	end
+	local t = M.atgt
+	local gp, gf = glob("GetPlayerMapPosition"), glob("GetPlayerFacing")
+	local px, py, face
+	if t and gp and gf then
+		px, py = gp("player")
+		face = gf()
+	end
+	if not t or not px or (px == 0 and py == 0) or type(face) ~= "number" then
+		f.tex:Hide()
+		f.txt:SetText("")
+		f.sub:SetText("")
+		return
+	end
+	local dx, dy = (t.x - px) * t.w, (t.y - py) * t.h
+	local dist = math.sqrt(dx * dx + dy * dy)
+	local near = dist < M.ARROW_NEAR
+	M.ArrowSetAngle(f.tex, -(M.Atan2(dx, -dy) + face))
+	local col = near and T.c.good or { T.Accent() }
+	f.tex:SetVertexColor(col[1], col[2], col[3], 1)
+	f.tex:Show()
+	f.txt:SetText(near and L("msg.questtrack.arrow.here") or L("msg.questtrack.arrow.dist", floor(dist + 0.5)))
+	if f.subFor ~= t.title then
+		f.subFor = t.title
+		f.sub:SetText(t.title or "")
+	end
+end
+
+function M.ArrowBuild()
+	if M.arrow then return M.arrow end
+	local f = CreateFrame("Frame", "ShikiUI_QuestArrow", UIParent)
+	f:SetWidth(M.ARROW_SIZE + 60)
+	f:SetHeight(M.ARROW_SIZE + 30)
+	f:SetFrameStrata("MEDIUM")
+	f.tex = f:CreateTexture(nil, "ARTWORK")
+	f.tex:SetTexture(M.ARROW_TEX)
+	f.tex:SetWidth(M.ARROW_SIZE)
+	f.tex:SetHeight(M.ARROW_SIZE)
+	f.tex:SetPoint("TOP", f, "TOP", 0, 0)
+	f.txt = T.Text(f, 12, T.c.text, "CENTER", true)
+	f.txt:SetPoint("TOP", f.tex, "BOTTOM", 0, -2)
+	f.sub = T.Text(f, 10, T.c.text, "CENTER", true)
+	f.sub:SetPoint("TOP", f.txt, "BOTTOM", 0, -1)
+	f.sub:SetWidth(M.ARROW_SIZE + 56)
+	f.sub:SetHeight(12)
+	f.elapsed = 0
+	f:SetScript("OnUpdate", function()
+		this.elapsed = this.elapsed + arg1
+		if this.elapsed < M.ARROW_EVERY then return end
+		this.elapsed = 0
+		M.ArrowUpdate()
+	end)
+	SUI.Mover.Register("questtrack.arrow", f, { label = "mod.questtrack.arrow.mover", point = "TOP", x = 0, y = -150 })
+	M.arrow = f
+	return f
+end
+
+-- Montre / cache la fleche selon l'option, le module et le Codex (sans lui, pas de coordonnees de quetes)
+function M.ArrowSync()
+	local want = M.on and C.Get("questtrack.arrow") and codex() ~= nil and true or false
+	if want then
+		local f = M.ArrowBuild()
+		f:Show()
+	elseif M.arrow then
+		M.arrow:Hide()
+		M.atgt, M.apick = nil, nil
+	end
+end
+
 -- ---------------------------------------------------------------- cycle de vie, commande
 -- Bouton "Quetes" autour de la minicarte (glissable) : affiche / masque le suivi de quetes
 function M.RingButton()
@@ -893,6 +1033,7 @@ end
 
 function M.OnKey(key, value)
 	if key == "questtrack.btn" or key == "questtrack.angle" then M.RingButton() end
+	if key == "questtrack.arrow" then M.ArrowSync() end
 	if not M.on then return end
 	M.Sync()
 	if M.frame then M.Paint() end
@@ -913,10 +1054,12 @@ function M.Enable()
 	M.Sync()
 	M.Queue()
 	M.RingButton()
+	M.ArrowSync()
 end
 
 function M.Disable()
 	M.on = false
+	M.ArrowSync()
 	M.RingButton()
 	SUI.Off("QUEST_LOG_UPDATE", M.Queue)
 	SUI.Off("PLAYER_ENTERING_WORLD", M.Queue)
@@ -939,8 +1082,26 @@ function M.Disable()
 	M.gready, M.gbuilding, M.gids, M.gby, M.gz = false, false, nil, nil, nil
 end
 
+-- /sui quests arrow : cible d'essai pendant 30 s (a 100 yards au nord-est de toi), pour voir la fleche sans quete dans la zone
+function M.ArrowTest()
+	local gp = glob("GetPlayerMapPosition")
+	local px, py = 0, 0
+	if gp then px, py = gp("player") end
+	if not px or (px == 0 and py == 0) then
+		SUI.Print(L("msg.questtrack.arrow.nopos"))
+		return
+	end
+	M.atest = { x = px + 100 / 4000, y = py - 100 / 2667, w = 4000, h = 2667, title = L("msg.questtrack.arrow.test"), till = GetTime() + 30 }
+	M.apick = 0
+	M.ArrowSync()
+end
+
 function M.Command(rest)
 	local arg = slower(rest or "")
+	if arg == "arrow" then
+		M.ArrowTest()
+		return
+	end
 	if arg == "show" or arg == "hide" then
 		C.Set("questtrack.show", arg == "show")
 	end
@@ -967,6 +1128,7 @@ SUI.RegisterModule("questtrack", {
 		opt("minigivers", "bool", 22.5, true, { simple = true }),
 		opt("miniedge", "bool", 23, true),
 		opt("btn", "bool", 21, true),
+		opt("arrow", "bool", 21.2, true, { simple = true }),
 		opt("angle", "number", 21.5, 270, { min = 0, max = 355, step = 5 }),
 		opt("pinsize", "number", 24, 16, { min = 12, max = 32, step = 1 }),
 		opt("giverlow", "number", 26, 6, { min = 0, max = 20, step = 1 }),
