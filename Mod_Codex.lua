@@ -1235,10 +1235,11 @@ M.PIN_MAX = 14                -- epingles gardees par zone et par quete (les don
 M.PIN_POOL = 160              -- epingles posees a la fois (quete epinglee + suivi + lieux utiles) = taille du pool (cadres crees a la demande)
 M.providers = {}              -- fournisseurs d'epingles par cle : "track" (suivi des quetes), "places" (lieux utiles) : function(c, z, ctx) -> liste d'enregistrements
 M.PROVORDER = { "track", "places" }
-M.PINCOL = {}                 -- couleur (fonction -> jeton de theme) des aspects "P<famille>" enregistres par le module des lieux
-M.PINTAG = {}                 -- marque d'un aspect de lieu
 M.trackFn = nil               -- fournisseur des quetes du suivi (module questtrack) : function() -> liste d'enregistrements resolus
-M.PIN_SIZE = 14
+M.PIN_SIZE = 20
+M.ICONDIR = "Interface\\AddOns\\ShikiUI\\Media\\Icons\\"
+-- Icones des aspects de quete (pfQuest, MIT) : ! a prendre, ? a rendre, epee = creature, sac = objet, rouage = objet du monde
+M.PINICON = { S = "available_c", E = "complete_c", O = "cluster_mob", I = "cluster_item", B = "cluster_misc" }
 M.PIN_DELAY = 0.2             -- silence attendu apres le dernier WORLD_MAP_UPDATE (la carte en envoie une centaine a l'ouverture)
 M.PIN_WATCH = 0.5             -- surveillance de l'ouverture / fermeture de la carte
 M.PINKINDS = { "S", "E", "O" }
@@ -1405,8 +1406,6 @@ end
 -- ---- cadres
 -- Couleur (jeton du theme) et marque d'un type d'epingle : depart !, fin ?, objectif o
 function M.PinColor(kind)
-	local pc = M.PINCOL[kind]
-	if pc then return pc() end
 	if kind == "S" then return T.c.warn end
 	if kind == "E" then return T.c.good end
 	if kind == "I" then return T.c.text end
@@ -1436,11 +1435,26 @@ function M.PinEntries(rec, d)
 	return nil
 end
 
--- Texte de l'epingle : le nombre de quetes quand elles sont plusieurs, sinon la marque de son aspect
+-- Texte de l'epingle : le nombre de quetes ou de lieux quand ils sont plusieurs, sinon rien (l'icone dit ce que c'est)
 function M.PinMark(vk, n)
-	if M.PINTAG[vk] then return M.PINTAG[vk] end
 	if n and n > 1 then return n > 9 and "9+" or tostring(n) end
-	return M.PINMARK[vk] or "o"
+	return ""
+end
+
+-- Icone d'une epingle : chemin et rognage (nil = image entiere). Un lieu porte sa propre icone (d.icon, d.tc).
+function M.PinIcon(d, vk)
+	if d.icon then return d.icon, d.tc end
+	return M.ICONDIR .. (M.PINICON[vk] or M.PINICON.O), nil
+end
+
+-- Pose l'icone d'un cadre (epingle de carte ou de minicarte) seulement si elle change
+function M.PaintIcon(p, d, vk)
+	local path, tc = M.PinIcon(d, vk)
+	local key = path .. (tc and (tc[1] .. "," .. tc[3]) or "")
+	if p.iconKey == key then return end
+	p.iconKey = key
+	p.tex:SetTexture(path)
+	if tc then p.tex:SetTexCoord(tc[1], tc[2], tc[3], tc[4]) else p.tex:SetTexCoord(0, 1, 0, 1) end
 end
 
 -- i-eme epingle du pool ; creee a la demande, HORS combat seulement (nil sinon : l'appelant reessaie plus tard)
@@ -1455,11 +1469,20 @@ function M.PinFrame(i)
 	p:SetHeight(M.PIN_SIZE)
 	p:SetFrameLevel(btn:GetFrameLevel() + 8)
 	p:EnableMouse(true)
-	T.Backdrop(p, T.c.warn, T.c.bg)
-	p.mark = T.Text(p, 10, T.c.bg, "CENTER")
-	p.mark:SetPoint("CENTER", p, "CENTER", 0, 0)
+	p.tex = p:CreateTexture(nil, "ARTWORK")
+	p.tex:SetAllPoints(p)
+	p.hl = p:CreateTexture(nil, "OVERLAY")
+	p.hl:SetTexture("Interface\\Minimap\\UI-Minimap-ZoomButton-Highlight")
+	p.hl:SetBlendMode("ADD")
+	p.hl:SetPoint("CENTER", p, "CENTER", 0, 0)
+	p.hl:SetWidth(M.PIN_SIZE * 1.6)
+	p.hl:SetHeight(M.PIN_SIZE * 1.6)
+	p.hl:Hide()
+	p.mark = T.Text(p, 10, T.c.text, "RIGHT", true)
+	p.mark:SetPoint("BOTTOMRIGHT", p, "BOTTOMRIGHT", 3, -2)
 	p.kind = "S"
-	p.mark:SetText(M.PINMARK.S)
+	p.mark:SetText("")
+	M.PaintIcon(p, { k = "S" }, "S")
 	p:SetScript("OnEnter", function() M.PinEnter(this) end)
 	p:SetScript("OnLeave", function() M.PinLeave(this) end)
 	p:RegisterForClicks("LeftButtonUp", "RightButtonUp")
@@ -1474,8 +1497,7 @@ function M.PinEnter(p)
 	local rec, d = p.rec or M.pin, p.data
 	local tt = glob("WorldMapTooltip") or glob("GameTooltip")
 	if not rec or not d or not tt then return end
-	local r, g, bl = T.Accent()
-	p:SetBackdropBorderColor(r, g, bl, 1)
+	p.hl:Show()
 	tt:SetOwner(p, "ANCHOR_LEFT")
 	if d.k == "P" then
 		tt:SetText(d.title or "")
@@ -1499,7 +1521,7 @@ function M.PinEnter(p)
 end
 
 function M.PinLeave(p)
-	T.Backdrop(p, M.PinColor(p.kind), T.c.bg)
+	p.hl:Hide()
 	local tt = glob("WorldMapTooltip") or glob("GameTooltip")
 	if tt then tt:Hide() end
 end
@@ -1795,10 +1817,8 @@ function M.PinRefresh()
 				p.data = d
 				p.rec = rec
 				p.entries = M.PinEntries(rec, d)
-				if p.kind ~= vk then
-					p.kind = vk
-					T.Backdrop(p, M.PinColor(vk), T.c.bg)
-				end
+				p.kind = vk
+				M.PaintIcon(p, d, vk)
 				local mk = M.PinMark(vk, p.entries and getn(p.entries) or 0)
 				if p.markText ~= mk then
 					p.markText = mk
@@ -2799,11 +2819,52 @@ function M.Reset()
 	M.selQuest = nil
 end
 
+-- Bouton "Codex" autour de la minicarte (glissable)
+function M.RingButton()
+	local want = M.on and C.Get("codex.btn") and true or false
+	local b = M.rbtn
+	if not b and want then
+		local mm = getglobal("Minimap")
+		if not mm or SUI.InCombat() then return end
+		b = T.Button(mm, L("msg.codex.btn"), 46, 22, function() M.Toggle() end)
+		b.suiOwn = true
+		b:SetFrameStrata("HIGH")
+		b:SetFrameLevel((mm:GetFrameLevel() or 0) + 12)
+		b:SetScript("OnEnter", M.RingEnter)
+		b:SetScript("OnLeave", M.RingLeave)
+		SUI.MiniRing.Drag(b, "codex.angle", 235)
+		M.rbtn = b
+	end
+	if b then
+		if want then
+			if not b.ringDrag then SUI.MiniRing.Place(b, "codex.angle", 235) end
+			b:Show()
+		else
+			b:Hide()
+		end
+	end
+end
+
+function M.RingEnter()
+	local r, g, bl = T.Accent()
+	this:SetBackdropBorderColor(r, g, bl, 1)
+	GameTooltip:SetOwner(this, "ANCHOR_LEFT")
+	GameTooltip:AddLine(L("mod.codex.title"))
+	GameTooltip:AddLine(L("msg.codex.btn.tip"), T.c.dim[1], T.c.dim[2], T.c.dim[3])
+	GameTooltip:Show()
+end
+
+function M.RingLeave()
+	this:SetBackdropBorderColor(T.c.border[1], T.c.border[2], T.c.border[3], 1)
+	GameTooltip:Hide()
+end
+
 function M.OnKey(key, value)
 	if key == "codex.minlevel" or key == "codex.server" then
 		M.Reset()
 		if M.win and M.win.f:IsShown() then M.Open() end
 	end
+	if key == nil or key == "codex.btn" or key == "codex.angle" then M.RingButton() end
 end
 
 function M.Enable()
@@ -2816,6 +2877,7 @@ function M.Enable()
 	M.PinRestore()
 	if SUI.QuestTrack then SUI.QuestTrack.Sync() end
 	if SUI.Places then SUI.Places.Sync() end
+	M.RingButton()
 end
 
 function M.Disable()
@@ -2832,6 +2894,7 @@ function M.Disable()
 	M.moved = false
 	M.mapIdx = nil
 	M.selQuest = nil
+	M.RingButton()
 end
 
 SUI.RegisterCategory("codex", 79)
@@ -2846,6 +2909,8 @@ SUI.RegisterModule("codex", {
 			default = true, simple = true, order = 10 },
 		{ key = "codex.maxresults", type = "number", cat = "codex", label = "opt.codex.maxresults", tip = "tip.codex.maxresults",
 			min = 20, max = 200, step = 10, default = 40, order = 20 },
+		{ key = "codex.btn", type = "bool", cat = "codex", label = "opt.codex.btn", tip = "tip.codex.btn", default = true, simple = true, order = 40 },
+		{ key = "codex.angle", type = "number", cat = "codex", label = "opt.codex.angle", tip = "tip.codex.angle", min = 0, max = 355, step = 5, default = 235, order = 41 },
 		{ key = "codex.minlevel", type = "number", cat = "codex", label = "opt.codex.minlevel", tip = "tip.codex.minlevel",
 			min = 0, max = 60, step = 5, default = 0, order = 30 },
 	},

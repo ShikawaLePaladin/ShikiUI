@@ -62,6 +62,31 @@ M.PROF = {
 	{ 113, { "tailor", "couture" } },
 	{ 114, { "survival", "survie" } },
 }
+-- Icones des familles (fichiers de ShikiUIMediaIcons, pfQuest MIT) ; entraineurs : icone de classe du client ou icone de metier
+M.ICONFILE = { repair = "repair", auctioneer = "auctioneer", banker = "banker", mailbox = "mailbox", vendor = "vendor", stablemaster = "stablemaster",
+	flight = "flight", innkeeper = "innkeeper", battlemaster = "battlemaster", meetingstone = "meetingstone", spirithealer = "spirithealer",
+	trainer = "icon_npc", herbs = "herbs", mines = "mines", fish = "fish", chests = "chests" }
+M.CLASSTC = {
+	[1] = { 0, 0.25, 0, 0.25 }, [8] = { 0.25, 0.49609375, 0, 0.25 }, [4] = { 0.49609375, 0.7421875, 0, 0.25 }, [11] = { 0.7421875, 0.98828125, 0, 0.25 },
+	[3] = { 0, 0.25, 0.25, 0.5 }, [7] = { 0.25, 0.49609375, 0.25, 0.5 }, [5] = { 0.49609375, 0.7421875, 0.25, 0.5 }, [9] = { 0.7421875, 0.98828125, 0.25, 0.5 },
+	[2] = { 0, 0.25, 0.5, 0.75 }, [20] = { 0, 0.25, 0.25, 0.5 },
+}
+M.CLASSTEX = "Interface\\WorldStateFrame\\Icons-Classes"
+M.PROFICON = { [101] = "Trade_Alchemy", [102] = "Trade_BlackSmithing", [103] = "INV_Misc_Food_15", [104] = "Trade_Engraving", [105] = "Trade_Engineering",
+	[106] = "Spell_Holy_SealOfSacrifice", [107] = "Trade_Fishing", [108] = "Spell_Nature_NatureTouchGrow", [109] = "INV_Misc_Gem_01",
+	[110] = "Trade_LeatherWorking", [111] = "Trade_Mining", [112] = "INV_Misc_Pelt_Wolf_01", [113] = "Trade_Tailoring", [115] = "Ability_Poisons" }
+
+-- Icone (chemin, rognage) d'une famille ; pour un entraineur selon sa categorie
+function M.IconOf(key, tag)
+	local Cx = SUI.Codex
+	local dir = Cx and Cx.ICONDIR or "Interface\\AddOns\\ShikiUI\\Media\\Icons\\"
+	if key == "trainer" and tag then
+		if M.CLASSTC[tag] then return M.CLASSTEX, M.CLASSTC[tag] end
+		if M.PROFICON[tag] then return "Interface\\Icons\\" .. M.PROFICON[tag], nil end
+	end
+	return dir .. (M.ICONFILE[key] or "icon_npc"), nil
+end
+
 M.CLASSID = { WARRIOR = 1, PALADIN = 2, HUNTER = 3, ROGUE = 4, PRIEST = 5, SHAMAN = 7, MAGE = 8, WARLOCK = 9, DRUID = 11 }
 
 local function glob(name)
@@ -152,9 +177,10 @@ function M.Name(pl, id)
 end
 
 -- Enregistrement { zones = { g } } d'une zone de donnees (nil si les noms de zones des quetes ne sont pas chargeables)
-function M.ZRec(Cx, zid)
+function M.ZRec(Cx, zid, ctx)
 	M.zrec = M.zrec or {}
-	local r = M.zrec[zid]
+	local zkey = zid .. (ctx or "")
+	local r = M.zrec[zkey]
 	if r ~= nil then return r end
 	local P = Cx.P
 	local en, fr
@@ -164,7 +190,7 @@ function M.ZRec(Cx, zid)
 	else
 		r = false
 	end
-	M.zrec[zid] = r
+	M.zrec[zkey] = r
 	return r
 end
 
@@ -186,8 +212,8 @@ function M.ZoneOf(Cx, pl, c, z)
 end
 
 -- ---------------------------------------------------------------- filtres
-function M.KindOn(key)
-	return C.Get("places." .. key) and true or false
+function M.KindOn(key, ctx)
+	return C.Get((ctx == "mini" and "places.m." or "places.") .. key) and true or false
 end
 
 -- Un lieu (famille, faction, categorie) est-il a montrer pour ce joueur ?
@@ -210,10 +236,10 @@ function M.Wanted(key, fac, tag, me)
 end
 
 -- ---------------------------------------------------------------- regroupement
-local function optSig()
-	local s = lang()
+local function optSig(ctx)
+	local s = lang() .. (ctx or "")
 	for i = 1, getn(M.KINDS) do
-		s = s .. (M.KindOn(M.KINDS[i][1]) and "1" or "0")
+		s = s .. (M.KindOn(M.KINDS[i][1], ctx) and "1" or "0")
 	end
 	return s .. (C.Get("places.faction") and "1" or "0") .. (C.Get("places.mine") and "1" or "0") .. (C.Get("places.mounts") and "1" or "0")
 end
@@ -247,24 +273,25 @@ local function entryList(pins)
 end
 
 -- Epingles (regroupees) de la zone de donnees zid pour ce joueur
-function M.BuildPins(pl, zid, me)
+function M.BuildPins(pl, zid, me, ctx)
 	local zd = pl.z[zid]
 	local pins, cells = {}, {}
 	if not zd then return pins end
 	for ki = 1, getn(M.KINDS) do
 		local key = M.KINDS[ki][1]
 		local arr = zd[key]
-		if arr and M.KindOn(key) then
+		if arr and M.KindOn(key, ctx) then
 			local vk = "P" .. key
 			for i = 1, getn(arr), 4 do
 				local packed, id, fac, tag = arr[i], arr[i + 1], arr[i + 2], arr[i + 3]
 				if M.Wanted(key, fac, tag, me) then
 					local xi = floor(packed / 1024)
 					local x, y = xi / 10, (packed - xi * 1024) / 10
-					local ck = key .. ":" .. floor(x / M.CELL) * 1000 + floor(y / M.CELL)
+					local ck = key .. ":" .. (key == "trainer" and tag or 0) .. ":" .. floor(x / M.CELL) * 1000 + floor(y / M.CELL)
 					local pin = cells[ck]
 					if not pin then
 						pin = { k = "P", vk = vk, kind = key, x = x, y = y, sx = 0, sy = 0, n = 0, ents = {}, by = {} }
+						pin.icon, pin.tc = M.IconOf(key, tag)
 						cells[ck] = pin
 						tinsert(pins, pin)
 					end
@@ -296,19 +323,21 @@ function M.Recs(c, z, ctx)
 	local Cx = codex()
 	if not Cx or not M.on or not C.Get("places.show") or not c or not z or z <= 0 then return {} end
 	if ctx == "mini" and not C.Get("places.mini") then return {} end
+	if ctx ~= "mini" then M.FilterButtons() end
 	local pl = M.Load()
 	if not pl then return {} end
 	local zid = M.ZoneOf(Cx, pl, c, z)
 	if not zid then return {} end
-	local rec = M.ZRec(Cx, zid)
+	local cx = ctx == "mini" and "mini" or "map"
+	local rec = M.ZRec(Cx, zid, cx)
 	if not rec then return {} end
 	local me = M.Me()
-	local sig = optSig() .. "|" .. me.key
+	local sig = optSig(cx) .. "|" .. me.key
 	M.zsig = M.zsig or {}
-	if M.zsig[zid] ~= sig then
-		M.zsig[zid] = sig
+	if M.zsig[zid .. cx] ~= sig then
+		M.zsig[zid .. cx] = sig
 		local g = rec.zones[1]
-		g.pins = M.BuildPins(pl, zid, me)
+		g.pins = M.BuildPins(pl, zid, me, cx)
 		g.n = getn(g.pins)
 		rec.n = g.n
 	end
@@ -318,7 +347,7 @@ function M.Recs(c, z, ctx)
 	if f and f.zid == zid then
 		if not M.focusRec then
 			M.focusRec = { id = -3, t = L("msg.places.title"), cap = 1, n = 1, zones = { { en = rec.zones[1].en, fr = rec.zones[1].fr, map = rec.zones[1].map, zid = zid, n = 1,
-				pins = { { k = "P", vk = "P" .. f.kind, kind = f.kind, x = f.x, y = f.y, title = L("msg.places.nearest", f.name), head = f.name,
+				pins = { { k = "P", vk = "P" .. f.kind, kind = f.kind, icon = M.IconOf(f.kind, nil), x = f.x, y = f.y, title = L("msg.places.nearest", f.name), head = f.name,
 					lines = { f.name }, q = { { place = true, title = f.name } } } } } } }
 		end
 		tinsert(out, M.focusRec)
@@ -397,6 +426,188 @@ function M.Nearest(word)
 	if SUI.QuestTrack and SUI.QuestTrack.MiniSync then SUI.QuestTrack.MiniSync() end
 end
 
+-- ---------------------------------------------------------------- choix de ce qui est affiche (carte et minicarte)
+-- Une fenetre de cases a cocher, une ligne par famille (icone, nom, case Carte, case Mini). Deux exemplaires : sur la carte du monde (bouton Filtres en haut
+-- a droite de la carte) et sous la minicarte (petit bouton). Les cases lisent et ecrivent les memes options que le menu ; aucune minuterie.
+M.FROW = 22
+M.FW = 280
+M.panels = {}
+M.fbtn = {}
+
+function M.FilterRows()
+	if M.frows then return M.frows end
+	local rows = {}
+	tinsert(rows, { head = "msg.places.f.quests" })
+	tinsert(rows, { file = "available_c", label = "msg.places.f.givers", map = "questtrack.givers", mini = "questtrack.minigivers" })
+	tinsert(rows, { file = "cluster_mob", label = "msg.places.f.objectives", map = "questtrack.pins", mini = "questtrack.mini" })
+	tinsert(rows, { head = "msg.places.f.places" })
+	for i = 1, getn(M.KINDS) do
+		local k = M.KINDS[i][1]
+		tinsert(rows, { kind = k, label = "msg.places.k." .. k, map = "places." .. k, mini = "places.m." .. k })
+	end
+	M.frows = rows
+	return rows
+end
+
+local function mkCheck(f, key, x, y)
+	local b = T.Check(f, function(on) C.Set(key, on and true or false) end)
+	b:SetPoint("TOPLEFT", f, "TOPLEFT", x, y + 2)
+	return b
+end
+
+local function mkMode(f, mode, x, y)
+	local b = T.Button(f, L("msg.places.f." .. mode), 70, 20, function() M.FilterSet(mode) end)
+	b:SetPoint("TOPLEFT", f, "TOPLEFT", x, y)
+end
+
+function M.FilterBuild(where)
+	local pn = M.panels[where]
+	if pn then return pn end
+	local parent = glob(where == "map" and "WorldMapButton" or "UIParent")
+	if not parent or SUI.InCombat() then return nil end
+	local Cx = SUI.Codex
+	local dir = Cx and Cx.ICONDIR or "Interface\\AddOns\\ShikiUI\\Media\\Icons\\"
+	local rows = M.FilterRows()
+	local f = CreateFrame("Frame", nil, parent)
+	f:SetWidth(M.FW)
+	f:SetHeight(86 + getn(rows) * M.FROW)
+	f:EnableMouse(true)
+	f:SetFrameStrata("FULLSCREEN_DIALOG")
+	f:SetFrameLevel(parent:GetFrameLevel() + 20)
+	T.Backdrop(f, T.c.bg, T.c.border)
+	local title = T.Text(f, 12, T.c.text, "LEFT")
+	title:SetPoint("TOPLEFT", f, "TOPLEFT", 10, -9)
+	title:SetText(L("msg.places.f.title"))
+	local x1, x2 = M.FW - 86, M.FW - 44
+	local h1 = T.Text(f, 10, T.c.dim, "CENTER")
+	h1:SetPoint("TOP", f, "TOPLEFT", x1 + 8, -30)
+	h1:SetText(L("msg.places.f.map"))
+	local h2 = T.Text(f, 10, T.c.dim, "CENTER")
+	h2:SetPoint("TOP", f, "TOPLEFT", x2 + 8, -30)
+	h2:SetText(L("msg.places.f.mini"))
+	local close = T.Button(f, "x", 18, 18, function() f:Hide() end)
+	close:SetPoint("TOPRIGHT", f, "TOPRIGHT", -5, -5)
+	f.ent = {}
+	for i = 1, getn(rows) do
+		local r = rows[i]
+		local y = -48 - (i - 1) * M.FROW
+		if r.head then
+			local t = T.Text(f, 11, T.c.dim, "LEFT")
+			t:SetPoint("TOPLEFT", f, "TOPLEFT", 10, y - 2)
+			t:SetText(L(r.head))
+		else
+			local ic = f:CreateTexture(nil, "ARTWORK")
+			ic:SetWidth(18)
+			ic:SetHeight(18)
+			ic:SetPoint("TOPLEFT", f, "TOPLEFT", 12, y + 1)
+			local path, tc
+			if r.kind then path, tc = M.IconOf(r.kind, nil) else path = dir .. r.file end
+			ic:SetTexture(path)
+			if tc then ic:SetTexCoord(tc[1], tc[2], tc[3], tc[4]) end
+			local t = T.Text(f, 11, T.c.text, "LEFT")
+			t:SetPoint("TOPLEFT", f, "TOPLEFT", 36, y - 2)
+			t:SetText(L(r.label))
+			tinsert(f.ent, { row = r, cm = mkCheck(f, r.map, x1, y), cn = mkCheck(f, r.mini, x2, y) })
+		end
+	end
+	local by = -(48 + getn(rows) * M.FROW + 6)
+	local modes = { "all", "none", "default" }
+	for i = 1, 3 do mkMode(f, modes[i], 10 + (i - 1) * 76, by) end
+	f:Hide()
+	M.panels[where] = f
+	return f
+end
+
+function M.FilterRefresh(f)
+	if not f or not f.ent then return end
+	for i = 1, getn(f.ent) do
+		local e = f.ent[i]
+		T.SetCheck(e.cm, C.Get(e.row.map) and true or false)
+		T.SetCheck(e.cn, C.Get(e.row.mini) and true or false)
+	end
+end
+
+function M.FilterRefreshAll()
+	for _, f in pairs(M.panels) do
+		if f:IsShown() then M.FilterRefresh(f) end
+	end
+end
+
+-- Tout / rien / defaut pour les lieux (les deux colonnes)
+function M.FilterSet(mode)
+	for i = 1, getn(M.KINDS) do
+		local k = M.KINDS[i]
+		local v
+		if mode == "all" then v = true elseif mode == "none" then v = false else v = k[4] end
+		C.Set("places." .. k[1], v)
+		C.Set("places.m." .. k[1], v)
+	end
+end
+
+function M.FilterToggle(where)
+	if not M.on then
+		SUI.Print(L("msg.places.f.nomod"))
+		return
+	end
+	local f = M.FilterBuild(where)
+	if not f then return end
+	if f:IsShown() then
+		f:Hide()
+		return
+	end
+	f:ClearAllPoints()
+	if where == "map" then
+		f:SetPoint("TOPRIGHT", glob("WorldMapButton"), "TOPRIGHT", -12, -38)
+	else
+		local mm = glob("Minimap")
+		f:SetPoint("TOPRIGHT", mm, "BOTTOMRIGHT", 0, -22)
+	end
+	M.FilterRefresh(f)
+	f:Show()
+end
+
+-- Boutons Filtres : sur la carte (toujours) et sous la minicarte (option) ; crees hors combat, caches quand le module est coupe
+function M.FilterButtons()
+	local want = M.on and true or false
+	local b = M.fbtn.map
+	if not b and want then
+		local btn = glob("WorldMapButton")
+		if btn and not SUI.InCombat() then
+			b = T.Button(btn, L("msg.places.f.btn"), 72, 20, function() M.FilterToggle("map") end)
+			b:SetPoint("TOPRIGHT", btn, "TOPRIGHT", -12, -12)
+			b:SetFrameLevel(btn:GetFrameLevel() + 15)
+			M.fbtn.map = b
+		end
+	end
+	if b then
+		if want then b:Show() else b:Hide() end
+	end
+	local m = M.fbtn.mini
+	local wantMini = want and C.Get("places.minibutton") and true or false
+	if not m and wantMini then
+		local mm = glob("Minimap")
+		if mm and not SUI.InCombat() then
+			m = T.Button(mm, L("msg.places.f.btn"), 56, 18, function() M.FilterToggle("mini") end)
+			m.suiOwn = true
+			m:SetFrameStrata("HIGH")
+			m:SetFrameLevel((mm:GetFrameLevel() or 0) + 12)
+			SUI.MiniRing.Drag(m, "places.angle", 305)
+			M.fbtn.mini = m
+		end
+	end
+	if m then
+		if wantMini then
+			if not m.ringDrag then SUI.MiniRing.Place(m, "places.angle", 305) end
+			m:Show()
+		else
+			m:Hide()
+		end
+	end
+	if not want then
+		for _, f in pairs(M.panels) do f:Hide() end
+	end
+end
+
 -- ---------------------------------------------------------------- branchement
 function M.MiniWanted()
 	return M.on and C.Get("places.show") and C.Get("places.mini") and true or false
@@ -414,20 +625,6 @@ function M.Sync()
 	local Cx = SUI.Codex
 	if not Cx or not Cx.PinTrack then return end
 	local want = M.on and Cx.on and C.Get("places.show") and true or false
-	if want then
-		for i = 1, getn(M.KINDS) do
-			local k = M.KINDS[i]
-			Cx.PINTAG["P" .. k[1]] = k[2]
-			local g = k[3]
-			Cx.PINCOL["P" .. k[1]] = function()
-				if g == "svc" then return T.c.text end
-				if g == "trv" then return T.c.good end
-				if g == "res" then return T.c.dim end
-				local r, gg, b = T.Accent()
-				return { r, gg, b, 1 }
-			end
-		end
-	end
 	if want and Cx.providers.places ~= M.Recs then
 		Cx.PinTrack(M.Recs, "places")
 	elseif not want and Cx.providers.places == M.Recs then
@@ -440,6 +637,12 @@ function M.OnKey()
 	if not M.on then return end
 	M.Sync()
 	M.Refresh()
+	M.FilterButtons()
+	M.FilterRefreshAll()
+end
+
+function M.OnQKey()
+	if M.on then M.FilterRefreshAll() end
 end
 
 function M.Enable()
@@ -450,8 +653,10 @@ function M.Enable()
 	if not M.watching then
 		M.watching = true
 		C.Watch("places.", M.OnKey)
+		C.Watch("questtrack.", M.OnQKey)
 	end
 	M.Sync()
+	M.FilterButtons()
 end
 
 function M.Disable()
@@ -459,6 +664,7 @@ function M.Disable()
 	SUI.Off("SKILL_LINES_CHANGED", M.OnSkills)
 	SUI.Off("PLAYER_ENTERING_WORLD", M.OnSkills)
 	M.Sync()
+	M.FilterButtons()
 	M.me, M.zsig, M.zrec, M.zcur, M.focus, M.focusRec = nil, nil, nil, nil, nil, nil
 end
 
@@ -467,6 +673,11 @@ function M.Command(rest)
 	a = slower(a or "")
 	if a == "near" or a == "proche" then
 		M.Nearest(b)
+		return
+	end
+	if a == "filters" or a == "filtres" then
+		local wm = glob("WorldMapFrame")
+		M.FilterToggle(wm and wm:IsShown() and "map" or "mini")
 		return
 	end
 	if a == "off" or a == "clear" then
@@ -489,10 +700,13 @@ local OPTS = {
 	opt("faction", "bool", 14, true),
 	opt("mine", "bool", 16, true, { simple = true }),
 	opt("mounts", "bool", 18, false),
+	opt("minibutton", "bool", 19, true),
+	opt("angle", "number", 19.5, 305, { min = 0, max = 355, step = 5 }),
 }
 for i = 1, getn(M.KINDS) do
 	local k = M.KINDS[i]
 	tinsert(OPTS, opt(k[1], "bool", 30 + i, k[4], { simple = (k[4] and true or false) }))
+	tinsert(OPTS, opt("m." .. k[1], "bool", 60 + i, k[4]))
 end
 
 SUI.RegisterCategory("places", 81)

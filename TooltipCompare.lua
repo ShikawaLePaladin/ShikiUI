@@ -438,7 +438,10 @@ function K.Watch()
 			K.lastAge = (K.lastAge or 99) + dt
 		end
 		local cur = K.last
-		if K.lastAge > GRACE then cur = nil end
+		if K.lastAge > GRACE then
+			cur = nil
+			K.tgE, K.tgC = false, false      -- le curseur a quitte l'objet : l'affichage bascule repart a zero (sinon il reste coince sur l'objet suivant)
+		end
 		-- Une pression sur la touche (front montant) bascule l'affichage : maintenir la touche enfoncee fait deriver Windows
 		-- (repetition de touche), donc on ne lit pas l'etat maintenu.
 		local sd = IsShiftKeyDown() and true or false
@@ -478,6 +481,7 @@ function K.Wake()
 	K.idleE, K.idleC = 0, 0
 	if not K.running then
 		K.running = true
+		K.prevS, K.prevC = IsShiftKeyDown() and true or false, IsControlKeyDown() and true or false   -- sinon une touche relachee pendant l'arret compte comme enfoncee et la 1re pression est perdue
 		K.watch:SetScript("OnUpdate", K.tick)
 	end
 end
