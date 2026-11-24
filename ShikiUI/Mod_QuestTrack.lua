@@ -42,10 +42,12 @@ function M.Read()
 	if not ok or type(n) ~= "number" then return nil end
 	local gnb, gb = glob("GetNumQuestLeaderBoards"), glob("GetQuestLogLeaderBoard")
 	local out = {}
+	local zone = nil
 	for i = 1, n do
 		local ok2, title, level, _, isHeader, _, isComplete = pcall(gt, i)
+		if ok2 and type(title) == "string" and isHeader then zone = title end
 		if ok2 and type(title) == "string" and not isHeader then
-			local e = { i = i, title = title, level = tonumber(level) or 0, complete = (isComplete == 1), objs = {} }
+			local e = { i = i, title = title, level = tonumber(level) or 0, complete = (isComplete == 1), objs = {}, zone = zone }
 			if gnb and gb then
 				local ok3, no = pcall(gnb, i)
 				if ok3 and type(no) == "number" then
@@ -131,6 +133,77 @@ function M.Resolve(e)
 	end
 	e.id = best or any
 	return e.id
+end
+
+-- ---------------------------------------------------------------- choix des quetes affichees
+-- "questtrack.hide" : cles "titre#niveau" des quetes retirees de la liste, separees par "|" (cle hors menu). Tout le reste du journal est affiche.
+-- "questtrack.arrowq" : cle de la quete visee par la fleche ("" = la plus proche). M.list reste le journal entier ; M.View() est ce qu'on montre.
+M.MAXHIDE = 60
+SUI.Config.Register({ ["questtrack.hide"] = "", ["questtrack.arrowq"] = "" })
+
+function M.Key(e)
+	local k = string.gsub(e.title, "|", "")
+	return k .. "#" .. e.level
+end
+
+local function hideSet()
+	local s = C.Get("questtrack.hide")
+	if type(s) ~= "string" then return "" end
+	return s
+end
+
+function M.IsShown(e)
+	return not string.find("|" .. hideSet() .. "|", "|" .. M.Key(e) .. "|", 1, true)
+end
+
+-- Montre / retire une quete de la liste (enregistre ; les plus anciennes retraits sont oublies au-dela de M.MAXHIDE)
+function M.SetShown(e, on)
+	local key = M.Key(e)
+	local arr = {}
+	for k in string.gfind(hideSet(), "[^|]+") do
+		if k ~= key then tinsert(arr, k) end
+	end
+	if not on then tinsert(arr, key) end
+	while getn(arr) > M.MAXHIDE do table.remove(arr, 1) end
+	C.Set("questtrack.hide", table.concat(arr, "|"))
+end
+
+function M.SetAllShown(on)
+	if on then
+		C.Set("questtrack.hide", "")
+		return
+	end
+	local arr = {}
+	for i = 1, getn(M.list) do tinsert(arr, M.Key(M.list[i])) end
+	while getn(arr) > M.MAXHIDE do table.remove(arr, 1) end
+	C.Set("questtrack.hide", table.concat(arr, "|"))
+end
+
+local function zoneNow()
+	local f = glob("GetRealZoneText") or glob("GetZoneText")
+	if not f then return nil end
+	local ok, z = pcall(f)
+	if ok and type(z) == "string" and z ~= "" then return z end
+	return nil
+end
+
+-- Quetes montrees : le journal sans les retraits ; zoneOnly (liste a l'ecran seulement) : seulement celles de la zone ou tu es, si elle est connue
+function M.View(zoneOnly)
+	local out = {}
+	local zn = zoneOnly and C.Get("questtrack.zoneonly") and zoneNow() or nil
+	for i = 1, getn(M.list) do
+		local e = M.list[i]
+		if M.IsShown(e) and (not zn or e.zone == zn) then tinsert(out, e) end
+	end
+	return out
+end
+
+function M.NumShown()
+	local n = 0
+	for i = 1, getn(M.list) do
+		if M.IsShown(M.list[i]) then n = n + 1 end
+	end
+	return n
 end
 
 -- ---------------------------------------------------------------- enregistrements de carte (fournisseur du Codex)
@@ -332,6 +405,21 @@ function M.GiverRec(Cx, c, z)
 	return out
 end
 
+-- Enregistrement de carte d'une quete du journal (objectifs, ou rendu si terminee) ; nil si inconnue / sans epingle. Mis en cache.
+function M.EntryRec(Cx, e)
+	local id = M.Resolve(e)
+	if not id then return nil end
+	local kind = e.complete and "E" or "O"
+	local key = id .. ":" .. kind
+	local rec = M.recs[key]
+	if rec == nil then
+		local full = Cx.PinBuild(id)
+		rec = full and filtered(full, kind) or false
+		M.recs[key] = rec
+	end
+	return rec or nil
+end
+
 -- Fournisseur appele par le Codex (carte ouverte seulement) : une liste d'enregistrements resolus pour les quetes du journal
 function M.Recs(c, z, ctx)
 	local Cx = codex()
@@ -341,20 +429,10 @@ function M.Recs(c, z, ctx)
 	local wantGiv = (ctx ~= "arrow") and C.Get(mini and "questtrack.minigivers" or "questtrack.givers") and true or false
 	if not wantObj and not wantGiv then return {} end
 	local out = {}
-	for i = 1, wantObj and getn(M.list) or 0 do
-		local e = M.list[i]
-		local id = M.Resolve(e)
-		if id then
-			local kind = e.complete and "E" or "O"
-			local key = id .. ":" .. kind
-			local rec = M.recs[key]
-			if rec == nil then
-				local full = Cx.PinBuild(id)
-				rec = full and filtered(full, kind) or false
-				M.recs[key] = rec
-			end
-			if rec then tinsert(out, rec) end
-		end
+	local view = wantObj and M.View() or {}
+	for i = 1, getn(view) do
+		local rec = M.EntryRec(Cx, view[i])
+		if rec then tinsert(out, rec) end
 	end
 	if wantGiv then
 		if M.gready then
@@ -682,7 +760,8 @@ function M.Row(i)
 	b:EnableMouse(true)
 	b.txt = T.Text(b, 11, T.c.warn, "LEFT")
 	b.txt:SetPoint("LEFT", b, "LEFT", 0, 0)
-	b:SetScript("OnClick", function() M.OnTitle(this) end)
+	b:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+	b:SetScript("OnClick", function() M.OnTitle(this, arg1) end)
 	if SUI.Mover and SUI.Mover.QuickDrag then
 		b:RegisterForDrag("LeftButton")
 		b:SetScript("OnDragStart", function()
@@ -713,6 +792,10 @@ function M.Build()
 	T.Backdrop(f, T.c.bg, T.c.border)
 	f:Hide()
 	M.frame = f
+	f.head = T.Text(f, 11, T.c.dim, "LEFT")
+	f.head:SetPoint("TOPLEFT", f, "TOPLEFT", M.PAD, -M.PAD - 1)
+	f.pick = T.Button(f, L("msg.questtrack.pick.btn"), 58, 15, function() M.PickToggle() end)
+	f.pick:SetPoint("TOPRIGHT", f, "TOPRIGHT", -M.PAD, -M.PAD + 1)
 	if SUI.Mover and SUI.Mover.Register then
 		SUI.Mover.Register("questtrack", f, { label = "mod.questtrack.mover", point = "TOPRIGHT", x = -110, y = -200 })
 		SUI.Mover.QuickDrag(f, "questtrack", M.DragOn)
@@ -730,19 +813,24 @@ end
 function M.Paint()
 	local f = M.frame
 	if not f then return end
-	local n = getn(M.list)
-	local max = C.Get("questtrack.max")
-	if n > max then n = max end
-	if n > M.MAXQ then n = M.MAXQ end
-	if n == 0 or not C.Get("questtrack.show") then
+	local total = getn(M.list)
+	if total == 0 or not C.Get("questtrack.show") then
 		f:Hide()
 		return
 	end
+	local view = M.View(true)
+	local n = getn(view)
+	local max = C.Get("questtrack.max")
+	if n > max then n = max end
+	if n > M.MAXQ then n = M.MAXQ end
 	local w = C.Get("questtrack.width")
 	f:SetWidth(w)
-	local y = M.PAD
+	f.head:SetText(L("msg.questtrack.head", getn(M.View()), total))
+	f.head:SetWidth(w - 2 * M.PAD - 62)
+	T.SetButtonText(f.pick, L("msg.questtrack.pick.btn"))
+	local y = M.PAD + 18
 	for i = 1, n do
-		local e = M.list[i]
+		local e = view[i]
 		local r = M.Row(i)
 		local b = r.btn
 		b.entry = e
@@ -811,6 +899,8 @@ function M.Scan()
 	end
 	M.Build()
 	M.Paint()
+	M.PickPaint()
+	M.LogPaint()
 	if codex() and not M.resTask and not M.listResolved(list) then M.resTask = SUI.After(2, M.ResolveAll, "questtrack.res") end
 	local Cx = SUI.Codex
 	if Cx and Cx.trackFn == M.Recs and Cx.PinOnMapEvent then Cx.PinOnMapEvent() end
@@ -822,9 +912,49 @@ function M.Queue()
 end
 
 -- ---------------------------------------------------------------- souris
-function M.OnTitle(b)
+-- Maj+clic : "[titre]" dans la ligne de saisie du chat ; Ctrl+clic : la quete s'ouvre dans le journal du jeu
+function M.ChatLink(e)
+	local eb = glob("ChatFrameEditBox")
+	if eb and eb.IsVisible and eb:IsVisible() and eb.Insert then eb:Insert("[" .. e.title .. "]") end
+end
+
+function M.OpenLog(e)
+	local sel = glob("SelectQuestLogEntry")
+	if sel then pcall(sel, e.i) end
+	local f = glob("QuestLogFrame")
+	local show = glob("ShowUIPanel")
+	if f and show then
+		if f:IsVisible() then
+			local upd = glob("QuestLog_Update")
+			if upd then upd() end
+		else
+			show(f)
+		end
+	end
+end
+
+function M.OnTitle(b, button)
 	local e = b.entry
 	if not e then return end
+	local shift, ctrl = glob("IsShiftKeyDown"), glob("IsControlKeyDown")
+	if shift and shift() then
+		M.ChatLink(e)
+		return
+	end
+	if ctrl and ctrl() then
+		M.OpenLog(e)
+		return
+	end
+	if button == "RightButton" then
+		M.SetShown(e, false)
+		SUI.Print(L("msg.questtrack.hidden", M.Title(e)))
+		return
+	end
+	M.PinEntry(e)
+end
+
+-- Epingle la quete seule sur la carte du monde
+function M.PinEntry(e)
 	local Cx = SUI.Codex
 	if not (Cx and Cx.on) then
 		SUI.Print(L("msg.questtrack.nocodex"))
@@ -846,6 +976,8 @@ function M.OnTip(b)
 	GameTooltip:SetText(e.title)
 	GameTooltip:AddLine(L(e.complete and "msg.questtrack.tip.done" or "msg.questtrack.tip.todo"), d[1], d[2], d[3])
 	GameTooltip:AddLine(L("msg.questtrack.tip.click"), d[1], d[2], d[3])
+	GameTooltip:AddLine(L("msg.questtrack.tip.hide"), d[1], d[2], d[3])
+	GameTooltip:AddLine(L("msg.questtrack.tip.log"), d[1], d[2], d[3])
 	if C.Get("questtrack.drag") then GameTooltip:AddLine(L("msg.questtrack.tip.drag"), d[1], d[2], d[3]) end
 	GameTooltip:Show()
 end
@@ -890,10 +1022,24 @@ function M.ArrowPick()
 	local c, z = Cx.MapCur()
 	if not px or (px == 0 and py == 0) or not c or not z or z <= 0 then return nil end
 	if M.atest and GetTime() < M.atest.till then return M.atest end
-	local srcs = M.Recs(c, z, "arrow")
-	local pinned = Cx.pin
-	if pinned and type(pinned.zones) == "table" and Cx.PinHere(pinned, c, z) then
-		srcs = { pinned }
+	-- priorite : quete choisie pour la fleche (si elle a un point ici) > quete epinglee > objectif le plus proche des quetes affichees
+	local srcs = nil
+	local aq = C.Get("questtrack.arrowq")
+	if type(aq) == "string" and aq ~= "" then
+		for i = 1, getn(M.list) do
+			if M.Key(M.list[i]) == aq then
+				local r = M.EntryRec(Cx, M.list[i])
+				if r and Cx.PinHere(r, c, z) then srcs = { r } end
+				break
+			end
+		end
+	end
+	if not srcs then
+		srcs = M.Recs(c, z, "arrow")
+		local pinned = Cx.pin
+		if pinned and type(pinned.zones) == "table" and Cx.PinHere(pinned, c, z) then
+			srcs = { pinned }
+		end
 	end
 	local best, bd = nil, nil
 	for s = 1, getn(srcs) do
@@ -990,6 +1136,273 @@ function M.ArrowSync()
 	end
 end
 
+-- ---------------------------------------------------------------- fenetre de choix des quetes
+-- Une ligne par quete du journal : case (affichee dans la liste), titre (clic = coche / decoche), ">" = la fleche vise cette quete.
+M.PICKMAX = 25
+M.PICKROW = 19
+
+-- La fleche vise cette quete (ou revient a "la plus proche" si c'etait deja elle)
+function M.SetArrowTarget(e)
+	local k = M.Key(e)
+	if C.Get("questtrack.arrowq") == k then
+		C.Set("questtrack.arrowq", "")
+		return
+	end
+	C.Set("questtrack.arrowq", k)
+	if not C.Get("questtrack.arrow") then C.Set("questtrack.arrow", true) end
+end
+
+local function pickRow(f, i)
+	local r = {}
+	r.chk = T.Check(f, function(on)
+		if r.e then M.SetShown(r.e, on) end
+	end)
+	r.txt = CreateFrame("Button", nil, f)
+	r.txt:SetWidth(236)
+	r.txt:SetHeight(16)
+	r.fs = T.Text(r.txt, 11, T.c.warn, "LEFT")
+	r.fs:SetPoint("LEFT", r.txt, "LEFT", 0, 0)
+	r.fs:SetWidth(236)
+	r.txt:SetScript("OnClick", function()
+		if r.e then M.SetShown(r.e, not M.IsShown(r.e)) end
+	end)
+	r.arr = T.Button(f, ">", 22, 16, function()
+		if r.e then M.SetArrowTarget(r.e) end
+	end)
+	local y = 28 + (i - 1) * M.PICKROW
+	r.chk:SetPoint("TOPLEFT", f, "TOPLEFT", 10, -y)
+	r.txt:SetPoint("LEFT", r.chk, "RIGHT", 6, 0)
+	r.arr:SetPoint("TOPRIGHT", f, "TOPRIGHT", -10, -y)
+	f.rows[i] = r
+	return r
+end
+
+function M.PickBuild()
+	if M.pick then return M.pick end
+	local f = CreateFrame("Frame", "ShikiUI_QuestPick", UIParent)
+	f:SetWidth(310)
+	f:SetHeight(120)
+	f:SetFrameStrata("DIALOG")
+	T.Backdrop(f, T.c.bg, T.c.border)
+	f:EnableMouse(true)
+	f:SetMovable(true)
+	f:RegisterForDrag("LeftButton")
+	f:SetScript("OnDragStart", function() this:StartMoving() end)
+	f:SetScript("OnDragStop", function() this:StopMovingOrSizing() end)
+	f:Hide()
+	f.rows = {}
+	f.title = T.Text(f, 12, T.c.text, "LEFT", true)
+	f.title:SetPoint("TOPLEFT", f, "TOPLEFT", 10, -9)
+	f.empty = T.Text(f, 11, T.c.dim, "LEFT")
+	f.empty:SetPoint("TOPLEFT", f, "TOPLEFT", 10, -30)
+	f.hint = T.Text(f, 10, T.c.dim, "LEFT")
+	f.hint:SetWidth(290)
+	f.hint:SetHeight(26)
+	f.bAll = T.Button(f, "", 66, 18, function() M.SetAllShown(true) end)
+	f.bAll:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", 10, 8)
+	f.bNone = T.Button(f, "", 66, 18, function() M.SetAllShown(false) end)
+	f.bNone:SetPoint("LEFT", f.bAll, "RIGHT", 6, 0)
+	f.bClose = T.Button(f, "", 66, 18, function() f:Hide() end)
+	f.bClose:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -10, 8)
+	f.hint:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", 10, 30)
+	if UISpecialFrames then tinsert(UISpecialFrames, "ShikiUI_QuestPick") end
+	M.pick = f
+	return f
+end
+
+function M.PickPaint()
+	local f = M.pick
+	if not f or not f:IsShown() then return end
+	local aq = C.Get("questtrack.arrowq")
+	local n = getn(M.list)
+	if n > M.PICKMAX then n = M.PICKMAX end
+	f.title:SetText(L("msg.questtrack.pick.title"))
+	f.hint:SetText(L("msg.questtrack.pick.hint"))
+	T.SetButtonText(f.bAll, L("msg.questtrack.pick.all"))
+	T.SetButtonText(f.bNone, L("msg.questtrack.pick.none"))
+	T.SetButtonText(f.bClose, L("msg.questtrack.pick.close"))
+	f.empty:SetText(n == 0 and L("msg.questtrack.pick.empty") or "")
+	for i = 1, n do
+		local e = M.list[i]
+		local r = f.rows[i] or pickRow(f, i)
+		r.e = e
+		T.SetCheck(r.chk, M.IsShown(e))
+		local col = e.complete and T.c.good or T.c.warn
+		r.fs:SetTextColor(col[1], col[2], col[3], col[4] or 1)
+		r.fs:SetText((e.level > 0 and ("[" .. e.level .. "] ") or "") .. M.Title(e))
+		T.SetSelected(r.arr, aq == M.Key(e))
+		r.chk:Show()
+		r.txt:Show()
+		r.arr:Show()
+	end
+	for i = n + 1, getn(f.rows) do
+		local r = f.rows[i]
+		r.e = nil
+		r.chk:Hide()
+		r.txt:Hide()
+		r.arr:Hide()
+	end
+	f:SetHeight(92 + (n > 0 and n or 1) * M.PICKROW)
+end
+
+function M.PickToggle()
+	if not M.on then return end
+	local f = M.PickBuild()
+	if f:IsShown() then
+		f:Hide()
+		return
+	end
+	if not f.placed then
+		f.placed = true
+		f:ClearAllPoints()
+		if M.frame and M.frame:IsShown() then
+			f:SetPoint("TOPRIGHT", M.frame, "TOPLEFT", -8, 0)
+		else
+			f:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
+		end
+	end
+	f:Show()
+	M.PickPaint()
+end
+
+-- ---------------------------------------------------------------- panneau dans le journal de quetes du jeu
+-- Un petit panneau colle a droite de la fenetre du journal : quete selectionnee, dans la liste ou non, epingle, fleche, choix des quetes.
+-- QuestLog_Update est enveloppee a la main (pas de hooksecurefunc en 1.12) pour suivre la selection.
+function M.LogEntry()
+	local gs, gt = glob("GetQuestLogSelection"), glob("GetQuestLogTitle")
+	if not gs or not gt then return nil end
+	local ok, sel = pcall(gs)
+	if not ok or type(sel) ~= "number" or sel < 1 then return nil end
+	for i = 1, getn(M.list) do
+		local e = M.list[i]
+		if e.i == sel then
+			local ok2, t = pcall(gt, sel)
+			if ok2 and t == e.title then return e end
+			return nil
+		end
+	end
+	return nil
+end
+
+local function logButton(f, y, fn)
+	local b = T.Button(f, "", 170, 20, fn)
+	b:SetPoint("TOPLEFT", f, "TOPLEFT", 10, -y)
+	return b
+end
+
+function M.LogBuild()
+	if M.logp then return M.logp end
+	local qf = glob("QuestLogFrame")
+	if not qf then return nil end
+	local f = CreateFrame("Frame", "ShikiUI_QuestLogPanel", qf)
+	f:SetWidth(190)
+	f:SetHeight(214)
+	T.Backdrop(f, T.c.bg, T.c.border)
+	f:SetPoint("TOPLEFT", qf, "TOPRIGHT", M.LOGX, -12)
+	f:EnableMouse(true)
+	f.head = T.Text(f, 10, T.c.dim, "LEFT")
+	f.head:SetPoint("TOPLEFT", f, "TOPLEFT", 10, -8)
+	f.title = T.Text(f, 12, T.c.text, "LEFT", true)
+	f.title:SetPoint("TOPLEFT", f, "TOPLEFT", 10, -22)
+	f.title:SetWidth(170)
+	f.title:SetHeight(30)
+	f.state = T.Text(f, 11, T.c.dim, "LEFT")
+	f.state:SetPoint("TOPLEFT", f, "TOPLEFT", 10, -56)
+	f.state:SetWidth(170)
+	f.codex = T.Text(f, 10, T.c.dim, "LEFT")
+	f.codex:SetPoint("TOPLEFT", f, "TOPLEFT", 10, -72)
+	f.codex:SetWidth(170)
+	f.bTrack = logButton(f, 92, function()
+		if f.cur then M.SetShown(f.cur, not M.IsShown(f.cur)) end
+	end)
+	f.bPin = logButton(f, 116, function()
+		if f.cur then M.PinEntry(f.cur) end
+	end)
+	f.bArrow = logButton(f, 140, function()
+		if f.cur then M.SetArrowTarget(f.cur) end
+	end)
+	f.bPick = logButton(f, 164, function() M.PickToggle() end)
+	f.count = T.Text(f, 10, T.c.dim, "LEFT")
+	f.count:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", 10, 8)
+	f:SetScript("OnShow", function() M.LogPaint() end)
+	M.logp = f
+	return f
+end
+M.LOGX = -84
+
+function M.LogPaint()
+	local f = M.logp
+	if not f then return end
+	local e = M.LogEntry()
+	f.cur = e
+	f.head:SetText(L("msg.questtrack.log.head"))
+	f.count:SetText(L("msg.questtrack.log.count", M.NumShown(), getn(M.list)))
+	T.SetButtonText(f.bPick, L("msg.questtrack.log.pick"))
+	if not e then
+		f.title:SetText(L("msg.questtrack.log.none"))
+		f.state:SetText("")
+		f.codex:SetText("")
+		f.bTrack:Hide()
+		f.bPin:Hide()
+		f.bArrow:Hide()
+		return
+	end
+	f.bTrack:Show()
+	f.bPin:Show()
+	f.bArrow:Show()
+	f.title:SetText(M.Title(e))
+	local on = M.IsShown(e)
+	local col = on and T.c.good or T.c.dim
+	f.state:SetTextColor(col[1], col[2], col[3], col[4] or 1)
+	f.state:SetText(L(on and "msg.questtrack.log.on" or "msg.questtrack.log.off"))
+	T.SetButtonText(f.bTrack, L(on and "msg.questtrack.log.untrack" or "msg.questtrack.log.track"))
+	T.SetButtonText(f.bPin, L("msg.questtrack.log.pin"))
+	local arrowOn = C.Get("questtrack.arrowq") == M.Key(e)
+	T.SetButtonText(f.bArrow, L(arrowOn and "msg.questtrack.log.arrowoff" or "msg.questtrack.log.arrow"))
+	local txt
+	if not codex() then
+		txt = L("msg.questtrack.log.nocodex")
+	elseif type(e.id) == "number" then
+		txt = L("msg.questtrack.log.id", e.id)
+	elseif e.id == false then
+		txt = L("msg.questtrack.log.unknown")
+	else
+		txt = ""
+	end
+	f.codex:SetText(txt)
+end
+
+function M.LogHook()
+	if M.logHooked then return end
+	local orig = glob("QuestLog_Update")
+	if type(orig) ~= "function" then return end
+	M.logHooked = true
+	local function wrapped(a, b)
+		orig(a, b)
+		if M.on and M.logp then pcall(M.LogPaint) end
+	end
+	setglobal("QuestLog_Update", wrapped)
+end
+
+function M.LogSync()
+	local want = M.on and C.Get("questtrack.logpanel") and glob("QuestLogFrame") ~= nil
+	if want then
+		local f = M.LogBuild()
+		if f then
+			f:Show()
+			M.LogHook()
+			M.LogPaint()
+		end
+	elseif M.logp then
+		M.logp:Hide()
+	end
+end
+
+-- Changement de zone : la liste "zone actuelle seulement" se recompose
+function M.OnZone()
+	if M.on and M.frame and C.Get("questtrack.zoneonly") then M.Paint() end
+end
+
 -- ---------------------------------------------------------------- cycle de vie, commande
 -- Bouton "Quetes" autour de la minicarte (glissable) : affiche / masque le suivi de quetes
 function M.RingButton()
@@ -1037,7 +1450,13 @@ function M.OnKey(key, value)
 	if not M.on then return end
 	M.Sync()
 	if M.frame then M.Paint() end
-	if key == "questtrack.pins" or key == "questtrack.givers" or key == "questtrack.giverlow" then
+	if key == "questtrack.logpanel" then M.LogSync() end
+	if key == "questtrack.arrowq" then M.apick = 0 end
+	if key == "questtrack.hide" or key == "questtrack.arrowq" then
+		M.PickPaint()
+		M.LogPaint()
+	end
+	if key == "questtrack.pins" or key == "questtrack.givers" or key == "questtrack.giverlow" or key == "questtrack.hide" then
 		local Cx = SUI.Codex
 		if Cx and Cx.PinOnMapEvent then Cx.PinOnMapEvent() end
 	end
@@ -1047,6 +1466,7 @@ function M.Enable()
 	M.on = true
 	SUI.On("QUEST_LOG_UPDATE", M.Queue)
 	SUI.On("PLAYER_ENTERING_WORLD", M.Queue)
+	SUI.On("ZONE_CHANGED_NEW_AREA", M.OnZone)
 	if not M.watching then
 		M.watching = true
 		C.Watch("questtrack.", M.OnKey)
@@ -1055,14 +1475,18 @@ function M.Enable()
 	M.Queue()
 	M.RingButton()
 	M.ArrowSync()
+	M.LogSync()
 end
 
 function M.Disable()
 	M.on = false
 	M.ArrowSync()
 	M.RingButton()
+	M.LogSync()
+	if M.pick then M.pick:Hide() end
 	SUI.Off("QUEST_LOG_UPDATE", M.Queue)
 	SUI.Off("PLAYER_ENTERING_WORLD", M.Queue)
+	SUI.Off("ZONE_CHANGED_NEW_AREA", M.OnZone)
 	if M.task then
 		SUI.Cancel(M.task)
 		M.task = nil
@@ -1102,6 +1526,10 @@ function M.Command(rest)
 		M.ArrowTest()
 		return
 	end
+	if arg == "pick" then
+		M.PickToggle()
+		return
+	end
 	if arg == "show" or arg == "hide" then
 		C.Set("questtrack.show", arg == "show")
 	end
@@ -1129,6 +1557,8 @@ SUI.RegisterModule("questtrack", {
 		opt("miniedge", "bool", 23, true),
 		opt("btn", "bool", 21, true),
 		opt("arrow", "bool", 21.2, true, { simple = true }),
+		opt("logpanel", "bool", 11, true, { simple = true }),
+		opt("zoneonly", "bool", 11.5, false),
 		opt("angle", "number", 21.5, 270, { min = 0, max = 355, step = 5 }),
 		opt("pinsize", "number", 24, 16, { min = 12, max = 32, step = 1 }),
 		opt("giverlow", "number", 26, 6, { min = 0, max = 20, step = 1 }),
