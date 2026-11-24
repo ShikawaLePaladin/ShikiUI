@@ -469,7 +469,7 @@ M.ZL = {
 	{ "Alterac Mountains", "Montagnes d'Alterac", 30, 40, 2 }, { "Arathi Highlands", "Hautes-terres d'Arathi", 30, 40, 2 }, { "Badlands", "Terres ingrates", 35, 45, 2 },
 	{ "Blasted Lands", "Terres foudroyees", 45, 55, 2 }, { "Burning Steppes", "Steppes ardentes", 50, 58, 2 }, { "Deadwind Pass", "Defile de Deuillevent", 55, 60, 2 },
 	{ "Dun Morogh", "Dun Morogh", 1, 10, 2 }, { "Duskwood", "Bois de la Penombre", 18, 30, 2 }, { "Eastern Plaguelands", "Maleterres de l'est", 53, 60, 2 },
-	{ "Elwynn Forest", "Foret d'Elwynn", 1, 10, 2 }, { "Hillsbrad Foothills", "Contreforts de Hautebrande", 20, 30, 2 }, { "Loch Modan", "Loch Modan", 10, 20, 2 },
+	{ "Elwynn Forest", "Foret d'Elwynn", 1, 10, 2 }, { "Hillsbrad Foothills", "Contreforts d'Hillsbrad", 20, 30, 2 }, { "Loch Modan", "Loch Modan", 10, 20, 2 },
 	{ "Redridge Mountains", "Les Carmines", 15, 25, 2 }, { "Searing Gorge", "Gorge des Vents brulants", 43, 50, 2 }, { "Silverpine Forest", "Foret des Pins argentes", 10, 20, 2 },
 	{ "Stranglethorn Vale", "Vallee de Strangleronce", 30, 45, 2 }, { "Swamp of Sorrows", "Marais des Chagrins", 35, 45, 2 }, { "The Hinterlands", "Les Hinterlands", 40, 50, 2 },
 	{ "Tirisfal Glades", "Clairieres de Tirisfal", 1, 10, 2 }, { "Western Plaguelands", "Maleterres de l'ouest", 51, 58, 2 }, { "Westfall", "Marche de l'Ouest", 10, 20, 2 },
@@ -592,7 +592,16 @@ function M.LegendPaint()
 	local n, m = 0, 0
 	local zones = glob("GetMapZones") and { glob("GetMapZones")(c) } or {}
 	local have = {}
-	for i = 1, getn(zones) do have[foldName(zones[i])] = true end
+	for i = 1, getn(zones) do
+		-- le client francais de Turtle ajoute parfois le nom anglais : "Les Paluns (Wetlands)"
+		local full = foldName(zones[i])
+		have[full] = true
+		local _, _, base, alt = string.find(full, "^(.-)%s*%((.-)%)%s*$")
+		if base then
+			have[base] = true
+			have[alt] = true
+		end
+	end
 	for i = 1, getn(M.ZL) do
 		local e = M.ZL[i]
 		if e[5] == c and (have[foldName(e[1])] or have[foldName(e[2])]) and n < 24 and (not mine or (e[3] <= pl + 2 and e[4] >= pl - 2)) then
