@@ -1,93 +1,119 @@
 # ShikiUI
 
-Interface complète pour WoW 1.12 (Turtle WoW / OctoWow), écrite de zéro. Un socle léger (un seul timer,
-un routeur d'événements), 35+ modules activables, menu Simple/Expert, bilingue **FR/EN** natif
-(fonctionne avec le jeu en français ou en anglais), styles thématisés et mode Raid.
+**A complete interface suite for WoW 1.12 (Turtle WoW / OctoWoW), built from scratch** — and the optional data packages that power its Codex and quest tools.
 
-> Addon personnel de Shikiwa (speedy8182) — développement assisté par IA.
+English · [Français](README.fr.md)
 
-## Installation
+ShikiUI is **one addon plus four generated data addons**, released together as a single zip. The UI works on its own; the data packages
+unlock the **Codex** (dungeon loot, sets, reputations, quests, monsters) and the **quest tools** (map pins, minimap pins, direction arrow).
+Native French and English (works with a French or an English client), themed styles, Simple/Expert menu, raid mode.
 
-Le zip de la release contient **4 dossiers** a copier ensemble dans `Interface\AddOns\` :
+> Personal project by Shikiwa (speedy8182), developed with AI assistance.
 
-| Dossier | Role | Obligatoire ? |
-|---|---|---|
-| `ShikiUI` | l'interface (menu, modules, Codex, suivi de quetes...) | **oui** |
-| `ShikiCodexData` | donnees du Codex : butin des donjons et raids, sets, reputations, attunements | pour le Codex (onglets Donjons, Sets, Reputations) |
-| `ShikiCodexData_Quests` | donnees de quetes : titres, niveaux, PNJ, epingles de carte et de minicarte, fleche | pour les quetes dans le Codex, les "!" sur les cartes, la fleche |
-| `ShikiCodexData_Places` | lieux utiles : marchands, boites aux lettres, maitres de vol, herbes, minerais... | pour les epingles de lieux sur les cartes |
-| `ShikiCodexData_Mobs` | monstres : noms, niveaux, points de carte, sources de butin | pour la recherche de monstres du Codex (epingles sur les cartes) |
+## The packages
 
-Les quatre dossiers `ShikiCodexData*` sont des **donnees generees** (jamais modifiees a la main) ; ils sont charges *a la demande* :
-ils ne coutent ni memoire ni temps de chargement tant que tu n'ouvres pas le Codex ou une carte. Sans eux, ShikiUI fonctionne
-normalement mais le Codex et les epingles de quetes restent vides. Ils portent le meme numero de version que ShikiUI.
+```
+                     ┌────────────────────────────┐
+                     │          ShikiUI           │  the interface: 48 modules, /sui menu,
+                     │        (required)          │  quest tracker, Codex window
+                     └─────────────┬──────────────┘
+          loaded on demand, only when the Codex or a map needs them
+        ┌───────────────┬──────────┴──────────┬────────────────┐
+┌───────┴───────┐ ┌─────┴──────────┐ ┌────────┴───────┐ ┌──────┴────────┐
+│ShikiCodexData │ │…Data_Quests    │ │…Data_Places    │ │…Data_Mobs     │
+│ loot, sets,   │ │ quests, pins,  │ │ vendors, mail- │ │ monsters,     │
+│ reputations,  │ │ arrow          │ │ boxes, flight  │ │ levels, spawn │
+│ attunements   │ │                │ │ masters, herbs │ │ points, loot  │
+└───────────────┘ └────────────────┘ └────────────────┘ └───────────────┘
+```
 
-**Manuel** : dezipper `ShikiUI-v1.2.9.zip` dans `Interface\AddOns\` (les 5 dossiers sont a la racine du zip), puis relancer le jeu
-(un nouvel addon demande un redemarrage complet la premiere fois ; ensuite `/reload` suffit).
+| Folder | What it is | Needed for | Licence |
+|---|---|---|---|
+| `ShikiUI` | The interface: menu, modules, quest tracker, Codex window | everything | MIT |
+| `ShikiCodexData` | Dungeon and raid loot, set pages, reputations, attunements, item names | Codex tabs *Dungeons / Sets / Reputations* | GPL v2 (derived from Atlas-CFM) |
+| `ShikiCodexData_Quests` | Quest titles, levels, NPCs, map and minimap pin coordinates | quests in the Codex, "!" / "?" pins, direction arrow | GPL v2 (derived from Atlas-CFM) + MIT (pfQuest) |
+| `ShikiCodexData_Places` | Useful places: vendors, mailboxes, flight masters, herbs, ore, trainers… | place pins on the maps | MIT (pfQuest) |
+| `ShikiCodexData_Mobs` | Monsters: names, levels, map points, who drops what | monster search in the Codex (pins on maps) | MIT (pfQuest) |
 
-**OctoLauncher** : ajouter le lien `https://github.com/ShikawaLePaladin/ShikiUI` (installe `ShikiUI`), puis les donnees via leurs branches :
-`https://github.com/ShikawaLePaladin/ShikiUI/tree/codexdata`, `.../tree/codexdata-quests`, `.../tree/codexdata-places`.
-Si le lanceur ne gere pas les branches, prendre les dossiers dans le zip de la release.
+The four `ShikiCodexData*` folders are **generated data**, never edited by hand (`tools/build_codex_data.js`, `tools/build_places.js`,
+`tools/build_mobs.js`), and **load on demand**: they cost no memory or load time until you open the Codex or a map. Without them ShikiUI works
+normally, but the Codex and the quest pins stay empty. All five share the same version number. Sources and credits: Atlas-CFM,
+pfQuest and pfQuest-octo-plus — see each folder's `NOTICE.txt`.
 
-Commande principale : **`/sui`** (menu) — assistant de premier lancement inclus. Codex : bouton **Codex** de la minicarte ou `/sui codex`.
+## Install
 
-### English
+**Manual** — download `ShikiUI-vX.Y.Z.zip` from the [latest release](https://github.com/ShikawaLePaladin/ShikiUI/releases/latest), extract it into
+`Interface\AddOns\` (the **five folders** sit at the root of the zip) and restart the game (new addons need a full restart the first time; `/reload`
+is enough afterwards).
 
-The release zip contains **4 folders**; copy them together into `Interface\AddOns\`:
-`ShikiUI` (the addon, required) and three *generated, load-on-demand* data addons: `ShikiCodexData` (dungeon/raid loot, sets,
-reputations, attunements), `ShikiCodexData_Quests` (quest data for the Codex, "!" pins and the arrow) and `ShikiCodexData_Places`
-(vendors, mailboxes, flight masters, herbs, ore...). They cost nothing until the Codex or a map needs them; without them ShikiUI works
-but the Codex and quest pins stay empty. Restart the game fully the first time (new addons). Main command: `/sui`.
+**OctoLauncher** — add `https://github.com/ShikawaLePaladin/ShikiUI` (installs `ShikiUI`), then the data packages through their branches:
+`…/ShikiUI/tree/codexdata`, `…/tree/codexdata-quests`, `…/tree/codexdata-places`, `…/tree/codexdata-mobs`.
+If your launcher does not handle branches, take the folders from the release zip.
 
-## Modules principaux
+Main command: **`/sui`** (menu, first-run wizard included). Codex: the **Codex** button on the minimap, or `/sui codex`.
 
-| Catégorie | Modules |
+## What the Codex packages give you
+
+- **Codex window** — search an item, a quest or a monster; browse dungeon and raid loot, sets and reputation rewards.
+- **Quest tracker** — your quest log on screen with a small arrow button per quest; the **direction arrow** follows the nearest objective
+  (or the quest you pick) and turns into an icon when you are close: sword to fight, "?" to turn in, "!" to pick up, bag to collect.
+- **Pins on the world map and the minimap** — objectives, "!" quest givers, "?" turn-ins (gold and pulsing when the quest is complete, white
+  while it is still in progress), vendors, mailboxes, flight masters, herbs, ore.
+- **Quest-mob markers** — a "!" on nameplates and on the target frame for monsters you need to kill, and a green line in their tooltip.
+- **Monster search** — find a monster by name (French or English), see its levels and pin where it lives.
+
+## Main modules (ShikiUI)
+
+| Category | Modules |
 |---|---|
-| **Unités** | Cadres joueur/cible, Groupe, Raid 40, marques de raid (ciblage rapide) |
-| **Combat** | Compteur (meter), Menace, TankTools, CastBar, PowerAuras, Soins au clic, Totems |
-| **Utilitaires** | Sacs, Hôtel des ventes (4 onglets), Courrier, Vendeur auto, Loot, Macros, Chercheur de groupe |
-| **Raid** | **Alarmes de boss (BossMods)** — barres + annonces vanilla MC/BWL/ZG/AQ/Naxx |
-| **Social** | Messages type WIM, Chat (mots-clés, onglets), PvP, Bulletin |
-| **Suivi** | Verrous d'instances, or par session, specs auto par profil |
+| **Units** | Player/target frames, party, 40-man raid, raid marks (quick targeting), nameplates |
+| **Combat** | Damage meter, threat, TankTools, cast bar, PowerAuras, click-healing, totems |
+| **Utilities** | Bags, auction house (4 tabs), mail, auto-vendor, loot, macros, group finder |
+| **Raid** | **Boss alerts (BossMods)** — bars and announcements for vanilla MC / BWL / ZG / AQ / Naxx |
+| **Social** | WIM-style whispers, chat (keywords, tabs), PvP, bulletin |
+| **Tracking** | Instance lockouts, session gold, automatic specs per profile |
+| **World** | Codex, quest tracker, map and minimap pins, minimap button drawer |
 
-Chaque module est activable/coupable individuellement, a ses propres réglages
-(mode Simple par défaut, Expert pour tout), sa visibilité conditionnelle
-(toujours / combat / groupe / raid / spé...) et son déplacement libre (`/sui move`).
+Every module can be switched on or off, has its own settings (Simple mode by default, Expert for everything), conditional visibility
+(always / combat / group / raid / spec…) and free positioning (`/sui move`).
 
-## Addons autonomes (sans ShikiUI)
+## Standalone addons (without ShikiUI)
 
-**ShikiPallyPower** (bénédictions de paladin) et **ShikiFinder** (chercheur de groupe) existent aussi comme addons séparés dans `standalone/`,
-pour les joueurs qui n'utilisent pas ShikiUI. Voir [standalone/README.md](standalone/README.md).
+**ShikiPallyPower** (paladin blessings) and **ShikiFinder** (group finder) also exist as separate addons in `standalone/`, for players who do not
+use ShikiUI. See [standalone/README.md](standalone/README.md).
 
-## Commandes
+## Commands
 
 ```
-/sui                     menu principal
-/sui bossmods            alarmes de raid
-/sui marks               marques de raid
-/sui pp                  bénédictions de raid (paladin)
-/sui lfg                 chercheur de groupe
-/sui move                déplacer l'interface
-/sui help                aide complète
+/sui                     main menu
+/sui codex               Codex window
+/sui quests arrow        test target for the direction arrow
+/sui bossmods            raid alerts
+/sui marks               raid marks
+/sui pp                  raid blessings (paladin)
+/sui lfg                 group finder
+/sui move                move the interface
+/sui help                full help
 ```
 
-## Tests hors jeu
+## Development
 
-La suite de tests tourne sous Node (Lua 5.0 simulé via fengari) — 72 suites, ~13 000 assertions,
-mutations anti-régression incluses :
+Tests run offline under Node (Lua 5.0 emulated with fengari): structure, Lua 5.0 lint, translations, styles and the module suites.
 
 ```bash
-sh tests/run_tests.sh     # tout : structure, lint, traductions, styles, suites
-node tests/mutate.js      # chaque régression simulée doit être détectée
+sh tests/run_tests.sh                     # everything
+node tools/build_codex_data.js --check    # Codex data up to date with the sources (needs the game's AddOns folder)
+node tools/build_mobs.js --check          # same for the monster data
 ```
 
-## Architecture
+- **Core** (`Core`, `Config`, `Theme`, `Mover`, `Visibility`, `Layouts`…): shared services, never touched by modules.
+- **Modules** (`Mod_<Name>.lua` + `Locale_<Name>.lua`): isolated, contract-based — see `MODULES.md`.
+- **Conventions**: strict Lua 5.0, no hard-coded colours or textures (style tokens), nothing created in combat, positions through the
+  layout service, FR/EN translations checked.
 
-- **Socle** (`Core`, `Config`, `Theme`, `Mover`, `Visibility`, `Layouts`...) : services partagés,
-  jamais touchés par les modules
-- **Modules** (`Mod_<Nom>.lua` + `Locale_<Nom>.lua`) : isolés, contractuels — voir `MODULES.md`
-- **Conventions** : Lua 5.0 strict, zéro couleur/texture en dur (jetons de style), rien de créé
-  en combat, positions via le service de layout, traductions FR/EN contrôlées
+`SPEC.md` describes the architecture, `PARITY.md` the parity with reference addons, `MODULES.md` the module contract and the state of each module.
 
-`SPEC.md` détaille l'architecture, `PARITY.md` la parité avec les addons de référence,
-`MODULES.md` le contrat de module et l'état de chacun.
+## Licence
+
+The code (`ShikiUI/`, `standalone/`) is MIT — see `LICENSE`. Each data folder carries its own `NOTICE.txt` (and `LICENSE` where GPL v2
+applies); the data packages are separate works and do not change the licence of the UI code.
