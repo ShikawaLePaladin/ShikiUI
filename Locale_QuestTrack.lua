@@ -22,6 +22,13 @@ SUI.AddStrings("fr", {
 	["tip.questtrack.minigivers"] = "Pose aussi sur la minicarte les ! des quetes que tu peux prendre autour de toi.",
 	["opt.questtrack.btn"] = "Bouton Quetes sur la minicarte",
 	["tip.questtrack.btn"] = "Un bouton autour de la minicarte affiche ou masque le suivi de quetes. Glisse-le pour le placer sur le cadran.",
+	["opt.questtrack.arrow"] = "Fleche vers l'objectif le plus proche",
+	["tip.questtrack.arrow"] = "Une petite fleche deplacable indique l'objectif de quete le plus proche dans la zone (ou la quete epinglee) avec la distance. Demande le module Codex.",
+	["msg.questtrack.arrow.dist"] = "%s m",
+	["msg.questtrack.arrow.here"] = "Tu y es",
+	["msg.questtrack.arrow.nopos"] = "Aucune position disponible ici (instance, ou carte du monde ouverte sur une autre zone).",
+	["msg.questtrack.arrow.test"] = "Cible d'essai",
+	["mod.questtrack.arrow.mover"] = "Fleche de quete",
 	["opt.questtrack.angle"] = "Position du bouton Quetes (degres)",
 	["tip.questtrack.angle"] = "Place le bouton autour de la minicarte : 0 droite, 90 haut, 180 gauche, 270 bas. Le plus simple : glisser le bouton.",
 	["msg.questtrack.btn"] = "Quetes",
@@ -44,7 +51,7 @@ SUI.AddStrings("fr", {
 	["msg.questtrack.tip.done"] = "Quete terminee : a rendre",
 	["msg.questtrack.tip.click"] = "Clic : epingler cette quete sur la carte",
 	["msg.questtrack.status"] = "Suivi des quetes : %d quete(s) lue(s), liste affichee : %s. /sui quests show|hide",
-	["help.questtrack"] = "/sui quests [show|hide] - suivi des quetes en cours",
+	["help.questtrack"] = "/sui quests [show|hide|arrow] - suivi des quetes en cours (arrow : cible d'essai 30 s pour la fleche)",
 })
 
 SUI.AddStrings("en", {
@@ -67,6 +74,13 @@ SUI.AddStrings("en", {
 	["tip.questtrack.minigivers"] = "Also places on the minimap the ! of the quests you can take around you.",
 	["opt.questtrack.btn"] = "Quests button on the minimap",
 	["tip.questtrack.btn"] = "A button around the minimap shows or hides the quest tracker. Drag it to place it on the dial.",
+	["opt.questtrack.arrow"] = "Arrow to the nearest objective",
+	["tip.questtrack.arrow"] = "A small movable arrow points to the closest objective of your quests in the current zone (or to the pinned quest) and shows the distance. Needs the Codex module.",
+	["msg.questtrack.arrow.dist"] = "%s yd",
+	["msg.questtrack.arrow.here"] = "You are here",
+	["msg.questtrack.arrow.nopos"] = "No position available here (instance or world map open on another zone).",
+	["msg.questtrack.arrow.test"] = "Test target",
+	["mod.questtrack.arrow.mover"] = "Quest arrow",
 	["opt.questtrack.angle"] = "Quests button position (degrees)",
 	["tip.questtrack.angle"] = "Places the button around the minimap: 0 right, 90 top, 180 left, 270 bottom. Easiest: drag the button.",
 	["msg.questtrack.btn"] = "Quests",
@@ -89,5 +103,5 @@ SUI.AddStrings("en", {
 	["msg.questtrack.tip.done"] = "Quest complete: turn it in",
 	["msg.questtrack.tip.click"] = "Click: pin this quest on the map",
 	["msg.questtrack.status"] = "Quest tracker: %d quest(s) read, list shown: %s. /sui quests show|hide",
-	["help.questtrack"] = "/sui quests [show|hide] - current quest tracker",
+	["help.questtrack"] = "/sui quests [show|hide|arrow] - current quest tracker (arrow: 30 s test target for the direction arrow)",
 })
