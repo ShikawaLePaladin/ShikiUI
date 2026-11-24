@@ -44,7 +44,7 @@ M.decorated = false
 M.unit = nil
 M.borderSet = false
 M.hooks = 0
-M.cfg = { style = true, anchor = "default", scale = 1, bordercolor = true, classcolor = true, target = true, unitid = false,
+M.cfg = { style = true, anchor = "default", scale = 1, bordercolor = true, classcolor = true, target = true, unitid = false, questmob = true,
 	itemid = false, itemlevel = true, hpvalue = true, hpbar = true, combathide = false, vendor = true, owned = true }
 M.units = { "mouseover", "target", "player", "pet", "party1", "party2", "party3", "party4" }
 M.tgt = { mouseover = "mouseovertarget", target = "targettarget", player = "playertarget", pet = "pettarget",
@@ -65,6 +65,7 @@ function M.ReadConfig()
 	cfg.classcolor = C.Get("tooltip.classcolor")
 	cfg.target = C.Get("tooltip.target")
 	cfg.unitid = C.Get("tooltip.unitid")
+	cfg.questmob = C.Get("tooltip.questmob")
 	cfg.itemid = C.Get("tooltip.itemid")
 	cfg.itemlevel = C.Get("tooltip.itemlevel")
 	if SUI.TooltipCompare then SUI.TooltipCompare.Apply() end
@@ -392,6 +393,12 @@ function M.DecorateUnit(unit)
 		local id = M.NpcId(unit)
 		if id then GameTooltip:AddLine(L("msg.tooltip.npcid", id), T.c.dim[1], T.c.dim[2], T.c.dim[3]) end
 	end
+	if cfg.questmob and not UnitIsPlayer(unit) and SUI.QuestTrack and SUI.QuestTrack.UnitObjective then
+		local q = SUI.QuestTrack.UnitObjective(UnitName(unit))
+		if q then
+			GameTooltip:AddLine(L("msg.tooltip.questmob", q.title, q.text), T.c.good[1], T.c.good[2], T.c.good[3])
+		end
+	end
 	M.UpdateHp()
 end
 
@@ -639,6 +646,7 @@ SUI.RegisterModule("tooltip", {
 		opt("hpvalue", "bool", 60, true),
 		opt("hpbar", "bool", 61, true),
 		opt("unitid", "bool", 70, false),
+		opt("questmob", "bool", 71, true, { simple = true }),
 		opt("itemlevel", "bool", 80, true),
 		opt("itemid", "bool", 81, false),
 		opt("vendor", "bool", 82, true, { simple = true }),
