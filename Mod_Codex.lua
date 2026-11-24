@@ -2009,6 +2009,7 @@ function M.PinRefresh()
 	end
 	M.pinRefreshes = M.pinRefreshes + 1
 	local n, full = 0, false
+	local gn = 0                  -- epingles grisees (rendu de quetes en cours) : pas comptees dans le bandeau
 	local w, h = btn:GetWidth(), btn:GetHeight()
 	local firstHere = nil
 	local spread = M.spreadList
@@ -2047,6 +2048,7 @@ function M.PinRefresh()
 				tinsert(spread, p)
 				p:Show()
 				n = n + 1
+				if rec.greyEnd then gn = gn + 1 end
 			end
 		end
 	end
@@ -2060,12 +2062,12 @@ function M.PinRefresh()
 		else
 			local nq = 0
 			for s = 1, getn(srcs) do
-				if (srcs[s].id or 0) >= 0 then nq = nq + 1 end
+				if (srcs[s].id or 0) >= 0 and not srcs[s].greyEnd then nq = nq + 1 end
 			end
 			if nq == 0 then
-				text = L("msg.codex.pin.banner.places", n)
+				text = L("msg.codex.pin.banner.places", n - gn)
 			else
-				text = L("msg.codex.pin.banner.track", nq, n)
+				text = L("msg.codex.pin.banner.track", nq, n - gn)
 			end
 		end
 		if b.shownText ~= text then
