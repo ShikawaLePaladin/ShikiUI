@@ -139,6 +139,8 @@ Locale_PallyPower.lua
 Mod_PallyPower.lua
 Locale_PowerAuras.lua
 Mod_PowerAuras.lua
+Locale_QuestTrack.lua
+Mod_QuestTrack.lua
 Locale_Raid.lua
 Mod_Raid.lua
 Locale_Skin.lua

@@ -1231,7 +1231,9 @@ end
 -- La zone se retrouve par son NOM (GetMapContinents / GetMapZones), jamais par un numero. Les epingles sont des Button enfants de WorldMapButton, posees
 -- seulement pour la zone AFFICHEE (WORLD_MAP_UPDATE, regroupe par M.PinSettle) ; la minuterie de surveillance n'existe que tant qu'une quete est epinglee.
 -- NON VERIFIE en jeu : ToggleWorldMap puis SetMapZoom (ordre), WORLD_MAP_UPDATE a l'ouverture, niveau des cadres, noms de zones Turtle dans GetMapZones.
-M.PIN_MAX = 14                -- epingles posees a la fois = taille du pool (les donnees en donnent 12 au plus par quete)
+M.PIN_MAX = 14                -- epingles gardees par zone et par quete (les donnees en donnent 12 au plus par quete)
+M.PIN_POOL = 60               -- epingles posees a la fois (quete epinglee + suivi) = taille du pool
+M.trackFn = nil               -- fournisseur des quetes du suivi (module questtrack) : function() -> liste d'enregistrements resolus
 M.PIN_SIZE = 14
 M.PIN_DELAY = 0.2             -- silence attendu apres le dernier WORLD_MAP_UPDATE (la carte en envoie une centaine a l'ouverture)
 M.PIN_WATCH = 0.5             -- surveillance de l'ouverture / fermeture de la carte
@@ -1410,7 +1412,7 @@ M.PINMARK = { S = "!", E = "?", O = "o" }
 function M.PinFrame(i)
 	local p = M.pins[i]
 	if p then return p end
-	if i > M.PIN_MAX or SUI.InCombat() then return nil end
+	if i > M.PIN_POOL or SUI.InCombat() then return nil end
 	local btn = glob("WorldMapButton")
 	if not btn then return nil end
 	p = CreateFrame("Button", nil, btn)
@@ -1432,7 +1434,7 @@ end
 
 -- Infobulle : titre de la quete, puis "Depart : <PNJ>" / "Fin : ..." / "Objectif : ..." (un nom d'objet est signale comme tel)
 function M.PinEnter(p)
-	local rec, d = M.pin, p.data
+	local rec, d = p.rec or M.pin, p.data
 	local tt = glob("WorldMapTooltip") or glob("GameTooltip")
 	if not rec or not d or not tt then return end
 	local r, g, bl = T.Accent()
@@ -1445,6 +1447,9 @@ function M.PinEnter(p)
 		if d.ek == "i" or d.ek == "r" then line = line .. " (" .. L("msg.codex.pin.item") .. ")" end
 	end
 	tt:AddLine(line, T.c.dim[1], T.c.dim[2], T.c.dim[3])
+	if d.lines then
+		for i = 1, getn(d.lines) do tt:AddLine(d.lines[i], T.c.text[1], T.c.text[2], T.c.text[3]) end
+	end
 	tt:Show()
 end
 
@@ -1496,55 +1501,113 @@ function M.PinBannerText(rec, here)
 	return L("msg.codex.pin.banner.none", rec.t)
 end
 
--- Pose les epingles de la zone affichee (une seule zone a la fois) ; cache tout ailleurs et quand la carte est fermee.
+-- Sources d'epingles : la quete epinglee (M.pin), puis les quetes du suivi (M.trackFn, fournie par le module questtrack ; appelee seulement
+-- carte ouverte, jamais au login). Une liste d'enregistrements resolus, sans doublon d'identifiant.
+function M.PinSources()
+	local out = {}
+	if M.pin then tinsert(out, M.pin) end
+	local fn = M.trackFn
+	if fn then
+		local ok, list = pcall(fn)
+		if ok and type(list) == "table" then
+			for i = 1, getn(list) do
+				local r = list[i]
+				if type(r) == "table" and type(r.zones) == "table" and not (M.pin and M.pin.id == r.id) then tinsert(out, r) end
+			end
+		end
+	end
+	return out
+end
+
+-- Vrai tant qu'il y a quelque chose a poser (quete epinglee ou suivi actif)
+function M.PinActive()
+	return M.pin ~= nil or M.trackFn ~= nil
+end
+
+-- Branche (fn) ou debranche (nil) le suivi de quetes ; la carte est repeinte
+function M.PinTrack(fn)
+	M.trackFn = fn
+	if fn then
+		M.PinStart()
+	else
+		M.PinHideAll()
+		if not M.pin and not M.moved then M.PinStop(true) else M.PinOnMapEvent() end
+	end
+end
+
+-- Zone de rec affichee par la carte (epinglable), ou nil
+function M.PinHere(rec, c, z)
+	if not (c and z and z > 0) then return nil end
+	for i = 1, getn(rec.zones) do
+		local g = rec.zones[i]
+		if M.PinUsable(g) and g.c == c and g.z == z then return g end
+	end
+	return nil
+end
+
+-- Pose les epingles de la zone affichee (toutes les sources) ; cache tout ailleurs et quand la carte est fermee.
 function M.PinRefresh()
 	M.pinRetry = false
-	local rec = M.pin
 	local wm, btn = glob("WorldMapFrame"), glob("WorldMapButton")
-	if not rec or not wm or not btn or not wm:IsShown() then
+	if not M.PinActive() or not wm or not btn or not wm:IsShown() then
+		M.PinHideAll()
+		return
+	end
+	local srcs = M.PinSources()
+	if not srcs[1] then
 		M.PinHideAll()
 		return
 	end
 	M.pinRefreshes = M.pinRefreshes + 1
 	local c, z = M.MapCur()
-	local here = nil
-	if c and z and z > 0 then
-		for i = 1, getn(rec.zones) do
-			local g = rec.zones[i]
-			if M.PinUsable(g) and g.c == c and g.z == z then
-				here = g
-				break
+	local n, full = 0, false
+	local w, h = btn:GetWidth(), btn:GetHeight()
+	local firstHere = nil
+	for s = 1, getn(srcs) do
+		local rec = srcs[s]
+		local here = M.PinHere(rec, c, z)
+		if s == 1 then firstHere = here end
+		if here and not full then
+			for i = 1, getn(here.pins) do
+				if i > (rec.cap or M.PIN_MAX) then break end
+				if n >= M.PIN_POOL then
+					full = true
+					break
+				end
+				local p = M.PinFrame(n + 1)
+				if not p then
+					M.pinRetry = true             -- pas de creation en combat : on reessaie des que possible
+					full = true
+					break
+				end
+				local d = here.pins[i]
+				p.data = d
+				p.rec = rec
+				if p.kind ~= d.k then
+					p.kind = d.k
+					T.Backdrop(p, M.PinColor(d.k), T.c.bg)
+					p.mark:SetText(M.PINMARK[d.k] or M.PINMARK.O)
+				end
+				p:ClearAllPoints()
+				p:SetPoint("CENTER", btn, "TOPLEFT", d.x / 100 * w, -d.y / 100 * h)
+				p:Show()
+				n = n + 1
 			end
-		end
-	end
-	local n = 0
-	if here then
-		local w, h = btn:GetWidth(), btn:GetHeight()
-		local count = getn(here.pins)
-		if count > M.PIN_MAX then count = M.PIN_MAX end
-		for i = 1, count do
-			local p = M.PinFrame(i)
-			if not p then
-				M.pinRetry = true             -- pas de creation en combat : on reessaie des que possible
-				break
-			end
-			local d = here.pins[i]
-			p.data = d
-			if p.kind ~= d.k then
-				p.kind = d.k
-				T.Backdrop(p, M.PinColor(d.k), T.c.bg)
-				p.mark:SetText(M.PINMARK[d.k] or M.PINMARK.O)
-			end
-			p:ClearAllPoints()
-			p:SetPoint("CENTER", btn, "TOPLEFT", d.x / 100 * w, -d.y / 100 * h)
-			p:Show()
-			n = i
 		end
 	end
 	for i = n + 1, getn(M.pins) do M.pins[i]:Hide() end
 	local b = M.PinBanner()
 	if b then
-		local text = M.PinBannerText(rec, here)
+		local text
+		if M.pin then
+			text = M.PinBannerText(M.pin, firstHere)
+		else
+			local nq = 0
+			for s = 1, getn(srcs) do
+				if (srcs[s].id or 0) >= 0 then nq = nq + 1 end
+			end
+			text = L("msg.codex.pin.banner.track", nq, n)
+		end
 		if b.shownText ~= text then
 			b.shownText = text
 			T.SetButtonText(b, text)
@@ -1557,7 +1620,7 @@ end
 
 -- Un WORLD_MAP_UPDATE : seulement une date ; la pose a lieu quand la carte s'est tue pendant M.PIN_DELAY (aucun travail dans la rafale).
 function M.PinOnMapEvent()
-	if not M.pin then return end
+	if not M.PinActive() then return end
 	local wm = glob("WorldMapFrame")
 	if not wm or not wm:IsShown() then return end
 	M.pinStamp = GetTime()
@@ -1591,10 +1654,10 @@ function M.PinWatch()
 	if shown ~= M.mapShown then
 		M.mapShown = shown
 		if shown then M.PinOnMapEvent() else M.PinMapClosed() end
-	elseif shown and M.pinRetry and M.pin and not SUI.InCombat() then
+	elseif shown and M.pinRetry and M.PinActive() and not SUI.InCombat() then
 		M.PinOnMapEvent()
 	end
-	if not M.pin and not M.moved then M.PinStop(true) end
+	if not M.PinActive() and not M.moved then M.PinStop(true) end
 end
 
 function M.PinStart()
@@ -1636,15 +1699,19 @@ end
 
 -- Zone epinglable suivante (clic sur le bandeau)
 function M.PinNext()
-	local rec = M.pin
-	if not rec then return end
+	local srcs = M.PinSources()
+	if not srcs[1] then return end
 	local c, z = M.MapCur()
-	local list, at = {}, 0
-	for i = 1, getn(rec.zones) do
-		local g = rec.zones[i]
-		if M.PinUsable(g) then
-			tinsert(list, g)
-			if g.c == c and g.z == z then at = getn(list) end
+	local list, at, seen = {}, 0, {}
+	for s = 1, getn(srcs) do
+		local rec = srcs[s]
+		for i = 1, getn(rec.zones) do
+			local g = rec.zones[i]
+			if M.PinUsable(g) and not seen[g.c * 1000 + g.z] then
+				seen[g.c * 1000 + g.z] = true
+				tinsert(list, g)
+				if g.c == c and g.z == z then at = getn(list) end
+			end
 		end
 	end
 	if not list[1] then return end
@@ -1667,7 +1734,7 @@ function M.PinOff(silent)
 	M.PinHideAll()
 	local wm = glob("WorldMapFrame")
 	if M.moved and not (wm and wm:IsShown()) then M.PinMapClosed() end
-	M.PinStop(false)
+	if M.trackFn then M.PinOnMapEvent() else M.PinStop(false) end
 	if not silent then SUI.Print(L(had and "msg.codex.pin.off" or "msg.codex.pin.nothing")) end
 	return had
 end
@@ -2526,6 +2593,7 @@ function M.Enable()
 		C.Watch("codex.", M.OnKey)
 	end
 	M.PinRestore()
+	if SUI.QuestTrack then SUI.QuestTrack.Sync() end
 end
 
 function M.Disable()
@@ -2535,6 +2603,7 @@ function M.Disable()
 	if M.warmTask then SUI.Cancel(M.warmTask) M.warmTask = nil end
 	M.ReleaseIndex()
 	M.Close()
+	M.trackFn = nil
 	M.PinOff(true)
 	M.PinStop(true)
 	M.moved = false
