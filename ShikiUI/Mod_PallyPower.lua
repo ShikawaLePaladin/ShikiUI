@@ -293,8 +293,8 @@ end
 function M.PrunePeers()
 	local here = {}
 	for i = 1, M.nrost do here[M.roster[i].name] = true end
-	local lists = { M.peers, M.peerKnown, M.peerSingle, M.peerFree, M.peerTanks }
-	for i = 1, 5 do
+	local lists = { M.peers, M.peerKnown, M.peerSingle, M.peerFree, M.peerTanks, M.peerNormal }
+	for i = 1, 6 do
 		local t = lists[i]
 		if t then
 			for name in pairs(t) do
@@ -357,6 +357,75 @@ function M.HasBuff(unit, base)
 		if n == want or n == gw or n == fwant or n == fgw or n == bs or n == bg then return true end
 	end
 	return false
+end
+
+-- ---------------------------------------------------------------- chronos
+-- Le client ne donne pas la duree des benedictions posees sur les AUTRES : le module compte a partir de SES lancements
+-- (30 min la superieure, 10 min la simple). Heure reelle (time) : les chronos survivent a un /reload ou une reconnexion.
+M.DUR_SINGLE, M.DUR_GREATER = 600, 1800
+
+function M.Now()
+	local t = getglobal("time")
+	if type(t) == "function" then return t() end
+	return GetTime()
+end
+
+function M.Timers()
+	local all = C.GetGlobal("pallypower.timers")
+	if type(all) ~= "table" then
+		all = {}
+		C.SetGlobal("pallypower.timers", all)
+	end
+	local key = M.assignKey or "?"
+	if type(all[key]) ~= "table" then all[key] = {} end
+	return all[key]
+end
+
+-- Apres un lancement : la superieure couvre toute la classe visible. Un paladin = une benediction par joueur.
+function M.Stamp(unit, b, greater)
+	if M.demo then return end
+	local file
+	for i = 1, M.nrost do
+		if M.roster[i].unit == unit then file = M.roster[i].file end
+	end
+	local t, prev = M.Timers(), {}
+	local vis = getglobal("UnitIsVisible")
+	local e = M.Now() + (greater and M.DUR_GREATER or M.DUR_SINGLE)
+	for i = 1, M.nrost do
+		local r = M.roster[i]
+		if r.unit == unit or (greater and r.file == file and (type(vis) ~= "function" or vis(r.unit))) then
+			prev[r.name] = t[r.name] or false
+			t[r.name] = { b = b, e = e }
+		end
+	end
+	M.lastStamp = { at = GetTime(), prev = prev }
+end
+
+-- Le serveur a refuse le sort : les chronos d'avant reviennent.
+function M.Unstamp()
+	local s = M.lastStamp
+	if not s or GetTime() - s.at > 1 then return end
+	local t = M.Timers()
+	for name, rec in pairs(s.prev) do
+		if rec then t[name] = rec else t[name] = nil end
+	end
+	M.lastStamp = nil
+end
+
+-- Secondes restantes de MA benediction b sur ce joueur ; nil = pas de chrono.
+function M.Left(name, b)
+	local rec = M.Timers()[name]
+	if not rec or rec.b ~= b then return nil end
+	local left = rec.e - M.Now()
+	if left <= 0 then return nil end
+	return left
+end
+
+function M.Expiring(name, b)
+	local limit = (C.Get("pallypower.rebuff") or 4) * 60
+	if limit <= 0 then return false end
+	local left = M.Left(name, b)
+	return (left and left < limit) and true or false
 end
 
 -- ---------------------------------------------------------------- cycle de benediction
@@ -522,6 +591,7 @@ function M.BuildPairs()
 	-- deux passes : d'abord les benedictions de classe (30 min), ensuite les benedictions simples (10 min).
 	-- Une benediction de classe touche TOUTE la classe : posee apres, elle ecraserait la benediction simple d'un autre joueur de la classe
 	-- (ex. Sagesse de classe sur le druide soigneur ecraserait Puissance 10 min sur le druide feral).
+	local renewed = {}      -- classes qui vont recevoir une superieure pendant ce cycle
 	for pass = 1, 2 do
 		for i = 1, M.nrost do
 			local r = M.roster[i]
@@ -532,9 +602,13 @@ function M.BuildPairs()
 					if a[b] then
 						-- cible de bas niveau : benediction simple, au rang que son niveau permet (seconde passe)
 						local nm, single = M.CastName(b, M.IsSingle(a, b) or M.noSym, r.unit)
-						if nm and M.Knows(b) and (pass == 2) == single and not M.HasBuff(r.unit, M.SPELLS[b]) then
+						if nm and M.Knows(b) and (pass == 2) == single
+							and ((pass == 2 and renewed[r.file]) or M.Expiring(r.name, b) or not M.HasBuff(r.unit, M.SPELLS[b])) then
 							M.npairs = M.npairs + 1
-							M.pairs[M.npairs] = { unit = r.unit, name = nm, base = M.SPELLS[b], frb = GAMEFR and M.SPELLS_FR[b] or nil, who = r.name, tries = 0 }
+							local greater = (not single and C.Get("pallypower.greater")) and true or false
+							if greater then renewed[r.file] = true end
+							M.pairs[M.npairs] = { unit = r.unit, name = nm, base = M.SPELLS[b], frb = GAMEFR and M.SPELLS_FR[b] or nil, who = r.name, tries = 0,
+								b = b, greater = greater, force = (pass == 2 and renewed[r.file]) or nil }
 						end
 					end
 				end
@@ -572,6 +646,7 @@ function M.CastStep()
 			lp.checks = 0
 			lp.tries = lp.tries + 1
 			castOn(lp.unit, lp.name)
+			M.Stamp(lp.unit, lp.b, lp.greater)
 			return
 		end
 		M.lastp = nil
@@ -583,12 +658,13 @@ function M.CastStep()
 		if p and UnitExists(p.unit) and not UnitIsDead(p.unit) and (not p.who or UnitName(p.unit) == p.who) then
 			-- buffs relus a neuf : une benediction superieure posee plus haut couvre peut-etre deja toute la classe, ou un autre paladin est passe
 			M.buffNames[p.unit] = nil
-			if M.HasBuff(p.unit, p.base) then
+			if not p.force and M.HasBuff(p.unit, p.base) and not (p.who and M.Expiring(p.who, p.b)) then
 				-- deja couvert
 			elseif not M.Reachable(p.unit) then
 				M.skipped = (M.skipped or 0) + 1      -- hors de portee / de vue : ignore pour ce cycle
 			else
 				castOn(p.unit, p.name)
+				M.Stamp(p.unit, p.b, p.greater)
 				p.tries = 1
 				M.lastp = p
 				M.castn = M.castn + 1
@@ -1298,76 +1374,281 @@ function M.SetFlag(name, flag, want)
 	return want
 end
 
--- Jeu de benedictions conseille pour un joueur de la liste (selon sa classe, sa jauge de ressource et le drapeau tank).
-function M.AutoSet(r)
-	local a = M.assign and M.assign[r.name]
+-- ---------------------------------------------------------------- repartition (bouton Auto et Auto equipe)
+-- Regle du joueur (2026-11-25) : Salut, puis Sagesse / Puissance, puis Rois, puis Lumiere. Un paladin ne maintient qu'UNE benediction
+-- par cible. Chaque paladin garde la meme benediction superieure sur toutes les classes ; les joueurs a qui elle ne convient pas
+-- (tank, hybride) recoivent de CE paladin une benediction de 10 min a la place. Jamais de Salut a un tank (sauf paladin tank).
+M.PLANSLOTS = { "salv", "mw", "kings", "light", "sanct" }
+M.SLOTBLESS = { salv = "salvation", kings = "kings", light = "light", sanct = "sanctuary" }
+M.MELEE = { WARRIOR = true, ROGUE = true, HUNTER = true }
+
+function M.SlotBless(slot, file)
+	if slot == "mw" then
+		if M.MELEE[file] then return "might" end
+		return "wisdom"
+	end
+	return M.SLOTBLESS[slot]
+end
+
+-- Ce que ce joueur doit recevoir, du plus important au moins important (un par paladin present).
+function M.WishList(r)
 	local file = r.file
-	local tank = M.IsTank(r.name)
-	local set
-	local melee = false
-	if tank then
-		set = M.TANKSET
-		melee = true
+	local w
+	if M.IsTank(r.name) then
+		w = { "kings", "might", "light", "sanctuary", "wisdom" }
+		if file == "PALADIN" then tinsert(w, 1, "salvation") end       -- paladin tank : Salut d'abord (OctoManaSwap)
 	elseif file == "WARRIOR" or file == "ROGUE" then
-		set = { "kings", "might" }
-		melee = true
-	elseif file == "HUNTER" then
-		set = { "kings", "might", "wisdom" }
-		melee = true
+		w = { "salvation", "might", "kings", "light", "sanctuary" }
 	elseif file == "MAGE" or file == "WARLOCK" or file == "PRIEST" then
-		set = { "kings", "wisdom" }
+		w = { "salvation", "wisdom", "kings", "light", "sanctuary" }
+	elseif file == "HUNTER" then
+		w = { "salvation", "might", "kings", "wisdom", "light", "sanctuary" }
 	else
-		-- druide / chaman / paladin : rage ou energie = au corps a corps (puissance), mana = soutien (sagesse)
+		-- druide / chaman / paladin : rage ou energie = corps a corps (puissance d'abord), mana = sagesse d'abord
 		local pt = 0
 		local upt = getglobal("UnitPowerType")
 		if type(upt) == "function" then pt = upt(r.unit) or 0 end
 		if pt == 1 or pt == 3 then
-			set = { "kings", "might" }
-			melee = true
+			w = { "salvation", "might", "kings", "wisdom", "light", "sanctuary" }
+		elseif file == "PALADIN" then
+			w = { "salvation", "wisdom", "kings", "light", "might", "sanctuary" }
 		else
-			set = { "kings", "wisdom" }
+			w = { "salvation", "wisdom", "kings", "might", "light", "sanctuary" }
 		end
 	end
-	local out = {}
-	for i = 1, getn(set) do
-		if M.Knows(set[i]) then tinsert(out, set[i]) end
+	if not C.Get("pallypower.autosalv") then
+		for i = getn(w), 1, -1 do
+			if w[i] == "salvation" then table.remove(w, i) end
+		end
 	end
-	if C.Get("pallypower.autosalv") and not tank and M.Knows("salvation") then tinsert(out, "salvation") end
+	return w
+end
+
+local function slotKnown(name, slot)
+	if slot == "mw" then return M.TeamKnows(name, "might") or M.TeamKnows(name, "wisdom") end
+	return M.TeamKnows(name, M.SLOTBLESS[slot])
+end
+
+local function slotOf(b)
+	if b == "might" or b == "wisdom" then return "mw" end
+	for slot, bb in pairs(M.SLOTBLESS) do
+		if bb == b then return slot end
+	end
+	return nil
+end
+
+-- Benediction que donne deja ce paladin (pour qu'il la garde).
+local function heldSlot(name)
+	for i = 1, getn(M.CORDER) do
+		local file = M.CORDER[i]
+		if M.classes[file] then
+			local b
+			if name == UnitName("player") then
+				b = M.MyClassBless(file)
+			else
+				local bid = M.peers[name] and M.peers[name][M.SYNC_CLS[file] or -1]
+				for bb, id in pairs(M.SYNC_BID) do
+					if id == bid then b = bb end
+				end
+			end
+			if b then return slotOf(b) end
+		end
+	end
+	return nil
+end
+
+-- Un paladin hors de la repartition donne-t-il deja quelque chose ? (benedictions annoncees : classe + exceptions)
+local function fixedList(free)
+	local isFree, out = {}, {}
+	for i = 1, getn(free) do isFree[free[i]] = true end
+	if C.Get("pallypower.autosplit") == false then return out end
+	for name, p in pairs(M.peers) do
+		if not isFree[name] then
+			local any = false
+			for id = 0, 9 do
+				if p[id] and p[id] >= 0 then any = true end
+			end
+			if any then tinsert(out, name) end
+		end
+	end
 	return out
 end
 
-function M.AutoOne(r)
-	local a = asg(r.name)
-	for j = 1, getn(M.BLESS) do a[M.BLESS[j]] = nil end
-	a.sg = nil
-	-- LOGIQUE SIMPLE : ce qui fait partie du jeu par defaut de la classe (CLASSDEF) = benediction superieure de 30 min (une pose couvre toute
-	-- la classe) ; ce qui s'en ecarte (tank, corps a corps d'une classe de soutien...) = 10 min sur CE joueur seulement, case marquee "10 min".
-	local def = M.CLASSDEF[r.file] or {}
-	local set = M.AutoSet(r)
-	for i = 1, getn(set) do
-		local b = set[i]
-		if not M.PeerCovers(r.file, b) then
-			a[b] = true
-			if not def[b] then
-				if not a.sg then a.sg = {} end
-				a.sg[b] = true
+local function fixedCover(fixed, r)
+	local covered = {}
+	local cid = M.SYNC_CLS[r.file]
+	for i = 1, getn(fixed) do
+		local bid = M.peerNormal[fixed[i]] and M.peerNormal[fixed[i]][r.name]
+		if not bid then bid = cid and M.peers[fixed[i]][cid] end
+		for b, id in pairs(M.SYNC_BID) do
+			if id == bid then covered[b] = true end
+		end
+	end
+	return covered
+end
+
+-- Quel paladin tient quelle benediction superieure : les plus rares d'abord, chacun garde la sienne, la Salut de preference a moi.
+local function pickSlots(free, fixed)
+	local taken = {}
+	for i = 1, getn(fixed) do
+		local p = M.peers[fixed[i]]
+		for b, id in pairs(M.SYNC_BID) do
+			for cid = 0, 9 do
+				if p[cid] == id then taken[slotOf(b) or "?"] = true end
 			end
 		end
 	end
-	-- PRIORITE PALATANK sur la Salut (2026-11-19) : un paladin avec le drapeau tank recoit la Salut
-	-- (il s'en sert pour son swap OctoManaSwap) EN PLUS de son set tank (Sanctuary incluse depuis le TANKSET).
-	-- Les autres tanks gardent Sanctuary sans Salut (la Salut sur un vrai tank = perte de menace).
-	if r.file == "PALADIN" and M.IsTank(r.name) and C.Get("pallypower.autosalv") and M.Knows("salvation") then
-		a.salvation = true
-		if not a.sg then a.sg = {} end
-		a.sg.salvation = true
+	local order = {}
+	for i = 1, getn(M.PLANSLOTS) do
+		local s = M.PLANSLOTS[i]
+		if not taken[s] and (s ~= "salv" or C.Get("pallypower.autosalv")) then tinsert(order, s) end
 	end
-	if C.Get("pallypower.autosingle") and (M.IsTank(r.name) or M.HYBRID[r.file]) then a.single = true end
+	local want, cap = {}, {}
+	for i = 1, getn(order) do
+		local s = order[i]
+		cap[s] = 0
+		for k = 1, getn(free) do
+			if slotKnown(free[k], s) then cap[s] = cap[s] + 1 end
+		end
+		if cap[s] > 0 and getn(want) < getn(free) then tinsert(want, s) end
+	end
+	local chosen, used = {}, {}
+	local held = {}
+	for k = 1, getn(free) do held[free[k]] = heldSlot(free[k]) end
+	local function place(s)
+		local best, score
+		for k = 1, getn(free) do
+			local p = free[k]
+			if not chosen[p] and slotKnown(p, s) then
+				local n = 100 - k
+				if held[p] == s then n = n + 10000 end
+				if s == "salv" and p == UnitName("player") then n = n + 1000 end
+				for i = 1, getn(want) do
+					if want[i] ~= s and slotKnown(p, want[i]) then n = n - 100 end
+				end
+				if not score or n > score then best, score = p, n end
+			end
+		end
+		if best then chosen[best] = s used[s] = true end
+	end
+	local byCap = {}
+	for i = 1, getn(want) do
+		local at = 1
+		while byCap[at] and cap[byCap[at]] <= cap[want[i]] do at = at + 1 end
+		tinsert(byCap, at, want[i])
+	end
+	for i = 1, getn(byCap) do place(byCap[i]) end
+	for i = 1, getn(order) do
+		if not used[order[i]] then place(order[i]) end
+	end
+	return chosen
+end
+
+-- free = paladins dont on decide la benediction. Retour : { greater = [paladin][classe], give = [joueur][paladin] }
+function M.Plan(free)
+	local fixed = fixedList(free)
+	local chosen = pickSlots(free, fixed)
+	local total = getn(free) + getn(fixed)
+	local plan = { greater = {}, give = {}, free = free }
+	local seq = {}                 -- paladins dans l'ordre d'importance de leur benediction
+	for i = 1, getn(M.PLANSLOTS) do
+		for k = 1, getn(free) do
+			if chosen[free[k]] == M.PLANSLOTS[i] then tinsert(seq, free[k]) end
+		end
+	end
+	for k = 1, getn(free) do
+		if not chosen[free[k]] then tinsert(seq, free[k]) end
+		plan.greater[free[k]] = {}
+	end
+	for i = 1, M.nrost do
+		local r = M.roster[i]
+		local wish = M.WishList(r)
+		local target = {}
+		for k = 1, mmin(total, getn(wish)) do target[wish[k]] = true end
+		local covered = fixedCover(fixed, r)
+		local give = {}
+		for k = 1, getn(seq) do
+			local p = seq[k]
+			if chosen[p] then
+				local g = M.SlotBless(chosen[p], r.file)
+				if target[g] and not covered[g] and M.TeamKnows(p, g) then
+					give[p] = g
+					covered[g] = true
+				end
+			end
+		end
+		for k = 1, getn(seq) do
+			local p = seq[k]
+			if not give[p] then
+				for j = 1, getn(wish) do
+					if not covered[wish[j]] and M.TeamKnows(p, wish[j]) then
+						give[p] = wish[j]
+						covered[wish[j]] = true
+						break
+					end
+				end
+			end
+		end
+		plan.give[r.name] = give
+	end
+	-- benediction superieure de chaque paladin sur chaque classe : la plus demandee, celle de son role en cas d'egalite
+	for k = 1, getn(free) do
+		local p = free[k]
+		for c = 1, getn(M.CORDER) do
+			local file = M.CORDER[c]
+			if M.classes[file] then
+				local count = {}
+				for i = 1, M.nrost do
+					local r = M.roster[i]
+					local g = r.file == file and plan.give[r.name][p]
+					if g then count[g] = (count[g] or 0) + 1 end
+				end
+				local own = chosen[p] and M.SlotBless(chosen[p], file)
+				local best, n = nil, 0
+				if own and count[own] then best, n = own, count[own] end
+				for j = 1, getn(M.BLESS) do
+					local b = M.BLESS[j]
+					if count[b] and count[b] > n then best, n = b, count[b] end
+				end
+				plan.greater[p][file] = best
+			end
+		end
+	end
+	return plan
+end
+
+-- Ecrit MA part du plan dans la grille (only = un seul joueur).
+function M.ApplyPlanSelf(plan, only)
+	local me = UnitName("player")
+	local mine = plan.greater[me]
+	if not mine then return end
+	for i = 1, M.nrost do
+		local r = M.roster[i]
+		if not only or r.name == only then
+			local a = asg(r.name)
+			for j = 1, getn(M.BLESS) do a[M.BLESS[j]] = nil end
+			a.sg, a.single = nil, nil
+			local g = plan.give[r.name][me]
+			if g then
+				a[g] = true
+				if g ~= mine[r.file] then a.sg = { [g] = true } end
+				if C.Get("pallypower.autosingle") and (M.IsTank(r.name) or M.HYBRID[r.file]) then a.single = true end
+			end
+		end
+	end
+	if not only then
+		for file in pairs(M.classes) do M.MirrorToPallyPower(file, mine[file]) end
+	end
+end
+
+function M.AutoOne(r)
+	if M.nrost == 0 then M.ScanRoster() end
+	M.ApplyPlanSelf(M.Plan({ (UnitName("player")) }), r.name)
 end
 
 function M.AutoAssign()
 	if M.nrost == 0 then M.ScanRoster() end
-	for i = 1, M.nrost do M.AutoOne(M.roster[i]) end
+	M.ApplyPlanSelf(M.Plan({ (UnitName("player")) }))
 	saveAssign()
 	M.PaintCells()
 	M.PaintRows()
@@ -1635,10 +1916,8 @@ function M.SyncSelfText()
 		local ch = "n"
 		for file, cid in pairs(M.SYNC_CLS) do
 			if cid == id then
-				for j = 1, getn(M.BLESS) do
-					local n, have = M.ClassState(file, M.BLESS[j])
-					if n > 0 and have == n then ch = tostring(M.SYNC_BID[M.BLESS[j]]) break end
-				end
+				local b = M.MyClassBless(file)
+				if b then ch = tostring(M.SYNC_BID[b]) end
 			end
 		end
 		s = s .. ch
@@ -1651,7 +1930,65 @@ function M.SyncSend()
 	if M.demo or C.Get("pallypower.sync") == false then return false end
 	local _, cls = UnitClass("player")
 	if cls ~= "PALADIN" then return false end
-	return syncSend(M.SyncSelfText())
+	local ok = syncSend(M.SyncSelfText())
+	M.SyncNormal()
+	return ok
+end
+
+-- Mes exceptions de 10 min (message NASSIGN de PallyPowerTW) ; -1 retire celles que je n'ai plus.
+M.sentNormal = {}
+function M.SyncNormal()
+	local me = UnitName("player")
+	local now = {}
+	for i = 1, M.nrost do
+		local r = M.roster[i]
+		local a = M.assign and M.assign[r.name]
+		local cid = M.SYNC_CLS[r.file]
+		if a and cid then
+			local main = M.MyClassBless(r.file)
+			for j = 1, getn(M.BLESS) do
+				local b = M.BLESS[j]
+				if b ~= main and M.IsSingle(a, b) then
+					now[r.name] = cid
+					syncSend("NASSIGN " .. me .. " " .. cid .. " " .. r.name .. " " .. M.SYNC_BID[b])
+					break
+				end
+			end
+		end
+	end
+	for name, cid in pairs(M.sentNormal) do
+		if not now[name] then syncSend("NASSIGN " .. me .. " " .. cid .. " " .. name .. " -1") end
+	end
+	M.sentNormal = now
+end
+
+-- Le chef me donne une exception pour un joueur (bid -1 = retour a la benediction de sa classe).
+function M.OnNormalForMe(sender, name, bid)
+	if not M.CanRemote(sender) then return end
+	local file
+	for i = 1, M.nrost do
+		if M.roster[i].name == name then file = M.roster[i].file end
+	end
+	if not file then return end
+	local main = M.MyClassBless(file)
+	local b = main
+	if bid >= 0 then
+		b = nil
+		for bb, id in pairs(M.SYNC_BID) do
+			if id == bid then b = bb end
+		end
+		if not b or not M.Knows(b) then return end
+	end
+	local a = asg(name)
+	for j = 1, getn(M.BLESS) do a[M.BLESS[j]] = nil end
+	a.sg, a.single = nil, nil
+	if b then
+		a[b] = true
+		if bid >= 0 and b ~= main then a.sg = { [b] = true } end
+	end
+	saveAssign()
+	M.PaintCells()
+	M.PaintRows()
 end
 
 -- Envoi differe (regroupe plusieurs clics en un seul message).
@@ -1717,6 +2054,7 @@ function M.PeerLines()
 	return out
 end
 
+M.peerNormal = {}     -- [paladin] = { [joueur] = id benediction } : ses exceptions de 10 min
 M.peerFree = {}       -- [nom] = true : ce paladin accepte les ordres de tout le monde (FREEASSIGN YES)
 
 -- Chef ou assistant du raid, chef du groupe : seuls leurs ordres sont suivis par les autres paladins.
@@ -1805,6 +2143,16 @@ function M.OnAddon(ev, a1, a2, a3, a4)
 		elseif name == UnitName("player") and skill then
 			for id = 0, 8 do M.TeamOnAssign(sender, id, skill, true) end
 		end
+	elseif strsub(a2, 1, 8) == "NASSIGN " then
+		local _, _, pal, _, name, bid = string.find(a2, "^NASSIGN (%S+) (%S+) (%S+) (%S+)")
+		bid = tonumber(bid)
+		if pal == sender and bid then
+			local t = M.peerNormal[sender] or {}
+			if bid >= 0 then t[name] = bid else t[name] = nil end
+			M.peerNormal[sender] = t
+		elseif pal == UnitName("player") and bid then
+			M.OnNormalForMe(sender, name, bid)
+		end
 	elseif a2 == "FREEASSIGN YES" then
 		M.peerFree[sender] = true
 	elseif a2 == "FREEASSIGN NO" then
@@ -1816,6 +2164,7 @@ function M.OnAddon(ev, a1, a2, a3, a4)
 			if M.win and M.win:IsShown() and M.PaintRows then M.PaintRows() end
 		end
 	elseif a2 == "CLEAR" then
+		M.peerNormal[sender] = nil
 		if M.peers[sender] then M.peers[sender] = nil changed = true end
 	end
 	if changed then
@@ -1865,6 +2214,24 @@ end
 
 -- Benediction que JE donne a une classe (premiere complete) et son mode.
 function M.MyClassBless(file)
+	local count = {}
+	for i = 1, M.nrost do
+		local r = M.roster[i]
+		local a = r.file == file and M.assign and M.assign[r.name]
+		if a then
+			for j = 1, getn(M.BLESS) do
+				local b = M.BLESS[j]
+				if a[b] and not M.IsSingle(a, b) then count[b] = (count[b] or 0) + 1 end
+			end
+		end
+	end
+	local best, most = nil, 0
+	for j = 1, getn(M.BLESS) do
+		local b = M.BLESS[j]
+		if count[b] and count[b] > most then best, most = b, count[b] end
+	end
+	if best then return best end
+	-- classe entierement en 10 min : la benediction que tout le monde a
 	for j = 1, getn(M.BLESS) do
 		local n, have = M.ClassState(file, M.BLESS[j])
 		if n > 0 and have == n then return M.BLESS[j] end
@@ -2053,10 +2420,8 @@ function M.TeamToggle10(name, file)
 	M.TeamSet(name, file, cur, not M.TeamSingle(name, file))
 end
 
-M.TEAMWANT = { "kings", "wisdom", "might" }
-
--- Repartition automatique : pour chaque classe presente, chaque benediction voulue (jeu par defaut) va au paladin qui la connait
--- et qui en donne le moins ; un paladin donne UNE benediction par classe (limite du protocole). Seul, on retombe sur l'auto simple.
+-- Repartition d'equipe : chaque paladin qui acceptera l'ordre recoit sa benediction superieure (ASSIGN) puis ses exceptions de
+-- 10 min joueur par joueur (NASSIGN, compris par PallyPowerTW et ShikiPallyPower).
 function M.TeamAuto()
 	if M.nrost == 0 then M.ScanRoster() end
 	local pal = {}
@@ -2064,86 +2429,45 @@ function M.TeamAuto()
 	for i = 1, getn(all) do
 		if M.CanOrder(all[i]) then tinsert(pal, all[i]) else SUI.Print(L("msg.pallypower.team.nolead", all[i])) end
 	end
-	-- une benediction superieure touche toute la classe : la Salut (perte de menace) tomberait aussi sur son tank
-	local tankIn = {}
-	for i = 1, M.nrost do
-		local r = M.roster[i]
-		if r.file ~= "PALADIN" and M.IsTank(r.name) then tankIn[r.file] = true end
-	end
 	if getn(pal) < 2 then
 		M.AutoAssign()
 		return
 	end
-	local load = {}
-	for i = 1, getn(pal) do load[pal[i]] = 0 end
-	local plan = {}
-	local stick = {}      -- benediction (Puissance et Sagesse comptent pour une) -> paladin qui la donne deja : chaque paladin garde la sienne sur toutes les classes
-	for idx = 1, getn(M.CORDER) do
-		local file = M.CORDER[idx]
-		if M.classes[file] then
-			local def = M.CLASSDEF[file] or {}
-			local want = {}
-			for k = 1, getn(M.TEAMWANT) do
-				if def[M.TEAMWANT[k]] then tinsert(want, M.TEAMWANT[k]) end
-			end
-			local salv = not tankIn[file]
-			if salv and C.Get("pallypower.autosalv") then tinsert(want, "salvation") end
-			-- plus de paladins que de benedictions : les suivants donnent Lumiere puis Salut (comme l'attribution de l'addon PallyPower d'origine)
-			local function hasW(w) for q = 1, getn(want) do if want[q] == w then return true end end return false end
-			if getn(pal) > getn(want) and not hasW("light") then tinsert(want, "light") end
-			if salv and getn(pal) > getn(want) and not hasW("salvation") then tinsert(want, "salvation") end
-			-- les benedictions que peu de paladins connaissent sont placees d'abord
-			local cap = {}
-			for k = 1, getn(want) do
-				cap[want[k]] = 0
-				for i = 1, getn(pal) do
-					if M.TeamKnows(pal[i], want[k]) then cap[want[k]] = cap[want[k]] + 1 end
-				end
-			end
-			for k = 2, getn(want) do
-				local v, j = want[k], k - 1
-				while j >= 1 and cap[want[j]] > cap[v] do
-					want[j + 1] = want[j]
-					j = j - 1
-				end
-				want[j + 1] = v
-			end
-			local used = {}
-			plan[file] = {}
-			for k = 1, getn(want) do
-				local best
-				local sk = (want[k] == "might" or want[k] == "wisdom") and "mw" or want[k]
-				local pv = stick[sk]
-				if pv and not used[pv] and M.TeamKnows(pv, want[k]) then best = pv end
-				if not best then
-					for i = 1, getn(pal) do
-						local p = pal[i]
-						if not used[p] and M.TeamKnows(p, want[k]) and (not best or load[p] < load[best]) then best = p end
-					end
-				end
-				if best then
-					used[best] = true
-					load[best] = load[best] + 1
-					plan[file][best] = want[k]
-					stick[sk] = best
-				end
-			end
-		end
-	end
+	local plan = M.Plan(pal)
+	local me = UnitName("player")
 	local step = 0
-	for idx = 1, getn(M.CORDER) do
-		local file = M.CORDER[idx]
-		if plan[file] then
-			for i = 1, getn(pal) do
-				local p = pal[i]
-				local b = plan[file][p]
-				if p == UnitName("player") then
-					M.TeamSet(p, file, b, false)
-				else
-					step = step + 1
-					SUI.After(0.25 * step, function() M.TeamSet(p, file, b, false) M.TeamPaint() end, "pp.teamauto")
+	local function later(fn)
+		step = step + 1
+		SUI.After(0.25 * step, fn, "pp.teamauto")
+	end
+	for k = 1, getn(pal) do
+		local p = pal[k]
+		if p == me then
+			M.ApplyPlanSelf(plan)
+			saveAssign()
+			M.PaintCells()
+			M.PaintRows()
+		else
+			for c = 1, getn(M.CORDER) do
+				local file = M.CORDER[c]
+				if M.classes[file] then
+					local b = plan.greater[p][file]
+					later(function() M.TeamSet(p, file, b, false) M.TeamPaint() end)
 				end
 			end
+			local old = M.peerNormal[p] or {}
+			local new = {}
+			for i = 1, M.nrost do
+				local r = M.roster[i]
+				local g = plan.give[r.name][p]
+				local bid = g and g ~= plan.greater[p][r.file] and M.SYNC_BID[g] or nil
+				if bid or old[r.name] then
+					local msg = "NASSIGN " .. p .. " " .. M.SYNC_CLS[r.file] .. " " .. r.name .. " " .. (bid or -1)
+					later(function() syncSend(msg) end)
+					new[r.name] = bid
+				end
+			end
+			M.peerNormal[p] = new
 		end
 	end
 	SUI.Print(L("msg.pallypower.team.autodone", getn(pal)))
@@ -2369,6 +2693,7 @@ function M.MiniScan()
 	local st = {}
 	M.miniState = st
 	local vis = getglobal("UnitIsVisible")
+	local late = {}       -- { s, nom, unite, simple } : presentes mais bientot finies
 	for i = 1, M.nrost do
 		local r = M.roster[i]
 		local a = M.assign and M.assign[r.name]
@@ -2378,22 +2703,40 @@ function M.MiniScan()
 				if a[b] then
 					local s = st[b]
 					if not s then
-						s = { n = 0, miss = {}, units = {}, singles = {} }
+						s = { key = b, n = 0, miss = {}, units = {}, singles = {}, lack = 0 }
 						st[b] = s
 					end
 					s.n = s.n + 1
 					local ok = UnitExists(r.unit) and not UnitIsDeadOrGhost(r.unit)
 					if ok and type(vis) == "function" and not vis(r.unit) then ok = false end
-					if ok and not M.HasTex(r.unit, b) then
-						tinsert(s.miss, r.name)
-						tinsert(s.units, r.unit)
-						tinsert(s.singles, M.IsSingle(a, b))
+					if ok then
+						if not M.HasTex(r.unit, b) then
+							tinsert(s.miss, r.name)
+							tinsert(s.units, r.unit)
+							tinsert(s.singles, M.IsSingle(a, b))
+							s.lack = s.lack + 1
+						elseif M.Expiring(r.name, b) then
+							tinsert(late, { s, r.name, r.unit, M.IsSingle(a, b) })
+						end
 					end
 				end
 			end
 		end
 	end
+	for i = 1, getn(late) do
+		local s = late[i][1]
+		tinsert(s.miss, late[i][2])
+		tinsert(s.units, late[i][3])
+		tinsert(s.singles, late[i][4])
+	end
 	return st
+end
+
+-- "Alice" (absente) ou "Alice (3 min)" (bientot finie)
+function M.MissLabel(s, k)
+	local name = s.miss[k]
+	if k <= s.lack then return name end
+	return name .. " (" .. math.ceil((M.Left(name, s.key) or 0) / 60) .. " min)"
 end
 
 -- Pose UNE benediction manquante (celle demandee, sinon la premiere dans l'ordre Rois, Sagesse...). Renvoie vrai si lancee.
@@ -2416,6 +2759,7 @@ function M.CastGreater(b)
 	if M.LowLevel(s.units[ri]) or M.NoSymbols() then nm = M.CastName(b, true, s.units[ri]) end     -- cible trop basse ou plus de Symbole : benediction simple au bon rang
 	if not nm then SUI.Print(L("msg.pallypower.lowlevel", s.miss[ri])) return false end
 	castOn(s.units[ri], nm)
+	M.Stamp(s.units[ri], b, nm == M.BookName(b, true))
 	M.lastCast = s.miss[ri]
 	if M.mini then M.MiniPaint() end
 	return true
@@ -2429,18 +2773,23 @@ function M.CastNext(b)
 	-- d'abord les benedictions de classe, puis les simples (10 min) : sinon la benediction de classe ecraserait la simple d'un autre joueur de la classe
 	for pass = 1, 2 do
 		local single = (pass == 2)
-		for j = 1, getn(M.BLESS) do
-			local bb = M.BLESS[j]
-			if b == nil or b == bb then
-				local s = st[bb]
-				if s then
-					for k = 1, getn(s.units) do
-						local nm, eff = M.CastName(bb, (s.singles[k] or M.NoSymbols()) and true or false, s.units[k])
-						if nm and eff == single and M.Reachable(s.units[k]) then
-							castOn(s.units[k], nm)
-							M.lastCast = s.miss[k]
-							if M.mini then M.MiniPaint() end
-							return true
+		for urgent = 1, 2 do      -- d'abord les absentes, ensuite les bientot finies
+			for j = 1, getn(M.BLESS) do
+				local bb = M.BLESS[j]
+				if b == nil or b == bb then
+					local s = st[bb]
+					if s then
+						for k = 1, getn(s.units) do
+							if (urgent == 1) == (k <= s.lack) then
+								local nm, eff = M.CastName(bb, (s.singles[k] or M.NoSymbols()) and true or false, s.units[k])
+								if nm and eff == single and M.Reachable(s.units[k]) then
+									castOn(s.units[k], nm)
+									M.Stamp(s.units[k], bb, not eff and C.Get("pallypower.greater"))
+									M.lastCast = s.miss[k]
+									if M.mini then M.MiniPaint() end
+									return true
+								end
+							end
 						end
 					end
 				end
@@ -2477,7 +2826,7 @@ function M.BuildMini()
 			GameTooltip:SetOwner(this, "ANCHOR_RIGHT")
 			GameTooltip:SetText(L("msg.pallypower.bless." .. this.bless))
 			if s and s.miss[1] then
-				for k = 1, mmin(getn(s.miss), 10) do GameTooltip:AddLine(s.miss[k], 1, 0.6, 0.6) end
+				for k = 1, mmin(getn(s.miss), 10) do GameTooltip:AddLine(M.MissLabel(s, k), 1, 0.6, 0.6) end
 				if getn(s.miss) > 10 then GameTooltip:AddLine("...", 0.7, 0.7, 0.7) end
 			else
 				GameTooltip:AddLine(L("msg.pallypower.mini.ok"), 0.5, 1, 0.5)
@@ -2523,6 +2872,15 @@ function M.BuildMini()
 	end)
 	f.oBtn = oBtn
 
+	-- les icones a refaire clignotent
+	f:SetScript("OnUpdate", function()
+		local a = M.BlinkAlpha()
+		for j = 1, getn(M.BLESS) do
+			local b = f.btn[j]
+			if b then b:SetAlpha(b.blink and a or 1) end
+		end
+	end)
+
 	SUI.Layout.Register(f, "pallypower.mini", "LEFT", 8, 120)
 	M.DragWire(f, "pallypower.mini")
 	M.mini = f
@@ -2558,6 +2916,7 @@ function M.MiniPaint()
 			if nm >= s.n then col = tc.bad elseif nm > 0 then col = tc.warn end
 			b:SetBackdropBorderColor(col[1], col[2], col[3], 1)
 			b.cnt:SetText(nm > 0 and nm or EMPTY)
+			b.blink = nm > 0
 			b:Show()
 		else
 			b:Hide()
@@ -2586,8 +2945,124 @@ function M.MiniPaint()
 	f:Show()
 end
 
+function M.BlinkAlpha()
+	local x = GetTime() * 1.6
+	if x - floor(x) < 0.5 then return 1 end
+	return 0.3
+end
+
+-- ---------------------------------------------------------------- aura
+-- Les auras du paladin sont des "formes" de la barre : isActive dit si c'est la MIENNE qui est active (celle d'un autre paladin
+-- ne compte pas). Reconnue par son icone, sinon par son nom francais ou anglais.
+M.AURAS = { "devotion", "retribution", "concentration", "shadow", "frost", "fire", "sanctity" }
+M.AURADEF = {
+	devotion = { "spell_holy_devotionaura", "Devotion Aura", "Aura de d\195\169votion" },
+	retribution = { "spell_holy_auraoflight", "Retribution Aura", "Aura de vindicte" },
+	concentration = { "spell_holy_mindsooth", "Concentration Aura", "Aura de concentration" },
+	shadow = { "spell_shadow_sealofkings", "Shadow Resistance Aura", "Aura de r\195\169sistance \195\160 l'Ombre" },
+	frost = { "spell_frost_wizardmark", "Frost Resistance Aura", "Aura de r\195\169sistance au Givre" },
+	fire = { "spell_fire_sealoffire", "Fire Resistance Aura", "Aura de r\195\169sistance au Feu" },
+	sanctity = { "spell_holy_mindvision", "Sanctity Aura", "Aura de saintet\195\169" },
+}
+
+-- Numero de forme, texture, active ; nil si le paladin ne l'a pas apprise.
+function M.FindAura(key)
+	local def = M.AURADEF[key]
+	local gn, gi = getglobal("GetNumShapeshiftForms"), getglobal("GetShapeshiftFormInfo")
+	if not def or type(gn) ~= "function" or type(gi) ~= "function" then return nil end
+	for i = 1, (gn() or 0) do
+		local tex, name, active = gi(i)
+		local _, _, file = string.find(slower(tex or EMPTY), "([^\\]+)$")
+		local low = fold(name or EMPTY)
+		if file == def[1] or low == fold(def[2]) or low == fold(def[3]) then return i, tex, active end
+	end
+	return nil
+end
+
+function M.AuraBuild()
+	if M.aura then return M.aura end
+	local f = CreateFrame("Button", "ShikiUI_PPAura", UIParent)
+	f:SetWidth(34)
+	f:SetHeight(34)
+	T.Backdrop(f)
+	f.icon = f:CreateTexture(nil, "ARTWORK")
+	f.icon:SetPoint("TOPLEFT", f, "TOPLEFT", 3, -3)
+	f.icon:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -3, 3)
+	f:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+	f:SetScript("OnClick", function()
+		if arg1 == "RightButton" then M.AuraNext() else M.AuraCast() end
+	end)
+	f:SetScript("OnEnter", function()
+		GameTooltip:SetOwner(this, "ANCHOR_RIGHT")
+		GameTooltip:SetText(L("choice.pallypower.aura." .. (C.Get("pallypower.aura") or "none")))
+		GameTooltip:AddLine(L("msg.pallypower.aura.hint"), 0.6, 0.6, 0.6)
+		GameTooltip:Show()
+	end)
+	f:SetScript("OnLeave", function() GameTooltip:Hide() end)
+	f:SetScript("OnUpdate", function() this:SetAlpha(this.blink and M.BlinkAlpha() or 1) end)
+	SUI.Layout.Register(f, "pallypower.aura", "CENTER", 0, -120)
+	M.aura = f
+	return f
+end
+
+function M.AuraTick()
+	if not M.on then return end
+	local key = C.Get("pallypower.aura")
+	local _, cls = UnitClass("player")
+	local i, tex, active
+	if cls == "PALADIN" and key ~= "none" then i, tex, active = M.FindAura(key) end
+	if not i then
+		if M.aura then M.aura:Hide() end
+		return
+	end
+	if not M.aura then
+		if SUI.InCombat() then return end
+		M.AuraBuild()
+	end
+	local f = M.aura
+	local missing = not active and not UnitIsDeadOrGhost("player")
+	f.icon:SetTexture(tex)
+	f.blink = missing
+	local col = missing and T.c.bad or T.c.border
+	f:SetBackdropBorderColor(col[1], col[2], col[3], 1)
+	f:Show()
+	if missing then
+		if not M.auraAlerted then
+			M.auraAlerted = true
+			local play = getglobal("PlaySound")
+			if C.Get("pallypower.aurasound") and type(play) == "function" then play("RaidWarning") end
+		end
+	else
+		M.auraAlerted = nil
+	end
+end
+
+function M.AuraCast()
+	local i, _, active = M.FindAura(C.Get("pallypower.aura"))
+	local cast = getglobal("CastShapeshiftForm")
+	if i and not active and type(cast) == "function" then cast(i) end      -- deja active : un clic l'enleverait
+end
+
+-- Aura suivante parmi celles apprises (clic droit, /sui pp aura).
+function M.AuraNext()
+	local cur = C.Get("pallypower.aura")
+	local at = 0
+	for i = 1, getn(M.AURAS) do
+		if M.AURAS[i] == cur then at = i end
+	end
+	local pick = "none"
+	for i = at + 1, getn(M.AURAS) do
+		if M.FindAura(M.AURAS[i]) then pick = M.AURAS[i] break end
+	end
+	C.Set("pallypower.aura", pick)
+	SUI.Print(L("msg.pallypower.aura.set", L("choice.pallypower.aura." .. pick)))
+	M.AuraTick()
+end
+M.AURA_EV = { "PLAYER_AURAS_CHANGED", "UPDATE_SHAPESHIFT_FORMS", "PLAYER_ALIVE", "PLAYER_UNGHOST", "PLAYER_DEAD" }
+
 function M.MiniTick()
 	if not M.on then return end
+	M.AuraTick()
 	if not C.Get("pallypower.mini") then
 		if M.mini then M.mini:Hide() end
 		return
@@ -2608,6 +3083,7 @@ function M.OnKey(key)
 		end
 		if M.win and M.win:IsShown() then M.PaintStatus() end
 		if key == "pallypower.mini" then M.MiniTick() end
+		if key == "pallypower.aura" then M.auraAlerted = nil M.AuraTick() end
 		if key == "pallypower.minilayout" and M.mini then M.MiniPaint() end
 	end
 end
@@ -2671,6 +3147,7 @@ function M.OnCastEv(ev, a1, a2)
 		M.busyUntil = (ms and ms > 0) and (GetTime() + ms / 1000) or nil
 	else
 		M.busyUntil = nil
+		if ev == "SPELLCAST_FAILED" or ev == "SPELLCAST_INTERRUPTED" then M.Unstamp() end
 	end
 end
 M.CAST_EV = { "SPELLCAST_START", "SPELLCAST_STOP", "SPELLCAST_FAILED", "SPELLCAST_INTERRUPTED", "SPELLCAST_CHANNEL_START", "SPELLCAST_CHANNEL_STOP" }
@@ -2685,6 +3162,7 @@ function M.Enable()
 	SUI.On("PLAYER_ENTERING_WORLD", M.OnRoster)
 	SUI.On("SPELLS_CHANGED", M.ScanKnown)
 	SUI.On("CHAT_MSG_ADDON", M.OnAddon)
+	for i = 1, getn(M.AURA_EV) do SUI.On(M.AURA_EV[i], M.AuraTick) end
 	SUI.WhenSafe(M.ScanKnown)
 	if not M.watching then
 		M.watching = true
@@ -2710,6 +3188,8 @@ function M.Disable()
 	M.Stop()
 	if M.miniTask then SUI.Cancel(M.miniTask) M.miniTask = nil end
 	if M.mini then M.mini:Hide() end
+	if M.aura then M.aura:Hide() end
+	for i = 1, getn(M.AURA_EV) do SUI.Off(M.AURA_EV[i], M.AuraTick) end
 	SUI.Off("RAID_ROSTER_UPDATE", M.OnRoster)
 	SUI.Off("PARTY_MEMBERS_CHANGED", M.OnRoster)
 	SUI.Off("PLAYER_ENTERING_WORLD", M.OnRoster)
@@ -2734,6 +3214,7 @@ end
 
 local function judgeText(o, v) return L("choice.pallypower.judge." .. v) end
 local function miniText(o, v) return L("choice.pallypower.minilayout." .. v) end
+local function auraText(o, v) return L("choice.pallypower.aura." .. v) end
 
 SUI.RegisterModule("pallypower", {
 	default = false,
@@ -2745,7 +3226,11 @@ SUI.RegisterModule("pallypower", {
 		opt("mini", "bool", 16, true, { simple = true }),
 		opt("minilayout", "choice", 16.5, "row", { choices = { "row", "col", "grid" }, choiceText = miniText, simple = true }),
 		opt("autosingle", "bool", 17, false, { simple = true }),
-		opt("autosalv", "bool", 18, false),
+		opt("autosalv", "bool", 18, true),
+		opt("rebuff", "number", 12, 4, { min = 0, max = 9, step = 1, simple = true }),
+		opt("aura", "choice", 13, "none", { choices = { "none", "devotion", "retribution", "concentration", "shadow", "frost", "fire", "sanctity" },
+			choiceText = auraText, simple = true }),
+		opt("aurasound", "bool", 13.5, true, { simple = true }),
 		opt("sync", "bool", 19, true),
 		opt("remote", "bool", 19.2, true),
 		opt("team", "bool", 15.5, false),
@@ -2830,6 +3315,8 @@ SUI.RegisterCommand("pp", function(rest)
 		M.Demo(false)
 	elseif rest == "auto" then
 		M.AutoAssign()
+	elseif rest == "aura" then
+		M.AuraNext()
 	elseif rest == "team" then
 		M.TeamToggle()
 	elseif rest == "tank" or rest == "single" then

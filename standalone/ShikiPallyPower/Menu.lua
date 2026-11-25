@@ -52,8 +52,8 @@ M.FAMILIES = {
 	{ id = "combat", cats = { "castbar", "auras", "threat", "tanktools", "meter", "totems", "clickheal", "alerts", "manaswap", "debuffs", "handguard", "cooldowns", "buffwatch", "ghosts", "bossmods", "groupfx", "esport" } },
 	{ id = "group", cats = { "group", "raid", "markers", "marks", "pallypower", "grouppets", "finder" } },
 	{ id = "interface", cats = { "actionbars", "chat", "chattabs", "messages", "windows", "minimap", "map", "datatext", "charstats" } },
-	{ id = "tools", cats = { "social", "bulletin", "stats", "macros", "tracker" } },
-	{ id = "loot", cats = { "loot", "items", "bags", "mail", "auction", "market", "vendor", "codex", "questtrack", "places" } },
+	{ id = "tools", cats = { "social", "bulletin", "stats", "macros", "tracker", "flights" } },
+	{ id = "loot", cats = { "loot", "items", "bags", "mail", "auction", "market", "vendor", "codex", "questtrack", "guide", "places", "crafts" } },
 }
 M.openFam = {}           -- familles depliees dans la navigation (en memoire : la famille de la page courante s'ouvre seule)
 
