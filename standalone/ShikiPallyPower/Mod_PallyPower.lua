@@ -1438,6 +1438,54 @@ local function slotOf(b)
 	return nil
 end
 
+-- Priorite par paladin (/sui pp prefer Nom benediction), gardee d'un raid a l'autre.
+function M.Prefs()
+	local t = C.GetGlobal("pallypower.prefer")
+	if type(t) ~= "table" then
+		t = {}
+		C.SetGlobal("pallypower.prefer", t)
+	end
+	return t
+end
+
+M.PREFWORD = { salut = "salvation", salvation = "salvation", salva = "salvation", lumiere = "light", light = "light",
+	rois = "kings", kings = "kings", sagesse = "wisdom", wisdom = "wisdom", puissance = "might", might = "might",
+	sanctuaire = "sanctuary", sanctuary = "sanctuary" }
+
+-- Place imposee : la priorite reglee, sinon un paladin tank donne la Salut.
+function M.PrefSlot(name)
+	local b = M.Prefs()[name]
+	if b then return slotOf(b) end
+	if M.IsTank(name) then return "salv" end
+	return nil
+end
+
+function M.SetPref(name, word)
+	if not name or name == EMPTY then
+		local any = false
+		for n, b in pairs(M.Prefs()) do
+			any = true
+			SUI.Print(L("msg.pallypower.pref.set", n, L("msg.pallypower.bless." .. b)))
+		end
+		if not any then SUI.Print(L("msg.pallypower.pref.usage")) end
+		return
+	end
+	name = string.upper(string.sub(name, 1, 1)) .. string.lower(string.sub(name, 2))
+	word = string.lower(word or EMPTY)
+	if word == "none" or word == "aucune" then
+		M.Prefs()[name] = nil
+		SUI.Print(L("msg.pallypower.pref.none", name))
+		return
+	end
+	local b = M.PREFWORD[word]
+	if not b then
+		SUI.Print(L("msg.pallypower.pref.usage"))
+		return
+	end
+	M.Prefs()[name] = b
+	SUI.Print(L("msg.pallypower.pref.set", name, L("msg.pallypower.bless." .. b)))
+end
+
 -- Benediction que donne deja ce paladin (pour qu'il la garde).
 local function heldSlot(name)
 	for i = 1, getn(M.CORDER) do
@@ -1516,6 +1564,26 @@ local function pickSlots(free, fixed)
 	local chosen, used = {}, {}
 	local held = {}
 	for k = 1, getn(free) do held[free[k]] = heldSlot(free[k]) end
+	-- d'abord les places imposees (priorite reglee, paladin tank)
+	local open = {}
+	for i = 1, getn(order) do open[order[i]] = true end
+	for k = 1, getn(free) do
+		local p = free[k]
+		local s = M.PrefSlot(p)
+		if s and open[s] and not used[s] and slotKnown(p, s) then
+			local listed = false
+			for i = 1, getn(want) do
+				if want[i] == s then listed = true end
+			end
+			if not listed then
+				for i = getn(want), 1, -1 do
+					if not used[want[i]] then want[i] = s break end
+				end
+			end
+			chosen[p] = s
+			used[s] = true
+		end
+	end
 	local function place(s)
 		local best, score
 		for k = 1, getn(free) do
@@ -1538,7 +1606,9 @@ local function pickSlots(free, fixed)
 		while byCap[at] and cap[byCap[at]] <= cap[want[i]] do at = at + 1 end
 		tinsert(byCap, at, want[i])
 	end
-	for i = 1, getn(byCap) do place(byCap[i]) end
+	for i = 1, getn(byCap) do
+		if not used[byCap[i]] then place(byCap[i]) end
+	end
 	for i = 1, getn(order) do
 		if not used[order[i]] then place(order[i]) end
 	end
@@ -3317,6 +3387,9 @@ SUI.RegisterCommand("pp", function(rest)
 		M.Demo(false)
 	elseif rest == "auto" then
 		M.AutoAssign()
+	elseif string.find(rest, "^prefer") then
+		local _, _, name, word = string.find(rest, "^prefer%s*(%S*)%s*(%S*)")
+		M.SetPref(name, word)
 	elseif rest == "aura" then
 		M.AuraNext()
 	elseif rest == "team" then
