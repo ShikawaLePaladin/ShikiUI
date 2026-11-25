@@ -489,8 +489,27 @@ end
 
 -- Nom complet du sort pour une unite : single = 10 min ; rang adapte au niveau.
 -- Renvoie aussi le booleen "simple" reellement utilise.
+-- La Salut superieure touche TOUTE la classe : interdite si un membre de la classe est tank ou n'a pas la Salut chez moi
+-- (case videe a la main). Les autres la recoivent alors en 10 min.
+function M.GreaterOK(b, unit)
+	if b ~= "salvation" or not unit then return true end
+	local file
+	for i = 1, M.nrost do
+		if M.roster[i].unit == unit then file = M.roster[i].file end
+	end
+	if not file then return true end
+	for i = 1, M.nrost do
+		local r = M.roster[i]
+		if r.file == file then
+			local a = M.assign and M.assign[r.name]
+			if M.IsTank(r.name) or not (a and a.salvation) then return false end
+		end
+	end
+	return true
+end
+
 function M.CastName(b, single, unit)
-	if not single and M.LowLevel(unit) then single = true end
+	if not single and (M.LowLevel(unit) or not M.GreaterOK(b, unit)) then single = true end
 	local rk = M.RankFor(b, unit)
 	local nm = M.SpellName(b, single)
 	if single and rk then nm = nm .. "(" .. (M.rankWord or (GAMEFR and "Rang" or "Rank")) .. " " .. rk .. ")" end
@@ -2624,9 +2643,8 @@ function M.TeamPaint()
 	if not f or not f:IsShown() then return end
 	local pal = M.TeamPaladins()
 	local cls = {}
-	for i = 1, getn(M.CORDER) do
-		if M.classes[M.CORDER[i]] then tinsert(cls, M.CORDER[i]) end
-	end
+	-- toutes les classes, meme absentes : on voit ce que chacun prevoit (voleur...)
+	for i = 1, getn(M.CORDER) do tinsert(cls, M.CORDER[i]) end
 	local ncls = mmax(getn(cls), 4)
 	local np = mmin(getn(pal), 8)
 	local x0 = 10 + 104
@@ -2828,7 +2846,7 @@ function M.CastGreater(b)
 	if not ri then SUI.Print(L("msg.pallypower.norange")) return false end
 	-- nom SUPERIEUR force (independant de l'option pallypower.greater), tel que le grimoire le donne
 	local nm = M.BookName(b, true)
-	if M.LowLevel(s.units[ri]) or M.NoSymbols() then nm = M.CastName(b, true, s.units[ri]) end     -- cible trop basse ou plus de Symbole : benediction simple au bon rang
+	if M.LowLevel(s.units[ri]) or M.NoSymbols() or not M.GreaterOK(b, s.units[ri]) then nm = M.CastName(b, true, s.units[ri]) end     -- cible trop basse ou plus de Symbole : benediction simple au bon rang
 	if not nm then SUI.Print(L("msg.pallypower.lowlevel", s.miss[ri])) return false end
 	castOn(s.units[ri], nm)
 	M.Stamp(s.units[ri], b, nm == M.BookName(b, true))
