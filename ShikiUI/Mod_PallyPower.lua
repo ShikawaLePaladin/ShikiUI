@@ -1652,6 +1652,7 @@ function M.AutoAssign()
 	saveAssign()
 	M.PaintCells()
 	M.PaintRows()
+	if M.TeamPaint then M.TeamPaint() end
 	SUI.Print(L("msg.pallypower.autodone", M.nrost))
 end
 
@@ -2028,7 +2029,7 @@ function M.PeerText(name)
 	local p = M.peers[name]
 	if not p then return nil end
 	local by = {}
-	for id = 0, 9 do
+	for id = 0, 8 do
 		local bid = p[id]
 		if bid and bid >= 0 then
 			if not by[bid] then by[bid] = {} end
