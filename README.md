@@ -7,6 +7,7 @@ English · [Français](README.fr.md)
 ShikiUI is **one addon plus four generated data addons**, released together as a single zip. The UI works on its own; the data packages
 unlock the **Codex** (dungeon loot, sets, reputations, quests, monsters) and the **quest tools** (map pins, minimap pins, direction arrow).
 Native French and English (works with a French or an English client), themed styles, Simple/Expert menu, raid mode.
+Quality of life: quest guide for your level and zone (`/sui guide`), loot source on item tooltips, flight timer, profession memory across characters.
 
 > Personal project by Shikiwa (speedy8182), developed with AI assistance.
 
@@ -31,7 +32,7 @@ or a map. That is why ShikiUI is a **suite of packages** — the interface on on
 
 ```
                      ┌────────────────────────────┐
-                     │          ShikiUI           │  the interface: 48 modules, /sui menu,
+                     │          ShikiUI           │  the interface: 51 modules, /sui menu,
                      │        (required)          │  quest tracker, Codex window
                      └─────────────┬──────────────┘
           loaded on demand, only when the Codex or a map needs them

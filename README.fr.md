@@ -7,6 +7,7 @@
 ShikiUI, c'est **un addon plus quatre addons de donnees generes**, livres ensemble dans un seul zip. L'interface fonctionne seule ; les paquets de donnees
 debloquent le **Codex** (butin des donjons, sets, reputations, quetes, monstres) et les **outils de quetes** (epingles de carte et de minicarte, fleche de direction).
 Bilingue **FR/EN** natif (client francais ou anglais), styles thematises, menu Simple/Expert, mode Raid.
+Confort : guide de quetes selon ton niveau et ta zone (`/sui guide`), source du butin dans les infobulles, chronometre de vol, memoire des metiers de tous tes personnages.
 
 > Projet personnel de Shikiwa (speedy8182), developpe avec l'aide de l'IA.
 
@@ -31,7 +32,7 @@ le Codex ou une carte. C'est pourquoi ShikiUI est une **suite de paquets** : l'i
 
 ```
                      ┌────────────────────────────┐
-                     │          ShikiUI           │  l'interface : 48 modules, menu /sui,
+                     │          ShikiUI           │  l'interface : 51 modules, menu /sui,
                      │       (obligatoire)        │  suivi de quetes, fenetre Codex
                      └─────────────┬──────────────┘
         charges a la demande, seulement quand le Codex ou une carte en a besoin

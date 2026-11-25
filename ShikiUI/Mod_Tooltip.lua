@@ -428,6 +428,7 @@ function M.DecorateItem(link)
 	if cfg.vendor then M.AddVendor(id, link) end
 	if SUI.Market and SUI.Market.AddTip then SUI.Market.AddTip(link) end
 	if cfg.owned then M.AddOwned(id) end
+	if SUI.Crafts and SUI.Crafts.AddTip then SUI.Crafts.AddTip(id, link) end
 end
 
 -- ---------------------------------------------------------------- texte de vie sur la barre

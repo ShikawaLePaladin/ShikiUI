@@ -97,6 +97,8 @@ Locale_Codex.lua
 Mod_Codex.lua
 Locale_Cooldowns.lua
 Mod_Cooldowns.lua
+Locale_Crafts.lua
+Mod_Crafts.lua
 Locale_Cursor.lua
 Mod_Cursor.lua
 Locale_Datatext.lua
@@ -105,6 +107,8 @@ Locale_Esport.lua
 Mod_Esport.lua
 Locale_Finder.lua
 Mod_Finder.lua
+Locale_Flights.lua
+Mod_Flights.lua
 Locale_Ghosts.lua
 Mod_Ghosts.lua
 Locale_Group.lua
