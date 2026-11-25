@@ -322,23 +322,46 @@ function M.HasBuff(unit, base)
 		fwant = fold(M.SPELLS_FR[id])
 		fgw = fold(M.SPELLS_GFR[id] or (M.GREATER_FR .. M.SPELLS_FR[id]))
 	end
+	-- noms reconnus par l'icone dans le grimoire (autre traduction que les notres)
+	local bs = id and M.byIcon and M.byIcon["s:" .. id]
+	local bg = id and M.byIcon and M.byIcon["g:" .. id]
+	if bs then bs = fold(bs) end
+	if bg then bg = fold(bg) end
 	for n in pairs(names) do
-		if n == want or n == gw or n == fwant or n == fgw then return true end
+		if n == want or n == gw or n == fwant or n == fgw or n == bs or n == bg then return true end
 	end
 	return false
 end
 
 -- ---------------------------------------------------------------- cycle de benediction
--- Nom reel du sort selon la langue du jeu (frFR chez OctoWow : "Ben959diction sup959rieure des Rois"), sinon EN.
+-- La langue annoncee par le client (GetLocale) ne dit pas dans quelle langue sont les sorts : chez OctoWow un client "enUS" peut avoir
+-- des sorts en francais, et l'inverse. Le nom lance est donc celui LU DANS LE GRIMOIRE : anglais ou francais, puis a defaut par l'icone
+-- (independante de la langue). Sans grimoire lisible, on retombe sur la langue du client.
+local function inBook(en, fr)
+	local k = M.known
+	if not k then return nil end
+	return (en and k[fold(en)]) or (fr and k[fold(fr)]) or nil
+end
+
+-- Nom de la benediction b : greater = superieure, sinon simple
+function M.BookName(b, greater)
+	local en = greater and (M.GREATERPFX .. M.SPELLS[b]) or M.SPELLS[b]
+	local fr = M.SPELLS_FR[b]
+	if greater and fr then fr = M.SPELLS_GFR[b] or (M.GREATER_FR .. fr) end
+	local real = inBook(en, fr)
+	if not real and M.byIcon then real = M.byIcon[(greater and "g:" or "s:") .. b] end
+	if real then return real end
+	if GAMEFR and fr then return fr end
+	return en
+end
+
+function M.JudgeName(jid)
+	if not M.JUDGES[jid] or jid == "none" then return EMPTY end
+	return inBook(M.JUDGES[jid], M.JUDGES_FR[jid]) or (GAMEFR and M.JUDGES_FR[jid]) or M.JUDGES[jid]
+end
+
 function M.SpellName(b, single)
-	local gr = C.Get("pallypower.greater") and not single
-	if GAMEFR and M.SPELLS_FR[b] then
-		if gr then return M.SPELLS_GFR[b] or (M.GREATER_FR .. M.SPELLS_FR[b]) end
-		return M.SPELLS_FR[b]
-	end
-	local base = M.SPELLS[b]
-	if gr then return M.GREATERPFX .. base end
-	return base
+	return M.BookName(b, C.Get("pallypower.greater") and not single)
 end
 
 -- Niveaux d'apprentissage des rangs (1.12) : le client refuse un rang trop haut sur une cible de bas niveau ("niveau trop bas").
@@ -374,7 +397,7 @@ function M.CastName(b, single, unit)
 	if not single and M.LowLevel(unit) then single = true end
 	local rk = M.RankFor(b, unit)
 	local nm = M.SpellName(b, single)
-	if single and rk then nm = nm .. "(" .. (GAMEFR and "Rang " or "Rank ") .. rk .. ")" end
+	if single and rk then nm = nm .. "(" .. (M.rankWord or (GAMEFR and "Rang" or "Rank")) .. " " .. rk .. ")" end
 	return nm, single
 end
 
@@ -561,7 +584,7 @@ function M.CastAll()
 	if M.task then SUI.Cancel(M.task) M.task = nil end
 	-- le jugement part avant tout, meme si plus personne ne manque (c'est un geste a part)
 	local jid = C.Get("pallypower.judge") or "none"
-	local j = (GAMEFR and M.JUDGES_FR[jid]) or M.JUDGES[jid] or EMPTY
+	local j = M.JudgeName(jid)
 	if j ~= EMPTY and UnitExists("target") and UnitCanAttack("player", "target") then CastSpellByName(j) end
 	M.BuildPairs()
 	if M.npairs == 0 then
@@ -1180,25 +1203,57 @@ M.TANKSET = { "kings", "might", "light", "sanctuary" }   -- (2026-11-19) Sanctua
 M.HYBRID = { PALADIN = true, SHAMAN = true, DRUID = true }
 
 -- Sorts connus du paladin (livre de sorts) : on n'attribue jamais une benediction qu'il ne possede pas.
+-- Icones des benedictions : { simple, superieure } (nom de texture sans le chemin)
+M.BOOKICON = {
+	kings = { "spell_magic_magearmor", "spell_magic_greaterblessingofkings" },
+	wisdom = { "spell_holy_sealofwisdom", "spell_holy_greaterblessingofwisdom" },
+	might = { "spell_holy_fistofjustice", "spell_holy_greaterblessingofkings" },
+	salvation = { "spell_holy_sealofsalvation", "spell_holy_greaterblessingofsalvation" },
+	light = { "spell_holy_prayerofhealing02", "spell_holy_greaterblessingoflight" },
+	sanctuary = { "spell_nature_lightningshield", "spell_holy_greaterblessingofsanctuary" },
+}
+
 function M.ScanKnown()
 	local gsn = getglobal("GetSpellName")
-	local known = {}
-	local any = false
+	local gst = getglobal("GetSpellTexture")
+	local known, byIcon = {}, {}
+	local any, word = false, nil
 	if type(gsn) == "function" then
 		for i = 1, 300 do
-			local nm = gsn(i, "spell")
+			local nm, rank = gsn(i, "spell")
 			if not nm then break end
 			any = true
-			known[fold(nm)] = true
+			local low = fold(nm)
+			known[low] = nm
+			if not word and type(rank) == "string" then
+				local _, _, w = string.find(rank, "^(%a+) %d")
+				if w == "Rank" or w == "Rang" then word = w end
+			end
+			-- le nom doit dire "benediction" / "blessing" : d'autres sorts partagent ces icones
+			if type(gst) == "function" and (string.find(low, "diction", 1, true) or string.find(low, "blessing", 1, true)) then
+				local tex = gst(i, "spell")
+				if type(tex) == "string" then
+					local _, _, file = string.find(slower(tex), "([^\\]+)$")
+					for b, icons in pairs(M.BOOKICON) do
+						if file == icons[1] then byIcon["s:" .. b] = nm end
+						if file == icons[2] then byIcon["g:" .. b] = nm end
+					end
+				end
+			end
 		end
 	end
 	M.known = any and known or nil
+	M.byIcon = any and byIcon or nil
+	M.rankWord = word
 end
 
 function M.Knows(b)
 	if not M.known then return true end
-	local nm = (GAMEFR and M.SPELLS_FR[b]) or M.SPELLS[b]
-	return M.known[fold(nm)] and true or false
+	local fr = M.SPELLS_FR[b]
+	if inBook(M.SPELLS[b], fr) then return true end
+	if inBook(M.GREATERPFX .. M.SPELLS[b], M.SPELLS_GFR[b]) then return true end
+	local icons = M.byIcon
+	return (icons and (icons["s:" .. b] or icons["g:" .. b])) and true or false
 end
 
 function M.SetFlag(name, flag, want)
@@ -2241,13 +2296,8 @@ function M.CastGreater(b)
 		if M.Reachable(s.units[k]) then ri = k break end
 	end
 	if not ri then SUI.Print(L("msg.pallypower.norange")) return false end
-	-- nom SUPERIEUR force (independant de l'option pallypower.greater) : EN ou FR selon le client
-	local nm
-	if GAMEFR and M.SPELLS_FR[b] then
-		nm = M.SPELLS_GFR[b] or (M.GREATER_FR .. M.SPELLS_FR[b])
-	else
-		nm = M.GREATERPFX .. M.SPELLS[b]
-	end
+	-- nom SUPERIEUR force (independant de l'option pallypower.greater), tel que le grimoire le donne
+	local nm = M.BookName(b, true)
 	if M.LowLevel(s.units[ri]) or M.NoSymbols() then nm = M.CastName(b, true, s.units[ri]) end     -- cible trop basse ou plus de Symbole : benediction simple au bon rang
 	if not nm then SUI.Print(L("msg.pallypower.lowlevel", s.miss[ri])) return false end
 	castOn(s.units[ri], nm)
@@ -2490,6 +2540,12 @@ function M.Debug()
 		end
 	end
 	SUI.Print("PP symboles=" .. tostring(M.SymbolCount()) .. " connus=" .. tostring(M.known and "oui" or "non") .. " occupe=" .. tostring(M.busyUntil ~= nil) .. " lignes=" .. n)
+	local g = getglobal("GetLocale")
+	SUI.Print("PP langue client=" .. tostring(g and g()) .. " rang=" .. tostring(M.rankWord))
+	for k = 1, getn(M.BLESS) do
+		local b = M.BLESS[k]
+		SUI.Print("PP " .. b .. " : " .. M.BookName(b, false) .. " | " .. M.BookName(b, true) .. (M.Knows(b) and "" or " (absent du grimoire)"))
+	end
 end
 
 -- Mes incantations : le cycle attend la fin d'un soin en cours au lieu de l'interrompre.
