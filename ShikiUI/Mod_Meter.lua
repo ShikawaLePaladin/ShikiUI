@@ -666,9 +666,11 @@ end
 
 function M.Credit(kind, name, cls, key, val, eff, crit)
 	local now = GetTime()
-	if not M.cur then M.StartSegment(now) end
-	M.lastEvt = now
-	M.CreditSeg(M.cur, kind, name, cls, key, val, eff, now, crit)
+	-- un soin sur la duree ou un soigneur entre deux pulls ne doit ni ouvrir un combat ni retarder sa fin
+	local fight = (kind ~= "heal" and kind ~= "dispel" and kind ~= "dispels") or UnitAffectingCombat("player")
+	if not M.cur and fight then M.StartSegment(now) end
+	if fight then M.lastEvt = now end
+	if M.cur then M.CreditSeg(M.cur, kind, name, cls, key, val, eff, now, crit) end
 	M.CreditSeg(M.overall, kind, name, cls, key, val, eff, now, crit)
 	M.ver = M.ver + 1
 end
@@ -1427,6 +1429,7 @@ local function onAdd(b)
 	for n = 1, C.Get("meter.windows") do
 		if not M.cfg.open[n] then
 			C.Set("meter.open" .. n, true)
+			C.Set("meter.closed" .. n, false)
 			SUI.Print(L("msg.meter.opened", n))
 			return
 		end
@@ -1462,6 +1465,7 @@ end
 local function onClose(b)
 	local w = b.win
 	C.Set("meter.open" .. w.i, false)
+	C.Set("meter.closed" .. w.i, true)
 	if M.AnyOpen() then
 		SUI.Print(L("msg.meter.closed1", w.i, w.i))
 	else
@@ -2550,6 +2554,7 @@ function M.NewWindow()
 	C.Set("meter.view" .. n, pick)
 	C.Set("meter.seg" .. n, "current")
 	C.Set("meter.open" .. n, true)
+	C.Set("meter.closed" .. n, false)
 	C.Set("meter.windows", n)
 	SUI.Config.Notify("pos", nil)
 	SUI.Print(L("msg.meter.newwin", n))
@@ -2569,8 +2574,10 @@ function M.DeleteWindow(i)
 		C.Set("meter.view" .. j, C.Get("meter.view" .. (j + 1)))
 		C.Set("meter.seg" .. j, C.Get("meter.seg" .. (j + 1)))
 		C.Set("meter.open" .. j, C.Get("meter.open" .. (j + 1)))
+		C.Set("meter.closed" .. j, C.Get("meter.closed" .. (j + 1)))
 	end
 	C.Set("meter.open" .. n, true)
+	C.Set("meter.closed" .. n, false)
 	SUI.Config.ClearPosAll("meter.win" .. n)
 	C.Set("meter.windows", n - 1)
 	M.CloseDetail()
@@ -2758,15 +2765,26 @@ function M.Wake()
 	SUI.On("PLAYER_ENTERING_WORLD", M.OnRoster)
 	SUI.On("PLAYER_TARGET_CHANGED", M.OnTarget)
 	SUI.On("PLAYER_REGEN_ENABLED", M.OnCombatEnd)
+	SUI.On("PLAYER_REGEN_DISABLED", M.OnCombatStart)
 	if SUI.Api.superwow then SUI.On("UNIT_CASTEVENT", M.OnCastEvent) end
 	M.task = SUI.Every(M.cfg.refresh, M.Tick, "meter.tick", true)
 end
 
 -- Fin de combat : remise a zero automatique si meter.autoreset est coche (et un combat a eu lieu).
 function M.OnCombatEnd()
+	M.leftCombat = GetTime()
 	if not M.cfg.autoreset or not M.fought then return end
 	M.fought = nil
 	M.Reset()
+end
+
+-- Reprise du combat apres en etre sorti : on cloture le precedent sans attendre meter.idle. Pas pendant un boss (feinte,
+-- resurrection), ni si des coups arrivent encore (le groupe se bat toujours).
+function M.OnCombatStart()
+	local left = M.leftCombat
+	M.leftCombat = nil
+	local now = GetTime()
+	if left and M.cur and not M.cur.boss and now - left >= 1 and now - M.lastEvt >= 2 then M.EndSegment() end
 end
 
 function M.Sleep()
@@ -2774,6 +2792,7 @@ function M.Sleep()
 	M.awake = false
 	M.Detach()
 	SUI.Off("PLAYER_REGEN_ENABLED", M.OnCombatEnd)
+	SUI.Off("PLAYER_REGEN_DISABLED", M.OnCombatStart)
 	SUI.Off("PARTY_MEMBERS_CHANGED", M.OnRoster)
 	SUI.Off("RAID_ROSTER_UPDATE", M.OnRoster)
 	SUI.Off("UNIT_PET", M.OnRoster)
@@ -2932,7 +2951,7 @@ SUI.Config.AddPreset("raid", "*", { ["meter.windows"] = 1, ["meter.rows"] = 8, [
 	["meter.segments"] = 2, ["meter.tooltips"] = false, ["meter.trackall"] = false })
 
 -- /sui meter show|hide|toggle [n] : rouvre ou masque la fenetre n (toutes sans n). "show" active le module si besoin.
-function M.SetShown(want, n)
+function M.SetShown(want, n, keepClosed)
 	if n and (n < 1 or n > M.MAXWIN or n ~= floor(n)) then
 		SUI.Print(L("msg.meter.badwin", M.MAXWIN))
 		return
@@ -2945,12 +2964,25 @@ function M.SetShown(want, n)
 	if want and C.Get("meter.vis") ~= "always" then C.Set("meter.vis", "always") end
 	if n then
 		C.Set("meter.open" .. n, want)
+		C.Set("meter.closed" .. n, not want)
 		SUI.Print(L(want and "msg.meter.shown1" or "msg.meter.hidden1", n))
 		return
 	end
-	for k = 1, C.Get("meter.windows") do C.Set("meter.open" .. k, want) end
+	-- keepClosed (bouton / raccourci "compteurs") : les fenetres fermees a la croix le restent, sauf si elles le sont toutes
+	local left = false
+	for k = 1, C.Get("meter.windows") do
+		if not C.Get("meter.closed" .. k) then left = true end
+	end
+	for k = 1, C.Get("meter.windows") do
+		if not (want and keepClosed and left and C.Get("meter.closed" .. k)) then
+			C.Set("meter.open" .. k, want)
+			if want then C.Set("meter.closed" .. k, false) end
+		end
+	end
 	SUI.Print(L(want and "msg.meter.shown" or "msg.meter.hidden"))
 end
+
+C.Register({ ["meter.closed1"] = false, ["meter.closed2"] = false, ["meter.closed3"] = false, ["meter.closed4"] = false })
 
 SUI.RegisterCommand("meter", function(rest)
 	local word, arg = rest or EMPTY, nil
@@ -3011,8 +3043,9 @@ function M.ToggleAll(want)
 	local T = SUI.Threat
 	local anyOn = (M.on and M.AnyOpen()) or (T and T.on and C.Get("threat.show"))
 	if want == nil then want = not anyOn end
-	M.SetShown(want)
-	if T and T.SetShown then T.SetShown(want) end
+	M.SetShown(want, nil, true)
+	-- menace fermee a sa croix : elle le reste, sauf s'il n'y a rien d'autre a afficher
+	if T and T.SetShown and not (want and C.Get("threat.closed")) then T.SetShown(want) end
 end
 SUI.RegisterCommand("meters", function(rest)
 	if rest == "show" then M.ToggleAll(true) elseif rest == "hide" then M.ToggleAll(false) else M.ToggleAll() end

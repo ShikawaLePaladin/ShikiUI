@@ -457,6 +457,7 @@ end
 -- Bouton de fermeture (x) : meme effet que de decocher "Afficher la fenetre" (reglage memorise, minuterie coupee).
 local function onClose(b)
 	C.Set("threat.show", false)
+	C.Set("threat.closed", true)
 	SUI.Print(L("msg.threat.closed"))
 end
 
@@ -1421,6 +1422,7 @@ end
 
 -- /sui threat show|hide|toggle : rouvre ou ferme la fenetre (active le module si besoin pour "show").
 function M.SetShown(want)
+	if want then C.Set("threat.closed", false) end
 	if want and not M.on then C.Set("modules.threat", true) end
 	if want and C.Get("threat.vis") ~= "always" then C.Set("threat.vis", "always") end
 	if C.Get("threat.show") ~= want then C.Set("threat.show", want) end
@@ -1429,6 +1431,7 @@ end
 
 -- ---------------------------------------------------------------- declaration
 SUI.RegisterCategory("threat", 47)
+C.Register({ ["threat.closed"] = false })      -- fermee a sa croix : le bouton "compteurs" ne la ramene pas
 
 local function opt(key, typ, order, def, extra)
 	local o = { key = "threat." .. key, type = typ, cat = "threat", label = "opt.threat." .. key, tip = "tip.threat." .. key, default = def, order = order }
