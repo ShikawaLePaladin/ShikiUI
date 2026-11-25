@@ -1198,6 +1198,8 @@ function M.Build()
 	f.head:SetPoint("TOPLEFT", f, "TOPLEFT", M.PAD, -M.PAD - 1)
 	f.pick = T.Button(f, L("msg.questtrack.pick.btn"), 58, 15, function() M.OpenLog(nil) end)
 	f.pick:SetPoint("TOPRIGHT", f, "TOPRIGHT", -M.PAD, -M.PAD + 1)
+	f.guide = T.Button(f, L("msg.questtrack.guide.btn"), 46, 15, function() if SUI.Guide then SUI.Guide.Toggle() end end)
+	f.guide:SetPoint("TOPRIGHT", f.pick, "TOPLEFT", -3, 0)
 	if SUI.Mover and SUI.Mover.Register then
 		SUI.Mover.Register("questtrack", f, { label = "mod.questtrack.mover", point = "TOPRIGHT", x = -110, y = -200 })
 		SUI.Mover.QuickDrag(f, "questtrack", M.DragOn)
@@ -1230,6 +1232,7 @@ function M.Paint()
 	f.head:SetText(L("msg.questtrack.head", getn(M.View()), total))
 	f.head:SetWidth(w - 2 * M.PAD - 62)
 	T.SetButtonText(f.pick, L("msg.questtrack.pick.btn"))
+	T.SetButtonText(f.guide, L("msg.questtrack.guide.btn"))
 	local y = M.PAD + 18
 	for i = 1, n do
 		local e = view[i]

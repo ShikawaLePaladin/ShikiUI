@@ -113,6 +113,8 @@ Locale_GroupFx.lua
 Mod_GroupFx.lua
 Locale_GroupPets.lua
 Mod_GroupPets.lua
+Locale_Guide.lua
+Mod_Guide.lua
 Locale_Items.lua
 Mod_Items.lua
 Locale_Loot.lua
