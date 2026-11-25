@@ -67,6 +67,27 @@ M.kwHits = 0
 local STAMP = { hm = "%H:%M", hms = "%H:%M:%S", hm12 = "%I:%M %p" }
 
 -- ---------------------------------------------------------------- reglages
+-- L'affectation est enregistree en texte ("2,3" ; "" = aucune fenetre) : la sauvegarde n'accepte que des valeurs simples
+function M.ParseSet(text)
+	local set, pos = {}, 1
+	while type(text) == "string" do
+		local a, b = string.find(text, "%d+", pos)
+		if not a then break end
+		set[tonumber(string.sub(text, a, b))] = true
+		pos = b + 1
+	end
+	return set
+end
+
+function M.SetText(set)
+	local list = {}
+	for idx, on in pairs(set) do
+		if on then table.insert(list, idx) end
+	end
+	table.sort(list)
+	return table.concat(list, ",")
+end
+
 function M.ReadConfig()
 	local cfg = M.cfg
 	cfg.stamp = C.Get("chat.stamp")
@@ -81,7 +102,7 @@ function M.ReadConfig()
 	cfg.wheel = C.Get("chat.wheel")
 	cfg.tabs = C.Get("chat.tabs")
 	cfg.tabs2 = C.Get("chat.tabs2")
-	cfg.tab2set = C.Get("chat.tab2set")
+	cfg.tab2set = M.ParseSet(C.Get("chat.tab2set"))
 	cfg.cw = C.Get("chat.width") or 0
 	cfg.ch = C.Get("chat.height") or 0
 	cfg.background = C.Get("chat.background")
@@ -865,10 +886,9 @@ end
 -- Affecte (on) ou retire (off) la fenetre idx de la barre d'onglets 2. Retourne true si applique (contrat du menu chattabs).
 function M.SetBar(idx, on)
 	if not M.frames[idx] then return false end
-	local set = C.Get("chat.tab2set")
-	if type(set) ~= "table" then set = { [2] = true } end
+	local set = M.ParseSet(C.Get("chat.tab2set"))
 	if on then set[idx] = true else set[idx] = nil end
-	C.Set("chat.tab2set", set)
+	C.SetBase("chat.tab2set", M.SetText(set))
 	M.cfg.tab2set = set
 	M.dirty = true
 	M.RefreshBar()
@@ -1449,6 +1469,7 @@ end
 
 -- ---------------------------------------------------------------- declaration
 SUI.RegisterCategory("chat", 22)
+C.Register({ ["chat.tab2set"] = "2" })   -- fenetres de la barre 2 (reglage sans case dans le menu : clic droit sur un onglet)
 
 local function opt(key, typ, order, def, extra)
 	local o = { key = "chat." .. key, type = typ, cat = "chat", label = "opt.chat." .. key, tip = "tip.chat." .. key, default = def, order = order }
