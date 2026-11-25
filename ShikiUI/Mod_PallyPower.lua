@@ -283,7 +283,33 @@ function M.ScanRoster()
 end
 
 function M.OnRoster()
-	if M.on and not M.demo then M.ScanRoster() end
+	if M.on and not M.demo then
+		M.ScanRoster()
+		M.PrunePeers()
+	end
+end
+
+-- Un paladin parti ne doit plus "couvrir" de benediction ; un nouvel arrivant ne parle que si on lui demande (REQ).
+function M.PrunePeers()
+	local here = {}
+	for i = 1, M.nrost do here[M.roster[i].name] = true end
+	local lists = { M.peers, M.peerKnown, M.peerSingle, M.peerFree, M.peerTanks }
+	for i = 1, 5 do
+		local t = lists[i]
+		if t then
+			for name in pairs(t) do
+				if not here[name] then t[name] = nil end
+			end
+		end
+	end
+	local n = M.nrost
+	if n ~= M.lastSize then
+		M.lastSize = n
+		if n > 1 and M.SyncReq then
+			if M.rtask then SUI.Cancel(M.rtask) end
+			M.rtask = SUI.After(3, function() M.rtask = nil if M.on then M.SyncReq() M.SyncSoon() end end, "pp.syncreq")
+		end
+	end
 end
 
 -- ---------------------------------------------------------------- benedictions posees ?
@@ -1076,7 +1102,7 @@ function M.PaintRows()
 			if cc then row.name:SetTextColor(cc.r, cc.g, cc.b) end
 			row._n = r.name
 			local fa = M.assign[r.name]
-			M.PaintFlag(row.bT, fa and fa.tank)
+			M.PaintFlag(row.bT, M.IsTank(r.name))
 			M.PaintFlag(row.bS, fa and fa.single)
 			row:Show()
 			for j = 1, getn(M.BLESS) do
@@ -1256,6 +1282,12 @@ function M.Knows(b)
 	return (icons and (icons["s:" .. b] or icons["g:" .. b])) and true or false
 end
 
+M.peerTanks = {}      -- [nom] = true : tank annonce par le chef avec l'addon PallyPower (messages TANK / CLTNK), pour la session
+function M.IsTank(name)
+	local a = M.assign and M.assign[name]
+	return ((a and a.tank) or M.peerTanks[name]) and true or false
+end
+
 function M.SetFlag(name, flag, want)
 	local a = asg(name)
 	if want == nil then want = not a[flag] end
@@ -1270,9 +1302,10 @@ end
 function M.AutoSet(r)
 	local a = M.assign and M.assign[r.name]
 	local file = r.file
+	local tank = M.IsTank(r.name)
 	local set
 	local melee = false
-	if a and a.tank then
+	if tank then
 		set = M.TANKSET
 		melee = true
 	elseif file == "WARRIOR" or file == "ROGUE" then
@@ -1299,7 +1332,7 @@ function M.AutoSet(r)
 	for i = 1, getn(set) do
 		if M.Knows(set[i]) then tinsert(out, set[i]) end
 	end
-	if C.Get("pallypower.autosalv") and not (a and a.tank) and M.Knows("salvation") then tinsert(out, "salvation") end
+	if C.Get("pallypower.autosalv") and not tank and M.Knows("salvation") then tinsert(out, "salvation") end
 	return out
 end
 
@@ -1324,12 +1357,12 @@ function M.AutoOne(r)
 	-- PRIORITE PALATANK sur la Salut (2026-11-19) : un paladin avec le drapeau tank recoit la Salut
 	-- (il s'en sert pour son swap OctoManaSwap) EN PLUS de son set tank (Sanctuary incluse depuis le TANKSET).
 	-- Les autres tanks gardent Sanctuary sans Salut (la Salut sur un vrai tank = perte de menace).
-	if r.file == "PALADIN" and a.tank and C.Get("pallypower.autosalv") and M.Knows("salvation") then
+	if r.file == "PALADIN" and M.IsTank(r.name) and C.Get("pallypower.autosalv") and M.Knows("salvation") then
 		a.salvation = true
 		if not a.sg then a.sg = {} end
 		a.sg.salvation = true
 	end
-	if C.Get("pallypower.autosingle") and (a.tank or M.HYBRID[r.file]) then a.single = true end
+	if C.Get("pallypower.autosingle") and (M.IsTank(r.name) or M.HYBRID[r.file]) then a.single = true end
 end
 
 function M.AutoAssign()
@@ -1351,7 +1384,15 @@ function M.ToggleFlag(n, flag)
 		SUI.Print(L("msg.pallypower.notinraid", n))
 		return nil
 	end
-	local want = M.SetFlag(n, flag)
+	local want
+	if flag == "tank" then
+		want = not M.IsTank(n)
+		M.SetFlag(n, flag, want)
+		if not want then M.peerTanks[n] = nil end
+		M.ShareTank(n, want)
+	else
+		want = M.SetFlag(n, flag)
+	end
 	if flag == "tank" and want then
 		M.AutoOne(rr)
 		saveAssign()
@@ -1676,6 +1717,42 @@ function M.PeerLines()
 	return out
 end
 
+M.peerFree = {}       -- [nom] = true : ce paladin accepte les ordres de tout le monde (FREEASSIGN YES)
+
+-- Chef ou assistant du raid, chef du groupe : seuls leurs ordres sont suivis par les autres paladins.
+function M.IsLead(name)
+	local nr = GetNumRaidMembers and GetNumRaidMembers() or 0
+	if nr > 0 then
+		for i = 1, nr do
+			local n, rank = GetRaidRosterInfo(i)
+			if n == name then return (rank or 0) >= 1 end
+		end
+		return false
+	end
+	if name == UnitName("player") then
+		local ipl = getglobal("IsPartyLeader")
+		return (ipl and ipl()) and true or false
+	end
+	local np = GetNumPartyMembers and GetNumPartyMembers() or 0
+	for i = 1, np do
+		if UnitName("party" .. i) == name then
+			return (UnitIsPartyLeader and UnitIsPartyLeader("party" .. i)) and true or false
+		end
+	end
+	return false
+end
+
+-- Puis-je regler ce paladin ? (sinon son addon refuserait l'ordre en silence et ma vue mentirait)
+function M.CanOrder(name)
+	if M.demo or name == UnitName("player") or not syncChan() then return true end
+	return (M.peerFree[name] or M.IsLead(UnitName("player"))) and true or false
+end
+
+function M.ShareTank(name, on)
+	if M.demo or C.Get("pallypower.sync") == false or not M.IsLead(UnitName("player")) then return false end
+	return syncSend((on and "TANK " or "CLTNK ") .. name)
+end
+
 function M.OnAddon(ev, a1, a2, a3, a4)
 	if not M.on or type(a2) ~= "string" or C.Get("pallypower.sync") == false then return end
 	if a1 == M.SHK_PREFIX then M.TeamOnShk(a2, a4) return end
@@ -1715,6 +1792,28 @@ function M.OnAddon(ev, a1, a2, a3, a4)
 			changed = true
 		elseif name == UnitName("player") and class and skill then
 			M.TeamOnAssign(sender, tonumber(class), tonumber(skill))
+		end
+	elseif strsub(a2, 1, 8) == "MASSIGN " then
+		-- une seule benediction pour toutes les classes (Maj + clic dans l'addon PallyPower)
+		local _, _, name, skill = string.find(a2, "^MASSIGN (%S+) (%S+)")
+		skill = tonumber(skill)
+		if name == sender and skill then
+			local p = M.peers[sender] or {}
+			for id = 0, 9 do p[id] = skill end
+			M.peers[sender] = p
+			changed = true
+		elseif name == UnitName("player") and skill then
+			for id = 0, 8 do M.TeamOnAssign(sender, id, skill, true) end
+		end
+	elseif a2 == "FREEASSIGN YES" then
+		M.peerFree[sender] = true
+	elseif a2 == "FREEASSIGN NO" then
+		M.peerFree[sender] = nil
+	elseif strsub(a2, 1, 5) == "TANK " or strsub(a2, 1, 6) == "CLTNK " then
+		local _, _, word, name = string.find(a2, "^(%u+) (%S+)")
+		if name and M.IsLead(sender) then
+			if word == "TANK" then M.peerTanks[name] = true else M.peerTanks[name] = nil end
+			if M.win and M.win:IsShown() and M.PaintRows then M.PaintRows() end
 		end
 	elseif a2 == "CLEAR" then
 		if M.peers[sender] then M.peers[sender] = nil changed = true end
@@ -1840,13 +1939,14 @@ function M.CanRemote(sender)
 	return false
 end
 
-function M.TeamOnAssign(sender, cid, bid)
+function M.TeamOnAssign(sender, cid, bid, quiet)
 	if not cid or not bid or not M.CanRemote(sender) then return end
 	local file = fileOfCid(cid)
 	if not file then return end
 	local b = (bid >= 0) and bessOfBid(bid) or nil
 	if b and not M.Knows(b) then return end
 	M.ApplyClassAssign(file, b, false)
+	if quiet and not M.classes[file] then return end      -- MASSIGN : un message par classe presente seulement
 	SUI.Print(L("msg.pallypower.team.recv", sender, className(file), b and L("msg.pallypower.bless." .. b) or L("msg.pallypower.team.tip.none")))
 end
 
@@ -1918,6 +2018,10 @@ function M.TeamSet(name, file, b, single)
 	end
 	local cid = M.SYNC_CLS[file]
 	if not cid then return end
+	if not M.CanOrder(name) then
+		SUI.Print(L("msg.pallypower.team.nolead", name))
+		return
+	end
 	local bid = b and M.SYNC_BID[b] or -1
 	syncSend("ASSIGN " .. name .. " " .. cid .. " " .. bid)
 	shkSend("S10 " .. name .. " " .. cid .. " " .. ((b and single) and 1 or 0))
@@ -1955,7 +2059,17 @@ M.TEAMWANT = { "kings", "wisdom", "might" }
 -- et qui en donne le moins ; un paladin donne UNE benediction par classe (limite du protocole). Seul, on retombe sur l'auto simple.
 function M.TeamAuto()
 	if M.nrost == 0 then M.ScanRoster() end
-	local pal = M.TeamPaladins()
+	local pal = {}
+	local all = M.TeamPaladins()
+	for i = 1, getn(all) do
+		if M.CanOrder(all[i]) then tinsert(pal, all[i]) else SUI.Print(L("msg.pallypower.team.nolead", all[i])) end
+	end
+	-- une benediction superieure touche toute la classe : la Salut (perte de menace) tomberait aussi sur son tank
+	local tankIn = {}
+	for i = 1, M.nrost do
+		local r = M.roster[i]
+		if r.file ~= "PALADIN" and M.IsTank(r.name) then tankIn[r.file] = true end
+	end
 	if getn(pal) < 2 then
 		M.AutoAssign()
 		return
@@ -1972,11 +2086,12 @@ function M.TeamAuto()
 			for k = 1, getn(M.TEAMWANT) do
 				if def[M.TEAMWANT[k]] then tinsert(want, M.TEAMWANT[k]) end
 			end
-			if C.Get("pallypower.autosalv") then tinsert(want, "salvation") end
+			local salv = not tankIn[file]
+			if salv and C.Get("pallypower.autosalv") then tinsert(want, "salvation") end
 			-- plus de paladins que de benedictions : les suivants donnent Lumiere puis Salut (comme l'attribution de l'addon PallyPower d'origine)
 			local function hasW(w) for q = 1, getn(want) do if want[q] == w then return true end end return false end
 			if getn(pal) > getn(want) and not hasW("light") then tinsert(want, "light") end
-			if getn(pal) > getn(want) and not hasW("salvation") then tinsert(want, "salvation") end
+			if salv and getn(pal) > getn(want) and not hasW("salvation") then tinsert(want, "salvation") end
 			-- les benedictions que peu de paladins connaissent sont placees d'abord
 			local cap = {}
 			for k = 1, getn(want) do
